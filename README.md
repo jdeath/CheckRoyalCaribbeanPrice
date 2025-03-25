@@ -5,7 +5,7 @@ This is not a hack. Developed only with Firefox and knowedlge of python. All the
 
 # Install
 Download the files
-`pip install requests yaml Apprise`
+`pip install requests Apprise`
 
 Edit `config.yaml`
 ```
