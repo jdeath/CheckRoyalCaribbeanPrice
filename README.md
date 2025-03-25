@@ -39,16 +39,16 @@ If anyone knows how to get this value via python, please let me know. It should 
 1. If you setup apprise, it will notify you via your prefered method(s) if you should rebook
 
 # Notes
-1. You need to cancel your beverage package, shore excursion, internet, etc
+1. Confirm price is still lower on website, because it could have gone up since running this bot
+1. You need to first cancel your beverage package, shore excursion, internet, etc
 1. Wait about 10s
 1. Rebook at the lower price.
-1. It takes about a week for Royal to refund your credit card, but they charge you new price right away
-1. Be sure to do quickly and confirm price is still lower, because it could have gone up
+1. It takes about a week for Royal to refund your credit card, but they charge you new price right away!
 1. Enjoy youtube videos on cruising from: `https://www.royalcaribbeanblog.com/`, `https://www.youtube.com/royalcaribbeanblog` and `https://www.youtube.com/@LifeWellCruised` 
 
 # Updates
 1. Probably not going to update much, unless I find an issue
-1. Only checks adult prices, if only have child prices in an order it probably will not work
+1. Only checks adult prices, if only have child prices in an order it may will not work.
 1. It should handle orders made by other people in your party
 1. May not handle all orders correcty.
 1. Prices of internet and beverage are per day, this code needs to divide by the length of your cruise. If you buy a partial package, it may not work correctly.
