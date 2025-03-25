@@ -1,5 +1,5 @@
 # CheckRoyalCaribbeanPrice
-A bot that checks if you have cheapest price for beverage package, excursions, etc. Does not price out the actual cruise!
+A bot that checks if you have cheapest price for beverage package, excursions, etc. Does not price out the actual cruise! You need to run manually or inside a cron job
 
 # Install
 Download the files
