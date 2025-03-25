@@ -1,0 +1,5 @@
+username: "user@gmail.com"
+password: "pa$$word"
+accountId: "abcdefgh-abcd-1234-1234-abcdefghijk"
+apprise:
+  - url: "mailto://user@gmail.com&pass=password"
