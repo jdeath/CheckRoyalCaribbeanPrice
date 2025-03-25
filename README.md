@@ -6,9 +6,9 @@ This is not a hack. Developed only with Firefox and knowedlge of python. All the
 If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
 
 # Install
-Download the raw files or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
-`cd CheckRoyalCaribbeanPrice`
-`pip install requests Apprise`
+1. Download the raw files or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
+1. `cd CheckRoyalCaribbeanPrice`
+1. `pip install requests Apprise`
 
 Edit `config.yaml`
 ```
