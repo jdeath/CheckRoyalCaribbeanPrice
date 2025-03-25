@@ -1,7 +1,7 @@
 # CheckRoyalCaribbeanPrice
 A bot that checks if you have cheapest price for beverage package, excursions, etc. Does not price out the actual cruise! You need to run manually or inside a cron job. If you run home assistant, an addon will be posted shortly
 
-This is not a hack. Developed only with Firefox and knowedlge of python. All the API calls are visible in the Firefox inspector.
+This is not a hack. Developed only with Firefox and knowedlge of python. All the API calls are visible in the Firefox inspector. Everything in this code, your browser is doing already when log into Royal Caribbean website.
 
 If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
 
