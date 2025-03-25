@@ -3,6 +3,8 @@ A bot that checks if you have cheapest price for beverage package, excursions, e
 
 This is not a hack. Developed only with Firefox and knowedlge of python. All the API calls are visible in the Firefox inspector.
 
+If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
+
 # Install
 Download the files
 `pip install requests Apprise`
@@ -12,8 +14,9 @@ Edit `config.yaml`
 username: "user@gmail.com" # Your Royal Caribbean User Name
 password: "pa$$word" # Your Royal Caribbean Password
 accountId: "abcdefgh-abcd-1234-1234-abcdefghijk"  # Your Royal Caribbean Account ID (see below)
-apprise:  # Optional, see https://github.com/caronc/apprise
+apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user@gmail.com&pass=password"
+  - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
 ```
 
 ## Get Royal Caribbean Account ID
