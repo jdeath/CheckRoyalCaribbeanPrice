@@ -6,7 +6,8 @@ This is not a hack. Developed only with Firefox and knowedlge of python. All the
 If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
 
 # Install
-Download the files
+Download the raw files or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
+`cd CheckRoyalCaribbeanPrice`
 `pip install requests Apprise`
 
 Edit `config.yaml`
@@ -34,7 +35,16 @@ If anyone knows how to get this value via python, please let me know. It should 
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py`
 1. It will indicate if you should rebook or if you have the best price
-1. If you setup apprise, it will notify you via your prefered method(s)
+1. It will also tell you if the price has gone up since you purchases (do not rebook in that case!)
+1. If you setup apprise, it will notify you via your prefered method(s) if you should rebook
+
+# Notes
+1. You need to cancel your beverage package, shore excursion, internet, etc
+1. Wait about 10s
+1. Rebook at the lower price.
+1. It takes about a week for Royal to refund your credit card, but they charge you new price right away
+1. Be sure to do quickly and confirm price is still lower, because it could have gone up
+1. Enjoy youtube videos on cruising from: `https://www.royalcaribbeanblog.com/`, `https://www.youtube.com/royalcaribbeanblog` and `https://www.youtube.com/@LifeWellCruised` 
 
 # Updates
 1. Probably not going to update much, unless I find an issue
