@@ -1,5 +1,7 @@
 # CheckRoyalCaribbeanPrice
-A bot that checks if you have cheapest price for beverage package, excursions, etc. Does not price out the actual cruise! You need to run manually or inside a cron job
+A bot that checks if you have cheapest price for beverage package, excursions, etc. Does not price out the actual cruise! You need to run manually or inside a cron job. If you run home assistant, an addon will be posted shortly
+
+This is not a hack. Developed only with Firefox and knowedlge of python. All the API calls are visible in the Firefox inspector.
 
 # Install
 Download the files
