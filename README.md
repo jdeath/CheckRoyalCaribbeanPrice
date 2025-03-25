@@ -16,7 +16,7 @@ username: "user@gmail.com" # Your Royal Caribbean User Name
 password: "pa$$word" # Your Royal Caribbean Password
 accountId: "abcdefgh-abcd-1234-1234-abcdefghijk"  # Your Royal Caribbean Account ID (see below)
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
-  - url: "mailto://user@gmail.com&pass=password"
+  - url: "mailto://user:password@gmail.com"
   - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
 ```
 
