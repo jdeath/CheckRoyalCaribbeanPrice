@@ -1,5 +1,5 @@
 # CheckRoyalCaribbeanPrice
-A bot that checks if you have cheapest price for beverage package, excursions, etc
+A bot that checks if you have cheapest price for beverage package, excursions, etc. Does not price out the actual cruise!
 
 # Install
 Download the files
@@ -23,3 +23,13 @@ apprise:  # Optional, see https://github.com/caronc/apprise
 1. Select the line that comes up
 1. When you click, you see something like: `https://aws-prd.api.rccl.com/v1/profileBookings/enriched/XXXX-XXX-XXXX-XXX-XXXXXXX?brand=R&includeCheckin=true`
 1. Copy the `XXXX-XXX-XXXX-XXX-XXXXXXX`, that is your account id.
+
+## Run
+1. `python CheckRoyalCaribbeanPrice.py`
+1. It will indicate if you should rebook or if you have the best price
+1. If you setup apprise, it will notify you via your prefered method
+
+# Updates
+1. Probably not going to update much, unless I find an issue
+1. Only checks adult prices
+1. May not handle all orders correcty.
