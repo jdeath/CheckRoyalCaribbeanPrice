@@ -29,12 +29,17 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. When you click, you see something like: `https://aws-prd.api.rccl.com/v1/profileBookings/enriched/XXXX-XXX-XXXX-XXX-XXXXXXX?brand=R&includeCheckin=true`
 1. Copy the `XXXX-XXX-XXXX-XXX-XXXXXXX`, that is your account id.
 
+If anyone knows how to get this value via python, please let me know. It should be possible. It is contained in a request cookie.
+
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py`
 1. It will indicate if you should rebook or if you have the best price
-1. If you setup apprise, it will notify you via your prefered method
+1. If you setup apprise, it will notify you via your prefered method(s)
 
 # Updates
 1. Probably not going to update much, unless I find an issue
-1. Only checks adult prices
+1. Only checks adult prices, if only have child prices in an order it probably will not work
+1. It should handle orders made by other people in your party
 1. May not handle all orders correcty.
+1. Prices of internet and beverage are per day, this code needs to divide by the length of your cruise. If you buy a partial package, it may not work correctly.
+1. If other prices are per day, it will not work. Let me know what other things are not calculating correctly
