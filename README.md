@@ -29,8 +29,8 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. Select the line that comes up
 1. When you click, you see something like: `https://aws-prd.api.rccl.com/v1/profileBookings/enriched/XXXX-XXX-XXXX-XXX-XXXXXXX?brand=R&includeCheckin=true`
 1. Copy the `XXXX-XXX-XXXX-XXX-XXXXXXX`, that is your account id.
-
-If anyone knows how to get this value via python, please let me know. It should be possible. It is contained in a request cookie.
+1. This key should last about a month. You will need to get it again.
+1. If anyone knows how to get this value via python, please let me know. It should be possible. It looks like it is extracted from the access token somehow
 
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py`
