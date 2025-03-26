@@ -105,7 +105,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         print(reservationId + ": " + "You have the best price for " + title +  " of: " + str(paidPrice))
         
     if currentPrice > paidPrice:
-        print(reservationId + ": " + "Price of " + title + " is now higher: " + str(currentPrice))
+        print(reservationId + ": \t" + "Price of " + title + " is now higher: " + str(currentPrice))
 
 def getVoyages(access_token,accountId,session,apobj):
 
