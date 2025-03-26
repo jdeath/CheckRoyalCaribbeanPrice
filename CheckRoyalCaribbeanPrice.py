@@ -1,8 +1,11 @@
 import requests
 import yaml
 from apprise import Apprise
+from datetime import datetime
 
 def main():
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(timestamp)
     
     apobj = Apprise()
         
