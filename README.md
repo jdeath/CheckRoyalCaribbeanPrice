@@ -23,13 +23,14 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 ## Get Royal Caribbean Account ID
 1. Use Firefox to load Royal Caribbean Website
 1. Right Click in window, select `Inspect (Q)`
-1. Enter you username and password
-1. Click the network button
-1. In the "filter urls" box type `profile`
-1. Select the line that comes up
+1. Click Signin in on the Royal website
+1. Enter you username and password and click login
+1. Click the network button (has an up/down arrow) in the inspector section of firefox
+1. In the "filter urls" box type `profileBookings/enriched`
+1. Select the line that comes up that has information in the "File" column
 1. When you click, you see something like: `https://aws-prd.api.rccl.com/v1/profileBookings/enriched/XXXX-XXX-XXXX-XXX-XXXXXXX?brand=R&includeCheckin=true`
 1. Copy the `XXXX-XXX-XXXX-XXX-XXXXXXX`, that is your account id.
-1. This key should last about a month. You will need to get it again.
+1. This key should last about a month. You will need to get it again in a month
 1. If anyone knows how to get this value via python, please let me know. It should be possible. It looks like it is extracted from the access token somehow
 
 ## Run
