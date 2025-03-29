@@ -61,7 +61,7 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 
 # Updates
 1. Probably not going to update much, unless I find an issue. I can only see my own account purchases.
-1. Only checks adult prices, if only have child prices in an order it may will not work.
+1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partners account for what I booked)
 1. May not handle all orders correcty.
 1. Prices of internet and beverage are per day, this code needs to divide by the length of your cruise. If you buy a partial package, it may not work correctly.
