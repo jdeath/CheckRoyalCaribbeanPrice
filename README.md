@@ -50,6 +50,17 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. It will also tell you if the price has gone up since you purchases (do not rebook in that case!)
 1. If you setup apprise, it will notify you via your prefered method(s) if you should rebook
 
+## Output
+Will output information on your purchases
+```
+CONFNUM1: You have the best price for Chacchoben Ruins Exclusive Drive of: 122.99
+CONFNUM1: You have the best price for Tabyana Beach Break of: 66.99
+CONFNUM2: You have the best price for Deluxe Beverage Package of: 67.99
+CONFNUM2: 	Price of Deluxe Beverage Package is now higher: 72.99
+CONFNUM2: You have the best price for VOOM SURF + STREAM Internet Package of: 17.99
+```
+If any of the prices are lower, it will send a notifcation if you setup aprise.
+
 # Notes
 1. Confirm price is still lower on website, because it could have gone up since running this bot
 1. You need to first cancel your beverage package, shore excursion, internet, etc
