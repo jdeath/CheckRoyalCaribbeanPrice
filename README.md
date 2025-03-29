@@ -1,7 +1,7 @@
 # CheckRoyalCaribbeanPrice
 A bot that checks if you have cheapest price for beverage package, excursions, etc. Does not price out the actual cruise! You need to run manually or inside a cron job. If you run home assistant, an addon is posted in my home assistant addon repo.
 
-This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when log into Royal Caribbean website.
+This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website.
 
 If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
 
@@ -11,7 +11,7 @@ If anyone can figure out how to get the AccountID programatically, please do a P
 1. `cd CheckRoyalCaribbeanPrice`
 1. `pip install requests Apprise`
 
-Edit `config.yaml`
+Edit `config.yaml` and make sure in the same directory as CheckRoyalCaribbeanPrice.py
 ```
 username: "user@gmail.com" # Your Royal Caribbean User Name
 password: "pa$$word" # Your Royal Caribbean Password
@@ -60,9 +60,10 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. Maybe Matt or Ilana will feature this tool in a video !
 
 # Updates
-1. Probably not going to update much, unless I find an issue
+1. Probably not going to update much, unless I find an issue. I can only see my own account purchases.
 1. Only checks adult prices, if only have child prices in an order it may will not work.
-1. It should handle orders made by other people in your party
+1. It should handle orders made by other people in your party (works in my partners account for what I booked)
 1. May not handle all orders correcty.
 1. Prices of internet and beverage are per day, this code needs to divide by the length of your cruise. If you buy a partial package, it may not work correctly.
 1. If other prices are per day, it will not work. Let me know what other things are not calculating correctly
+1. Please double check that the price is lower before you rebook!
