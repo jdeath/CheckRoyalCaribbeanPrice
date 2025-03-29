@@ -35,6 +35,15 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. This key should last about a month. You will need to get it again in a month and update config.yaml
 1. If anyone knows how to get this value via python, please let me know.
 
+## Apprise (Optional)
+1. Review documentation for apprise at: https://github.com/caronc/apprise
+1. 99% of people probably have gmail, so you can use the default already setup in the sample config.yaml
+1. This will send you an email only if there is a price drop
+1. Change username to your gmail username
+1. Change password to your gmail password. If you use 2-factor authentication, you need to generate an app password. You cannot use use normal password
+1. Documentation to generate ann app password for gmail is here: https://security.google.com/settings/security/apppasswords
+1. You can delete the whatsapp line, that is included so you know how to add other services. You can also add more lines for a additional gmail accounts.
+
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py`
 1. It will indicate if you should rebook or if you have the best price
