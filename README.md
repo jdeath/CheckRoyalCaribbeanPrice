@@ -6,7 +6,8 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
 
 # Install
-1. Download the raw files or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
+1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
+1. Download the raw files from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `cd CheckRoyalCaribbeanPrice`
 1. `pip install requests Apprise`
 
@@ -30,8 +31,9 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. Select the line that comes up that has information in the "File" column
 1. When you click, you see something like: `https://aws-prd.api.rccl.com/v1/profileBookings/enriched/XXXX-XXX-XXXX-XXX-XXXXXXX?brand=R&includeCheckin=true`
 1. Copy the `XXXX-XXX-XXXX-XXX-XXXXXXX`, that is your account id.
-1. This key should last about a month. You will need to get it again in a month
-1. If anyone knows how to get this value via python, please let me know. It should be possible. It looks like it is extracted from the access token somehow
+1. Paste into config.yaml `accountId:` field
+1. This key should last about a month. You will need to get it again in a month and update config.yaml
+1. If anyone knows how to get this value via python, please let me know.
 
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py`
