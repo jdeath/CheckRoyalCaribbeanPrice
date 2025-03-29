@@ -5,6 +5,8 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
 
+Learned there a free tool that does this already and does not log into your account, but you have to add your packages manually: https://royalpricetracker.com/  
+
 # Install
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the raw files from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
