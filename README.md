@@ -23,7 +23,7 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 ## Get Royal Caribbean Account ID
 1. Use Firefox to load Royal Caribbean Website
 1. Right Click in window, select `Inspect (Q)`
-1. Click Signin in on the Royal website
+1. Click SIGN IN on the Royal website (top right)
 1. Enter you username and password and click login
 1. Click the network button (has an up/down arrow) in the inspector section of firefox
 1. In the "filter urls" box type `profileBookings/enriched`
