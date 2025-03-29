@@ -56,7 +56,8 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. Wait about 10s
 1. Rebook at the lower price.
 1. It takes about a week for Royal to refund your credit card, but they charge you new price right away!
-1. Enjoy youtube videos on cruising from: `https://www.royalcaribbeanblog.com/`, `https://www.youtube.com/royalcaribbeanblog` and `https://www.youtube.com/@LifeWellCruised` 
+1. Enjoy youtube videos on cruising from: `https://www.royalcaribbeanblog.com/`, `https://www.youtube.com/royalcaribbeanblog` and `https://www.youtube.com/@LifeWellCruised`
+1. Maybe Matt or Ilana will feature this tool in a video !
 
 # Updates
 1. Probably not going to update much, unless I find an issue
