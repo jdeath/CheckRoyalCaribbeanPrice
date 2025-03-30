@@ -53,7 +53,7 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py` (recommended) or `CheckRoyalCaribbeanPrice.exe`
 1. It will indicate if you should rebook or if you have the best price
-1. It will also tell you if the price has gone up since you purchases (do not rebook in that case!)
+1. It will also tell you if the price has gone up since you purchased (do not rebook in that case!)
 1. If you setup apprise, it will notify you via your prefered method(s) if you should rebook
 
 ## Output
