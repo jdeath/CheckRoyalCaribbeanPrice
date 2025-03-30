@@ -5,7 +5,7 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
 
-Learned there a free tool that does this already and does not log into your account, but you have to add your packages manually: https://royalpricetracker.com/  
+There is a free tool cloud-based that does this already and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/  
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
@@ -51,7 +51,7 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. You can delete the whatsapp line, that is included so you know how to add other services. You can also add more lines for a additional gmail accounts.
 
 ## Run
-1. `python CheckRoyalCaribbeanPrice.py`
+1. `python CheckRoyalCaribbeanPrice.py` (recommended) or `CheckRoyalCaribbeanPrice.exe`
 1. It will indicate if you should rebook or if you have the best price
 1. It will also tell you if the price has gone up since you purchases (do not rebook in that case!)
 1. If you setup apprise, it will notify you via your prefered method(s) if you should rebook
