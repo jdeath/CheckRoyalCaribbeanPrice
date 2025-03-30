@@ -7,11 +7,14 @@ If anyone can figure out how to get the AccountID programatically, please do a P
 
 Learned there a free tool that does this already and does not log into your account, but you have to add your packages manually: https://royalpricetracker.com/  
 
-# Install
+# Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the raw files from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `cd CheckRoyalCaribbeanPrice`
 1. `pip install requests Apprise`
+
+# Install (Not Recommended, Windows 11 Only)
+1. Download CheckRoyalCaribbeanPrice.exe from releases
 
 Edit `config.yaml` and make sure in the same directory as CheckRoyalCaribbeanPrice.py
 ```
