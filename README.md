@@ -17,7 +17,7 @@ Learned there a free tool that does this already and does not log into your acco
 1. Download CheckRoyalCaribbeanPrice.exe from releases (made with `pyinstaller -F --collect-all apprise CheckRoyalCaribbeanPrice.py`)
 
 ## Edit Config File
-Edit `config.yaml` and make sure in the same directory as CheckRoyalCaribbeanPrice.py
+Edit `config.yaml` and make sure in the same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe`
 ```
 username: "user@gmail.com" # Your Royal Caribbean User Name
 password: "pa$$word" # Your Royal Caribbean Password
