@@ -276,7 +276,7 @@ def get_cruise_price(url, paidPrice, apobj):
     priceString = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"}).text
     
     priceString = priceString.replace(",", "")
-    m = re.search("\$(.*)USD", priceString)
+    m = re.search("\\$(.*)USD", priceString)
     priceOnlyString = m.group(1)
     price = float(priceOnlyString)
     
