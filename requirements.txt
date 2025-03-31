@@ -1,0 +1,5 @@
+apprise
+requests
+bs4
+yaml
+datetime
