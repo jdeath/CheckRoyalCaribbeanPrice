@@ -54,7 +54,9 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. Run the addon and see if it works
 1. you can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If it is lower than you paid for and before final payment date, call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
+1. Only test on a Garuntee Cabin, where mutliple of same cabin exist. Unclear if it will work for a specific booked room. If does not work, share the URL you are using in a issue and I can try to fix.
 
+   
 ## Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
 1. 99% of people probably have gmail, so you can use the default already setup in the sample config.yaml
