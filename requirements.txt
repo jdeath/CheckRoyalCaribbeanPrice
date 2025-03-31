@@ -1,5 +1,3 @@
-apprise
 requests
+Apprise
 bs4
-yaml
-datetime
