@@ -23,10 +23,10 @@ jobs:
           pip install -r requirements.txt
       - name: Package Application with PyInstaller
         run: |
-          pyinstaller pyinstaller.spec
+          pyinstaller CheckRoyalCaribbeanPrice.spec
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Windows-exe
-          path: dist/windows.exe
+          path: dist/CheckRoyalCaribbeanPrice.exe
