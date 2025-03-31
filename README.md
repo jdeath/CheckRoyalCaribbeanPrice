@@ -78,7 +78,7 @@ CONFNUM1: You have the best price for Tabyana Beach Break of: 66.99
 CONFNUM2: You have the best price for Deluxe Beverage Package of: 67.99
 CONFNUM2: 	Price of Deluxe Beverage Package is now higher: 72.99
 CONFNUM2: You have the best price for VOOM SURF + STREAM Internet Package of: 17.99
-2025-12-27 VI OUTSIDE: You have best Price of 3612.12 
+2025-12-27 VI OUTSIDE 4N: You have best Price of 3612.12 
 ```
 If any of the prices are lower, it will send a notifcation if you setup aprise.
 
