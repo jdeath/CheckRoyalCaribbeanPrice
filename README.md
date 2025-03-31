@@ -1,5 +1,5 @@
 # CheckRoyalCaribbeanPrice
-A script that checks if you have cheapest price for beverage package, excursions, etc that you have purchased. Does not price out the actual cruise and only checks prices on things you purchased already! You need to run manually or inside a cron job. If you run home assistant, an addon is posted in my home assistant addon repo.
+A script that checks if you have cheapest price for beverage package, excursions, etc that you have purchased. You need to run manually or inside a cron job. If you run home assistant, an addon is posted in my home assistant addon repo.
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website.
 
@@ -44,6 +44,16 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. Paste into config.yaml `accountId:` field
 1. This key should last about a month. You will need to get it again in a month and update config.yaml
 1. If anyone knows how to get this value via python, please let me know.
+
+## Get Cruise URL
+1. Go to Royal Caribbean and do a mock booking of the room you have
+1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
+1. At this point, you should see a blue bar at the bottom right of webpage with a price
+1. Copy the URL into the cruiseURL field. 
+1. Put the price you paid in the paidPrice field
+1. Run the addon and see if it works
+1. you can add multiple cruiseURL/cruiseXPath/paidPrice to track multiple cruises
+1. If it is lower than you paid for and before final payment date, call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you could lose the onboard credit you got in your first booking, if the new booking does not still offer it!
 
 ## Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
