@@ -1,24 +1,33 @@
-name: Package exe with PyInstaller - Windows
-
+name: Package Application with PyInstaller
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
+    branches:
+      - main
 jobs:
   build:
-
-    runs-on: ubuntu-latest
-
+    runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: PyInstaller Windows
-      uses: JackMcKew/pyinstaller-action-windows@python3-10-pyinstaller-5-3
-      with:
-        path: ./
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: my-exe
-        path: ./dist/windows # or path/to/artifact
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: >
+          python -m pip install --upgrade pip
+
+          pip install -r requirements.txt
+
+      - name: Package Application with PyInstaller
+        run: |
+          pyinstaller pyinstaller.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-exe
+          path: dist/windows.exe
