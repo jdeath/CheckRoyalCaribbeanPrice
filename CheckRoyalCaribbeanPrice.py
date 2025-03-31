@@ -276,11 +276,11 @@ def get_cruise_price(url, paidPrice, apobj):
     priceString = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"}).text
     
     priceString = priceString.replace(",", "")
-    m = re.search("\\$(.*)USD", priceString)
+    m = re.search("\$(.*)USD", priceString)
     priceOnlyString = m.group(1)
     price = float(priceOnlyString)
     
-    preString = params.get("sailDate")[0] + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0]
+    preString = params.get("sailDate")[0] + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
     
     if price < paidPrice: 
         textString = "Rebook! " + preString + " New Price for "  + str(price) + " is lower than " + str(paidPrice)
