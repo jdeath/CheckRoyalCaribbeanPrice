@@ -46,7 +46,7 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 1. If anyone knows how to get this value via python, please let me know.
 
 ## Get Cruise URL
-1. Go to Royal Caribbean and do a mock booking of the room you have, with the same number of people
+1. Go to Royal Caribbean and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the URL into the cruiseURL field. 
