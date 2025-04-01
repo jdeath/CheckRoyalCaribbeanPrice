@@ -36,7 +36,7 @@ accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
 ```
-## Get Cruise URL
+## Get Cruise URL (Optional)
 1. Go to Royal Caribbean and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
@@ -46,7 +46,7 @@ accountInfo:
 1. you can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If it is lower than you paid for and before final payment date, call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
 1. Only tested on a Garuntee Cabin, where mutliple of same cabin exist for purchase. If you use for a specific room (like "You Pick the Room"), if that room is booked the code will notify you. Have not tried to figure out if I can scan for an available room in that class. Suggest picking a GTY room for this code and use that as an indicator if your "pick you room" room changed, even though it may not correlate. 
-
+1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not nessesary.
    
 ## Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
