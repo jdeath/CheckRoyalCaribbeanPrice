@@ -5,6 +5,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
 import re
+import base64
 
 def main():
     
@@ -26,11 +27,10 @@ def main():
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
                 password = accountInfo['password']
-                accountId = accountInfo['accountId']
     
                 print(username)
                 session = requests.session()
-                access_token,session = login(username,password,session)
+                access_token,accountId,session = login(username,password,session)
                 getVoyages(access_token,accountId,session,apobj)
     
         if 'cruises' in data:
@@ -60,13 +60,20 @@ def login(username,password,session):
     }
     
     
-
     data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email+vdsid'
     
     #data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email'
     response = session.post('https://www.royalcaribbean.com/auth/oauth2/access_token', headers=headers, data=data)
     access_token = response.json().get("access_token")
-    return access_token,session
+    
+    list_of_strings = access_token.split(".")
+    string1 = list_of_strings[1]
+    while len(string1) % 4 != 0:
+        string1 += "="
+    decoded_bytes = base64.b64decode(string1)
+    decoded_string = decoded_bytes.decode('utf-8')
+    accountId = decoded_string[8:44]
+    return access_token,accountId,session
 
 def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj):
     
@@ -120,7 +127,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if currentPrice < paidPrice:
         text = reservationId + ": " + title + " Price is lower: " + str(currentPrice) + " Rebook"
         print(text)
-        apobj.notify(body=text, title='Price Alert')
+        apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
         print(reservationId + ": " + "You have the best price for " + title +  " of: " + str(paidPrice))
         
@@ -271,16 +278,23 @@ def get_cruise_price(url, paidPrice, apobj):
     
     response = requests.get('https://www.royalcaribbean.com/checkout/guest-info', params=params,headers=headers)
 
+    preString = params.get("sailDate")[0] + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
     
     soup = BeautifulSoup(response.text, "html.parser")
-    priceString = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"}).text
     
+    soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"})
+    if soupFind is None:
+        textString = preString + " No Longer Available To Book"
+        print(textString)
+        apobj.notify(body=textString, title='Cruise Room Not Available')
+        return
+    
+    
+    priceString = soupFind.text
     priceString = priceString.replace(",", "")
     m = re.search("\\$(.*)USD", priceString)
     priceOnlyString = m.group(1)
     price = float(priceOnlyString)
-    
-    preString = params.get("sailDate")[0] + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
     
     if price < paidPrice: 
         textString = "Rebook! " + preString + " New Price for "  + str(price) + " is lower than " + str(paidPrice)
