@@ -62,7 +62,6 @@ def login(username,password,session):
     
     data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email+vdsid'
     
-    #data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email'
     response = session.post('https://www.royalcaribbean.com/auth/oauth2/access_token', headers=headers, data=data)
     access_token = response.json().get("access_token")
     
@@ -166,7 +165,7 @@ def getVoyages(access_token,accountId,session,apobj):
         
     params = {
     'brand': 'R',
-    'includeCheckin': 'true',
+    'includeCheckin': 'false',
 }
     
     response = requests.get(
@@ -273,22 +272,51 @@ def get_cruise_price(url, paidPrice, apobj):
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
     }
 
+    # clean url of r0y and r0x tags
+    findindex1=url.find("r0y")
+    findindex2=url.find("&",findindex1+1)
+    if findindex2==-1:
+        url=url[0:findindex1-1]
+    else:
+        url=url[0:findindex1-1]+url[findindex2:len(url)]
+    
+    findindex1=url.find("r0x")
+    findindex2=url.find("&",findindex1+1)
+    if findindex2==-1:
+        url=url[0:findindex1-1]
+    else:
+        url=url[0:findindex1-1]+url[findindex2:len(url)]
+        
+    
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
     
     response = requests.get('https://www.royalcaribbean.com/checkout/guest-info', params=params,headers=headers)
-
+    
     preString = params.get("sailDate")[0] + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
     
-    soup = BeautifulSoup(response.text, "html.parser")
+    roomNumberList = params.get("r0j")
+    if roomNumberList:
+        roomNumber = roomNumberList[0]
+        preString = preString + " Cabin " + roomNumber
     
+    soup = BeautifulSoup(response.text, "html.parser")
     soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"})
     if soupFind is None:
-        textString = preString + " No Longer Available To Book"
-        print(textString)
-        apobj.notify(body=textString, title='Cruise Room Not Available')
-        return
-    
+        m = re.search("\"B:0\",\"NEXT_REDIRECT;replace;(.*);307;", response.text)
+        if m is not None:
+            redirectString = m.group(1)
+            textString = preString + ": URL Not Working - Redirecting to suggested room"
+            print(textString)
+            newURL = "https://www.royalcaribbean.com" + redirectString
+            get_cruise_price(newURL, paidPrice, apobj)
+            print("Update url to: " + newURL)
+            return
+        else:
+            textString = preString + " No Longer Available To Book"
+            print(textString)
+            apobj.notify(body=textString, title='Cruise Room Not Available')
+            return
     
     priceString = soupFind.text
     priceString = priceString.replace(",", "")
