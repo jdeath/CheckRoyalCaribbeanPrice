@@ -24,7 +24,9 @@ accountInfo:
     password: "pa$$word" # Your Royal Caribbean Password
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
-    paidPrice: "3833.74"   
+    paidPrice: "3833.74"
+  - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info..." # Can have as many URLS and price paid as you want
+    paidPrice: "1234.99"   
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user:password@gmail.com"
   - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
