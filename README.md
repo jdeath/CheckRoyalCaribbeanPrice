@@ -1,5 +1,5 @@
 # CheckRoyalCaribbeanPrice
-A script that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Automatically scans your account for all purchased packages. Will also check the price of a room if you provide the Royal Caribbean booking URL. You need to run this tool manually or inside a cron job. If you run home assistant, an addon is posted in my home assistant addon repo which can be called automatically.
+A script that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually or inside a cron job. If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website.
 
@@ -51,12 +51,12 @@ cruises:
 1. Go to Royal Caribbean and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
-1. Copy the URL into the cruiseURL field. 
+1. Copy the entire URL from the top of your browser into the cruiseURL field. 
 1. Put the price you paid in the paidPrice field
-1. Run the addon and see if it works
-1. you can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
+1. Run the tool and see if it works
+1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If it is lower than you paid for and before final payment date, call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
-1. Only tested on a Garuntee Cabin, where mutliple of same cabin exist for purchase. If you use for a specific room (like "You Pick the Room"), if that room is booked the code will notify you. Have not tried to figure out if I can scan for an available room in that class. Suggest picking a GTY room for this code and use that as an indicator if your "pick you room" room changed, even though it may not correlate. 
+1. Only tested on a Garuntee Cabin, where mutliple of same cabin exist for purchase. If you use for a specific room (like "You Pick the Room"), if that room is booked the code will notify you. Have not tried to figure out if I can scan for an available room in the same class. Suggest picking a GTY room for this code and use that as an indicator if your "pick you room" room changed, even though it may not correlate. 
 1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not nessesary.
    
 ## Apprise (Optional)
