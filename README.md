@@ -3,7 +3,7 @@ A script that checks if you have cheapest price for beverage package, excursions
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website.
 
-If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.
+~~If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.~~ Thanks to anonymous for the fix!
 
 There is a free tool cloud-based that does price checks for beverage packages/excursions already and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/  
 
@@ -22,7 +22,6 @@ Edit `config.yaml` and make sure in the same directory as `CheckRoyalCaribbeanPr
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
-    accountId: "abcdefgh-abcd-1234-1234-abcdefghijk"  # Your Royal Caribbean Account ID (see below)
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74"   
@@ -30,20 +29,6 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
   - url: "mailto://user:password@gmail.com"
   - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
 ```
-
-## Get Royal Caribbean Account ID
-1. Use Firefox to load Royal Caribbean Website
-1. Right Click in window, select `Inspect (Q)`
-1. Click SIGN IN on the Royal website (top right)
-1. Enter you username and password and click login
-1. Click the network button (has an up/down arrow) in the inspector section of firefox
-1. In the "filter urls" box type `profileBookings/enriched`
-1. Select the line that comes up that has information in the "File" column
-1. When you click, you see something like: `https://aws-prd.api.rccl.com/v1/profileBookings/enriched/XXXX-XXX-XXXX-XXX-XXXXXXX?brand=R&includeCheckin=true`
-1. Copy the `XXXX-XXX-XXXX-XXX-XXXXXXX`, that is your account id.
-1. Paste into config.yaml `accountId:` field
-1. This key should last about a month. You will need to get it again in a month and update config.yaml
-1. If anyone knows how to get this value via python, please let me know.
 
 ## Get Cruise URL
 1. Go to Royal Caribbean and do a mock booking of the room you have, with the same number of adults and kids
