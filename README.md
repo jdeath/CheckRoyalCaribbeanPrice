@@ -30,6 +30,12 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
   - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
 ```
 
+If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works
+```
+accountInfo:
+  - username: "user@gmail.com" # Your Royal Caribbean User Name
+    password: "pa$$word" # Your Royal Caribbean Password
+```
 ## Get Cruise URL
 1. Go to Royal Caribbean and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
