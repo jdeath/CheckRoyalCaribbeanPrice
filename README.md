@@ -5,7 +5,7 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 ~~If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.~~ Thanks to anonymous for the fix!
 
-There is a free tool cloud-based that does price checks for beverage packages/excursions already and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/  
+There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/ . Consider using that for a simpler solution.  
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
