@@ -100,6 +100,6 @@ If any of the prices are lower, it will send a notifcation if you setup aprise.
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partners account for what I booked)
 1. May not handle all orders correcty.
-1. Prices of internet and beverage are per day, this code needs to divide by the length of your cruise. If you buy a partial package, it may not work correctly.
-1. If other prices are per day, it will not work. Let me know what other things are not calculating correctly
+1. Prices of internet and beverage are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
+1. If other prices are per day, it will not work. Let me know what other things are not calculating correctly.
 1. Please double check that the price is lower before you rebook!
