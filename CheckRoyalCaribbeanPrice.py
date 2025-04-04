@@ -124,7 +124,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         currentPrice = response.json().get("payload").get("startingFromPrice").get("adultShipboardPrice")
     
     if currentPrice < paidPrice:
-        text = reservationId + ": " + title + " Price is lower: " + str(currentPrice) + " Rebook"
+        text = reservationId + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         print(text)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
