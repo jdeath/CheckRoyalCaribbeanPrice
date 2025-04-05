@@ -106,11 +106,11 @@ If any of the prices are lower, it will send a notifcation if you setup aprise.
 1. Enjoy youtube videos on cruising from: `https://www.royalcaribbeanblog.com/`, `https://www.youtube.com/royalcaribbeanblog` and `https://www.youtube.com/@LifeWellCruised`
 1. Maybe Matt or Ilana will feature this tool in a video !
 
-# Updates
-1. Probably not going to update much, unless I find an issue. I can only see my own account purchases.
+# Issues
+1. I am probably not going to update much, unless I find an issue. I can only see my own account purchases.
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
-1. It should handle orders made by other people in your party (works in my partners account for what I booked)
+1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
 1. May not handle all orders correcty.
 1. Prices of internet and beverage are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
-1. If other prices are per day, it will not work. Let me know what other things are not calculating correctly.
-1. Please double check that the price is lower before you rebook!
+1. If other prices are per day, it will not work. Let me know if other daily purchases are not calculating correctly.
+1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
