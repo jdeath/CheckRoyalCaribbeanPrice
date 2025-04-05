@@ -22,7 +22,12 @@ def main():
             for apprise in data['apprise']:
                 url = apprise['url']
                 apobj.add(url)
-    
+
+        if 'apprise_test' in data and data['apprise_test']:
+            apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
+            print("Apprise Notification Sent...quitting")
+            quit()
+        
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
