@@ -1,9 +1,9 @@
 # CheckRoyalCaribbeanPrice
-A script that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually, inside a cron job (linux), or [task schedular](https://www.windowscentral.com/how-create-automated-task-using-task-scheduler-windows-10) (windows). If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
+A script that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually, inside a cron job (linux), or [task scheduler](https://www.windowscentral.com/how-create-automated-task-using-task-scheduler-windows-10) (windows). If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website.
 
-~~If anyone can figure out how to get the AccountID programatically, please do a PR. I cannot figure that out.~~ Thanks to anonymous for the fix!
+~~If anyone can figure out how to get the AccountID programmatically, please do a PR. I cannot figure that out.~~ Thanks to anonymous for the fix!
 
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/ . Consider using that for a simpler solution.  
 
@@ -56,8 +56,8 @@ cruises:
 1. Run the tool and see if it works
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If it is lower than you paid for and before final payment date, call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
-1. Only tested on a Garuntee Cabin, where mutliple of same cabin exist for purchase. If you use for a specific room (like "You Pick the Room"), if that room is booked the code will notify you. Have not tried to figure out if I can scan for an available room in the same class. Suggest picking a GTY room for this code and use that as an indicator if your "pick you room" room changed, even though it may not correlate. 
-1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not nessesary.
+1. Only tested on a Guarantee Cabin, where multiple of same cabin exist for purchase. If you use for a specific room (like "You Pick the Room"), if that room is booked the code will notify you. Suggest picking a GTY room for this code and use that as an indicator if your "pick you room" room changed, even though it may not correlate. I may try to add the capability to scan for an available room in the same class.
+1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
    
 ## Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
@@ -65,14 +65,14 @@ cruises:
 1. This will send you an email only if there is a price drop
 1. Change username to your gmail username
 1. Change password to your gmail password. If you use 2-factor authentication, you need to generate an app password. You cannot use use normal password
-1. Documentation to generate ann app password for gmail is here: https://security.google.com/settings/security/apppasswords
-1. You can delete the whatsapp line, that is included so you know how to add other services. You can also add more lines for a additional gmail accounts.
+1. Documentation to generate an app password for gmail is here: https://security.google.com/settings/security/apppasswords
+1. You can delete the whatsapp line, that is included so you know how to add other services. You can also add more lines for an additional gmail accounts.
 
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py` (recommended) or `CheckRoyalCaribbeanPrice.exe`
 1. It will indicate if you should rebook or if you have the best price
 1. It will also tell you if the price has gone up since you purchased (do not rebook in that case!)
-1. If you setup apprise, it will notify you via your prefered method(s) if you should rebook
+1. If you setup apprise, it will notify you via your preferred method(s) if you should rebook
 
 ## Output
 Will output information on your purchases
@@ -84,7 +84,7 @@ CONFNUM2: 	Price of Deluxe Beverage Package is now higher: 72.99
 CONFNUM2: You have the best price for VOOM SURF + STREAM Internet Package of: 17.99
 2025-12-27 VI OUTSIDE 4N: You have best Price of 3612.12 
 ```
-If any of the prices are lower, it will send a notifcation if you setup aprise.
+If any of the prices are lower, it will send a notification if you set up apprise.
 
 ## Automating
 1. Linux: Put in a cron job, if running in linux, I am sure you know how!
@@ -110,7 +110,7 @@ If any of the prices are lower, it will send a notifcation if you setup aprise.
 1. I am probably not going to update much, unless I find an issue. I can only see my own account purchases.
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
-1. May not handle all orders correcty.
+1. May not handle all orders correctly.
 1. Prices of internet and beverage are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
 1. If other prices are per day, it will not work. Let me know if other daily purchases are not calculating correctly.
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
