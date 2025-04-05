@@ -66,15 +66,15 @@ cruises:
 1. This will send you an email only if there is a price drop
 1. Change username to your gmail username
 1. Change password to your gmail password. If you use 2-factor authentication, you need to generate an app password. You cannot use use normal password
-1. Documentation to generate an app password for gmail is here: https://security.google.com/settings/security/apppasswords
+   - Documentation to generate an app password for gmail is here: https://security.google.com/settings/security/apppasswords
 1. You can delete the whatsapp line, that is included so you know how to add other services. You can also add more lines for an additional gmail accounts.
 1. To test apprise, add a key in your config.yaml that says `apprise_test: true` . This will send a notification, then quit and not run the price check. This key goes above the `apprise:` keys not inside it (see `Edit Config File` section above). Once you know apprise is working, remove the line or set value to `false`
 
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py` (recommended, any OS) or `CheckRoyalCaribbeanPrice.exe` (Windows only)
-1. It will indicate if you should rebook or if you have the best price
-1. It will also tell you if the price has gone up since you purchased (do not rebook in that case!)
-1. If you setup apprise, it will notify you via your preferred method(s) if you should rebook
+    - It will indicate if you should rebook or if you have the best price
+    - It will also tell you if the price has gone up since you purchased (do not rebook in that case!)
+    - If you setup apprise, it will notify you via your preferred method(s) if you should rebook
 
 ## Output
 Will output information on your purchases
