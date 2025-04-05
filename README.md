@@ -86,7 +86,18 @@ CONFNUM2: You have the best price for VOOM SURF + STREAM Internet Package of: 17
 ```
 If any of the prices are lower, it will send a notifcation if you setup aprise.
 
-# Notes
+## Automating
+1. Linux: Put in a cron job, if running in linux, I am sure you know how!
+1. Home Assistant: Use directions in my [repo](https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck)
+1. Windows: Use windows task schedular
+1. Create a basic task. Select a daily trigger, suggest a little before you wake up
+1. Action, select "Start a Program"
+1. In "Program/script" Select the CheckRoyalCaribbeanPrice.exe file you download from here. Make sure the config.yaml is in same directory as .exe
+1. In "Start in (optional)" enter the directory of the .exe/.yaml (you can copy the "Program/script" field, paste it, and remove the CheckRoyalCaribbeanPrice.exe)
+1. After clicking finish, you can right click on task, go to triggers, and add more times to trigger the script. Suggest a time right before you get home from work. Twice a day should be sufficient
+1. Ensure apprise notifications are working, because the window will close automatically after run.
+   
+## Notes
 1. Confirm price is still lower on website, because it could have gone up since running this bot
 1. You need to first cancel your beverage package, shore excursion, internet, etc
 1. Wait about 10s
