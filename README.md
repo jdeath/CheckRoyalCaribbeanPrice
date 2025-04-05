@@ -94,7 +94,7 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Windows: Use windows task schedular
 1. Create a basic task. Select a daily trigger, suggest a little before you wake up
 1. Action, select "Start a Program"
-1. In "Program/script" Select the CheckRoyalCaribbeanPrice.exe file you download from here. Make sure the config.yaml is in same directory as .exe
+1. In "Program/script" Select the CheckRoyalCaribbeanPrice.exe file you download from here. Make sure the config.yaml is in same directory as .exe (if running python script, should be able to put python.exe the full path of this the script location)
 1. In "Start in (optional)" enter the directory of the .exe/.yaml (you can copy the "Program/script" field, paste it, and remove the CheckRoyalCaribbeanPrice.exe)
 1. After clicking finish, you can right click on task, go to triggers, and add more times to trigger the script. Suggest a time right before you get home from work. Twice a day should be sufficient
 1. Ensure apprise notifications are working, because the window will close automatically after run.
