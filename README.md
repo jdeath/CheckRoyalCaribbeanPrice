@@ -71,7 +71,7 @@ cruises:
 1. To test apprise, add a key in your config.yaml that says `apprise_test: true` . This will send a notification, then quit and not run the price check. This key goes above the `apprise:` keys not inside it (see `Edit Config File` section above). Once you know apprise is working, remove the line or set value to `false`
 
 ## Run
-1. `python CheckRoyalCaribbeanPrice.py` (recommended) or `CheckRoyalCaribbeanPrice.exe`
+1. `python CheckRoyalCaribbeanPrice.py` (recommended, any OS) or `CheckRoyalCaribbeanPrice.exe` (Windows only)
 1. It will indicate if you should rebook or if you have the best price
 1. It will also tell you if the price has gone up since you purchased (do not rebook in that case!)
 1. If you setup apprise, it will notify you via your preferred method(s) if you should rebook
