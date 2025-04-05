@@ -1,5 +1,5 @@
 # CheckRoyalCaribbeanPrice
-A script that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually or inside a cron job. If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
+A script that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually, inside a cron job (linux), or task schedular (windows). If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website.
 
