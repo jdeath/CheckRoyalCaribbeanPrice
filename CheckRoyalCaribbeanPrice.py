@@ -68,6 +68,11 @@ def login(username,password,session):
     data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email+vdsid'
     
     response = session.post('https://www.royalcaribbean.com/auth/oauth2/access_token', headers=headers, data=data)
+    
+    if response.status_code != 200:
+        print("Royal Caribbean Website Might Be Down. Quitting")
+        quit()
+          
     access_token = response.json().get("access_token")
     
     list_of_strings = access_token.split(".")
