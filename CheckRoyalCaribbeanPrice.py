@@ -36,6 +36,7 @@ def main():
                 print(username)
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session)
+                
                 getVoyages(access_token,accountId,session,apobj)
     
         if 'cruises' in data:
@@ -84,9 +85,7 @@ def login(username,password,session):
     accountId = decoded_string[8:44]
     return access_token,accountId,session
 
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj):
-    
-    
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj):    
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
@@ -127,7 +126,6 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         headers=headers,
     )
     
-    #print(response.json().get("payload"))
     title = response.json().get("payload").get("title")
     currentPrice = response.json().get("payload").get("startingFromPrice").get("adultPromotionalPrice")
     if not currentPrice:
@@ -193,6 +191,40 @@ def getVoyages(access_token,accountId,session,apobj):
         shipCode = booking.get("shipCode")
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
     
+def getRoyalUp(access_token,accountId,session,apobj):
+    # Unused, need javascript parsing to see offer
+    # Could notify when Royal Up is available, but not too useful.
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.5',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'X-Requested-With': 'XMLHttpRequest',
+        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
+        'Access-Token': access_token,
+        'vds-id': accountId,
+        'Account-Id': accountId,
+        'X-Request-Id': '67e0a0c8e15b1c327581b154',
+        'Req-App-Id': 'Royal.Web.PlanMyCruise',
+        'Req-App-Vers': '1.73.0',
+        'Content-Type': 'application/json',
+        'Origin': 'https://www.royalcaribbean.com',
+        'DNT': '1',
+        'Sec-GPC': '1',
+        'Connection': 'keep-alive',
+        'Referer': 'https://www.royalcaribbean.com/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'Priority': 'u=0',
+        # Requests doesn't support trailers
+        # 'TE': 'trailers',
+    }
+    
+    
+    response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
+    for booking in response.json().get("payload"):
+        print( booking.get("bookingId") + " " + booking.get("offerUrl") )
     
 def getOrders(access_token,accountId,session,reservationId,passengerId,ship,startDate,numberOfNights,apobj):
     
