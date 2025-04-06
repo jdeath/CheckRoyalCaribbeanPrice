@@ -249,16 +249,16 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 headers=headers,
             )
                     
-            orderDetail = response.json().get("payload").get("orderHistoryDetailItems")[0]
-            order_title = orderDetail.get("productSummary").get("title")
-            product = orderDetail.get("productSummary").get("id")
-            prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
-            paidPrice = orderDetail.get("guests")[0].get("priceDetails").get("subtotal")
-            # These packages report total price, must divide by number of days
-            if prefix == "pt_beverage" or prefix == "pt_internet":
-               paidPrice = round(paidPrice / numberOfNights,2)
-               
-            getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj)
+            for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
+                order_title = orderDetail.get("productSummary").get("title")
+                product = orderDetail.get("productSummary").get("id")
+                prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
+                paidPrice = orderDetail.get("guests")[0].get("priceDetails").get("subtotal")
+                # These packages report total price, must divide by number of days
+                if prefix == "pt_beverage" or prefix == "pt_internet":
+                   paidPrice = round(paidPrice / numberOfNights,2)
+                   
+                getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj)
 
 def get_cruise_price(url, paidPrice, apobj):
 
