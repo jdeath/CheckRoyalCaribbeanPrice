@@ -245,7 +245,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         orderCode = order.get("orderCode")
         
         # Only get Valid Orders That Cost Money
-        if order.get("status") == 'BOOKED' and order.get("orderTotals").get("total") > 0: 
+        if order.get("orderTotals").get("total") > 0: 
             
             # Get Order Details
             response = requests.get(
@@ -255,6 +255,9 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
             )
                     
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
+                # check for cancelled status at item-level
+                if orderDetail.get("guests")[0].get("orderStatus") == "CANCELLED":
+                    continue
                 order_title = orderDetail.get("productSummary").get("title")
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
