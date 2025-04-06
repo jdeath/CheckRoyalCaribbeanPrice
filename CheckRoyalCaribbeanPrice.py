@@ -187,7 +187,7 @@ def getVoyages(access_token,accountId,session,apobj):
     
     for booking in response.json().get("payload").get("profileBookings"):
         reservationId = booking.get("bookingId")
-        passengerId = booking.get("masterPassengerId")
+        passengerId = booking.get("passengerId")
         sailDate = booking.get("sailDate")
         numberOfNights = booking.get("numberOfNights")
         shipCode = booking.get("shipCode")
