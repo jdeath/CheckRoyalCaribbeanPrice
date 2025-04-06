@@ -330,7 +330,7 @@ def get_cruise_price(url, paidPrice, apobj):
     price = float(priceOnlyString)
     
     if price < paidPrice: 
-        textString = "Rebook! " + preString + " New Price for "  + str(price) + " is lower than " + str(paidPrice)
+        textString = "Rebook! " + preString + " New Price of "  + str(price) + " is lower than " + str(paidPrice)
         print(textString)
         apobj.notify(body=textString, title='Cruise Price Alert')
     else:
