@@ -14,7 +14,7 @@ There is a free website that does price checks for beverage packages/excursions 
 1. `pip install requests Apprise`
 
 ## Install (Not Recommended, Windows 11 Only)
-1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/0.5/CheckRoyalCaribbeanPrice.exe) from releases
+1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/0.6/CheckRoyalCaribbeanPrice.exe) from releases
     -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
     -   Note: Python code in repo may be newer than .exe file
 
