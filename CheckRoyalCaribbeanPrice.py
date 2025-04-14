@@ -78,9 +78,7 @@ def login(username,password,session):
     
     list_of_strings = access_token.split(".")
     string1 = list_of_strings[1]
-    while len(string1) % 4 != 0:
-        string1 += "="
-    decoded_bytes = base64.b64decode(string1)
+    decoded_bytes = base64.b64decode(string1 + '==')
     decoded_string = decoded_bytes.decode('utf-8')
     accountId = decoded_string[8:44]
     return access_token,accountId,session
