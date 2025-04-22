@@ -6,9 +6,16 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
 import re
 import base64
+import json
+
+cruiseLineName = "royalcaribbean"
+cruiseLineCode = "R"
+appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
 def main():
-    
+    global cruiseLineName
+    global cruiseLineCode
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(timestamp)
     
@@ -16,7 +23,6 @@ def main():
         
     with open('config.yaml', 'r') as file:
         data = yaml.safe_load(file)
-        
         
         if 'apprise' in data:
             for apprise in data['apprise']:
@@ -27,51 +33,41 @@ def main():
             apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
             print("Apprise Notification Sent...quitting")
             quit()
-        
+
+        if 'cruiseLineName' in data and data['cruiseLineName']:
+            cruiseLineName = data['cruiseLineName']
+        if 'cruiseLineCode' in data and data['cruiseLineCode']:
+            cruiseLineCode = data['cruiseLineCode']              
+
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
                 password = accountInfo['password']
-    
                 print(username)
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session)
-                
                 getVoyages(access_token,accountId,session,apobj)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
-                cruiseURL = cruises['cruiseURL'] 
-                paidPrice = float(cruises['paidPrice'])
-                get_cruise_price(cruiseURL, paidPrice, apobj)
-                
+                if cruiseLineName in cruises['cruiseURL']: # Only get X cruises if Celebrity, RCCL if Royal Caribbean
+                    cruiseURL = cruises['cruiseURL'] 
+                    paidPrice = float(cruises['paidPrice'])
+                    get_cruise_price(cruiseURL, paidPrice, apobj)
             
 def login(username,password,session):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'Referer': 'https://www.royalcaribbean.com/account/signin',
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ZzlTMDIzdDc0NDczWlVrOTA5Rk42OEYwYjRONjdQU09oOTJvMDR2TDBCUjY1MzdwSTJ5Mmg5NE02QmJVN0Q2SjpXNjY4NDZrUFF2MTc1MDk3NW9vZEg1TTh6QzZUYTdtMzBrSDJRNzhsMldtVTUwRkNncXBQMTN3NzczNzdrN0lC',
-        'Origin': 'https://www.royalcaribbean.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'Priority': 'u=0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
     }
-    
     
     data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email+vdsid'
     
-    response = session.post('https://www.royalcaribbean.com/auth/oauth2/access_token', headers=headers, data=data)
+    response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     
     if response.status_code != 200:
-        print("Royal Caribbean Website Might Be Down. Quitting")
+        print(cruiseLineName + " Website Might Be Down. Quitting")
         quit()
           
     access_token = response.json().get("access_token")
@@ -79,37 +75,16 @@ def login(username,password,session):
     list_of_strings = access_token.split(".")
     string1 = list_of_strings[1]
     decoded_bytes = base64.b64decode(string1 + '==')
-    decoded_string = decoded_bytes.decode('utf-8')
-    accountId = decoded_string[8:44]
+    auth_info = json.loads(decoded_bytes.decode('utf-8'))
+    accountId = auth_info["sub"]
     return access_token,accountId,session
 
 def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj):    
     
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.5',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'X-Requested-With': 'XMLHttpRequest',
-        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
         'Access-Token': access_token,
+        'AppKey': appKey,
         'vds-id': accountId,
-        'Account-Id': accountId,
-        'X-Request-Id': '67e0a0c8e15b1c327581b154',
-        'Req-App-Id': 'Royal.Web.PlanMyCruise',
-        'Req-App-Vers': '1.73.0',
-        'Content-Type': 'application/json',
-        'Origin': 'https://www.royalcaribbean.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.royalcaribbean.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        'Priority': 'u=0',
-        # Requests doesn't support trailers
-        # 'TE': 'trailers',
     }
 
     params = {
@@ -142,45 +117,22 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
 def getVoyages(access_token,accountId,session,apobj):
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.5',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'X-Requested-With': 'XMLHttpRequest',
-        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
         'Access-Token': access_token,
+        'AppKey': appKey,
         'vds-id': accountId,
-        'Account-Id': accountId,
-        'X-Request-Id': '67e0a0c8e15b1c327581b154',
-        'Req-App-Id': 'Royal.Web.PlanMyCruise',
-        'Req-App-Vers': '1.73.0',
-        'Content-Type': 'application/json',
-        'Origin': 'https://www.royalcaribbean.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.royalcaribbean.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        'Priority': 'u=0',
-        # Requests doesn't support trailers
-        # 'TE': 'trailers',
     }
-
         
     params = {
-    'brand': 'R',
-    'includeCheckin': 'false',
-}
-    
+        'brand': cruiseLineCode,
+        'includeCheckin': 'false',
+    }
+
     response = requests.get(
         'https://aws-prd.api.rccl.com/v1/profileBookings/enriched/' + accountId,
         params=params,
         headers=headers,
     )
-   
-    
+
     for booking in response.json().get("payload").get("profileBookings"):
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
@@ -206,11 +158,11 @@ def getRoyalUp(access_token,accountId,session,apobj):
         'Req-App-Id': 'Royal.Web.PlanMyCruise',
         'Req-App-Vers': '1.73.0',
         'Content-Type': 'application/json',
-        'Origin': 'https://www.royalcaribbean.com',
+        'Origin': 'https://www.'+cruiseLineName+'.com',
         'DNT': '1',
         'Sec-GPC': '1',
         'Connection': 'keep-alive',
-        'Referer': 'https://www.royalcaribbean.com/',
+        'Referer': 'https://www.'+cruiseLineName+'.com/',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'cross-site',
@@ -226,34 +178,11 @@ def getRoyalUp(access_token,accountId,session,apobj):
     
 def getOrders(access_token,accountId,session,reservationId,passengerId,ship,startDate,numberOfNights,apobj):
     
-    
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.5',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'X-Requested-With': 'XMLHttpRequest',
-        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
         'Access-Token': access_token,
-        'vds-id': accountId,
+        'AppKey': appKey,
         'Account-Id': accountId,
-        'X-Request-Id': '67e0a0c8e15b1c327581b154',
-        'Req-App-Id': 'Royal.Web.PlanMyCruise',
-        'Req-App-Vers': '1.73.0',
-        'Content-Type': 'application/json',
-        'Origin': 'https://www.royalcaribbean.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.royalcaribbean.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        'Priority': 'u=0',
-        # Requests doesn't support trailers
-        # 'TE': 'trailers',
     }
-
     
     params = {
         'passengerId': passengerId,
@@ -268,7 +197,6 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         params=params,
         headers=headers,
     )
-
  
     # Check for my orders and orders others booked for me
     for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
@@ -334,7 +262,7 @@ def get_cruise_price(url, paidPrice, apobj):
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
     
-    response = requests.get('https://www.royalcaribbean.com/checkout/guest-info', params=params,headers=headers)
+    response = requests.get('https://www.'+cruiseLineName+'.com/checkout/guest-info', params=params,headers=headers)
     
     preString = params.get("sailDate")[0] + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
     
@@ -351,7 +279,7 @@ def get_cruise_price(url, paidPrice, apobj):
             redirectString = m.group(1)
             textString = preString + ": URL Not Working - Redirecting to suggested room"
             print(textString)
-            newURL = "https://www.royalcaribbean.com" + redirectString
+            newURL = "https://www." + cruiseLineName + ".com" + redirectString
             get_cruise_price(newURL, paidPrice, apobj)
             print("Update url to: " + newURL)
             return
