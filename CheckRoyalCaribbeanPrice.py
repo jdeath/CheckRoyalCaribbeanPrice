@@ -100,9 +100,17 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     )
     
     title = response.json().get("payload").get("title")
-    currentPrice = response.json().get("payload").get("startingFromPrice").get("adultPromotionalPrice")
+    
+    try:
+        newPricePayload = response.json().get("payload").get("startingFromPrice")
+    except:
+        print(title + " is No Longer For Sale")
+        return
+        
+    currentPrice = newPricePayload.get("adultPromotionalPrice")
+    
     if not currentPrice:
-        currentPrice = response.json().get("payload").get("startingFromPrice").get("adultShipboardPrice")
+        currentPrice = newPricePayload.get("adultShipboardPrice")
     
     if currentPrice < paidPrice:
         text = reservationId + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
