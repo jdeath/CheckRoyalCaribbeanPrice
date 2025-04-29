@@ -8,13 +8,10 @@ import re
 import base64
 import json
 
-cruiseLineName = "royalcaribbean"
-cruiseLineCode = "R"
+
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
 def main():
-    global cruiseLineName
-    global cruiseLineCode
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(timestamp)
@@ -34,28 +31,31 @@ def main():
             print("Apprise Notification Sent...quitting")
             quit()
 
-        if 'cruiseLineName' in data and data['cruiseLineName']:
-            cruiseLineName = data['cruiseLineName']
-        if 'cruiseLineCode' in data and data['cruiseLineCode']:
-            cruiseLineCode = data['cruiseLineCode']              
-
+        
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
                 password = accountInfo['password']
-                print(username)
+                if 'cruiseLine' in accountInfo:
+                   if accountInfo['cruiseLine'].lower().startswith("c"):
+                    cruiseLineName = "celebritycruises"
+                   else:
+                    cruiseLineName =  "royalcaribbean"
+                else:
+                   cruiseLineName =  "royalcaribbean"     
+                    
+                print(cruiseLineName + " " + username)
                 session = requests.session()
-                access_token,accountId,session = login(username,password,session)
-                getVoyages(access_token,accountId,session,apobj)
+                access_token,accountId,session = login(username,password,session,cruiseLineName)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
-                if cruiseLineName in cruises['cruiseURL']: # Only get X cruises if Celebrity, RCCL if Royal Caribbean
                     cruiseURL = cruises['cruiseURL'] 
                     paidPrice = float(cruises['paidPrice'])
                     get_cruise_price(cruiseURL, paidPrice, apobj)
             
-def login(username,password,session):
+def login(username,password,session,cruiseLineName):
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ZzlTMDIzdDc0NDczWlVrOTA5Rk42OEYwYjRONjdQU09oOTJvMDR2TDBCUjY1MzdwSTJ5Mmg5NE02QmJVN0Q2SjpXNjY4NDZrUFF2MTc1MDk3NW9vZEg1TTh6QzZUYTdtMzBrSDJRNzhsMldtVTUwRkNncXBQMTN3NzczNzdrN0lC',
@@ -122,16 +122,21 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if currentPrice > paidPrice:
         print(reservationId + ": \t " + "Price of " + title + " is now higher: " + str(currentPrice))
 
-def getVoyages(access_token,accountId,session,apobj):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
 
     headers = {
         'Access-Token': access_token,
         'AppKey': appKey,
         'vds-id': accountId,
     }
+    
+    if cruiseLineName == "royalcaribbean":
+        brandCode = "R"
+    else:
+        brandCode = "C"
         
     params = {
-        'brand': cruiseLineCode,
+        'brand': brandCode,
         'includeCheckin': 'false',
     }
 
@@ -235,7 +240,6 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj)
 
 def get_cruise_price(url, paidPrice, apobj):
-
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'en-US,en;q=0.9',
@@ -267,6 +271,9 @@ def get_cruise_price(url, paidPrice, apobj):
         url=url[0:findindex1-1]+url[findindex2:len(url)]
         
     
+    
+    m = re.search('www.(.*).com', url)
+    cruiseLineName = m.group(1)
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
     
