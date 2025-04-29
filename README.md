@@ -5,6 +5,8 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 ~~If anyone can figure out how to get the AccountID programmatically, please do a PR. I cannot figure that out.~~ Thanks to anonymous for the fix!
 
+Thanks to help from @cyntil8 , supports Celebrity Cruises too. Not fully tested yet.
+
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/ . Consider using that for a simpler solution.  
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
@@ -24,11 +26,14 @@ Edit `config.yaml` and make sure in the same directory as `CheckRoyalCaribbeanPr
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
+  - username: "user@gmail.com" # Your Celebrity User Name
+    password: "pa$$word" # Your Royal Celebrity Password
+    cruiseLine: "celebrity" # Must indicate if celebrity
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74"
-  - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info..." # Can have as many URLS and price paid as you want
-    paidPrice: "1234.99"   
+  - cruiseURL: "https://www.celebritycruises.com/room-selection/room-subtype?groupId=RF04FLL-1098868345&packageCode=RF4BH246&sailDate=2025-08-11&country=USA&selectedCurrencyCode=USD&shipCode=RF&cabinClassType=INTERIOR&category=I&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y" # Can have as many URLS and price paid as you want. Supports Celebrity too
+    paidPrice: "1127.6"   
 apprise_test: false # Optional
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user:password@gmail.com"
@@ -40,7 +45,9 @@ If you only want to check cruise addons (drink packages, excursions, etc) and do
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
+    cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 ```
+
 
 If you only want to check cruise price and do not want emails, the account information is not needed by the tool. Config file can look like this:
 
@@ -51,7 +58,7 @@ cruises:
 ```
 
 ## Get Cruise URL (Optional)
-1. Go to Royal Caribbean and do a mock booking of the room you have, with the same number of adults and kids
+1. Go to Royal Caribbean or Celibrity and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. 
