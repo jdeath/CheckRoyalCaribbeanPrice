@@ -58,7 +58,7 @@ cruises:
 ```
 
 ## Get Cruise URL (Optional)
-1. Go to Royal Caribbean or Celibrity and do a mock booking of the room you have, with the same number of adults and kids
+1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
@@ -125,6 +125,6 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
 1. May not handle all orders correctly.
-1. Prices of internet and beverage are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
+1. Prices of internet and beverage packages are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
 1. If other prices are per day, it will not work. Let me know if other daily purchases are not calculating correctly.
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
