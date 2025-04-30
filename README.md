@@ -27,7 +27,7 @@ accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
   - username: "user@gmail.com" # Your Celebrity User Name
-    password: "pa$$word" # Your Royal Celebrity Password
+    password: "pa$$word" # Your Celebrity Password
     cruiseLine: "celebrity" # Must indicate if celebrity
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
@@ -40,7 +40,7 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
   - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
 ```
 
-If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works:
+If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
 ```
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
