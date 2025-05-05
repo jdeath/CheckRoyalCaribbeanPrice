@@ -152,9 +152,11 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
         sailDate = booking.get("sailDate")
         numberOfNights = booking.get("numberOfNights")
         shipCode = booking.get("shipCode")
+        
+        print(reservationId + ": " + sailDate + " " + shipCode + " Room " + booking.get("stateroomNumber"))
         if booking.get("balanceDue") is True:
-            print(reservationId + ": " + sailDate + " " + shipCode + " Room " + booking.get("stateroomNumber")
-             + " - Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")))
+            print(reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")))
+            
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
     
 def getRoyalUp(access_token,accountId,session,apobj):
