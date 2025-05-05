@@ -5,6 +5,8 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 ~~If anyone can figure out how to get the AccountID programmatically, please do a PR. I cannot figure that out.~~ Thanks to anonymous for the fix!
 
+Github version will tell you the remaining balance on your booked cruises. Let me know in an issue if this is less than your Travel Agent says you owe. My cruise shows about 10% lower than the orrginal total fare (eg. add your paid deposit back in). I wonder if this is the TA profit?
+
 Thanks to help from @cyntil8 , supports Celebrity Cruises too. Not fully tested yet.
 
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/ . Consider using that for a simpler solution.  
