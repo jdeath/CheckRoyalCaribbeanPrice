@@ -47,6 +47,7 @@ def main():
                 print(cruiseLineName + " " + username)
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
+                getLoyalty(access_token,accountId,session)
                 getVoyages(access_token,accountId,session,apobj,cruiseLineName)
     
         if 'cruises' in data:
@@ -122,6 +123,21 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if currentPrice > paidPrice:
         print(reservationId + ": \t " + "Price of " + title + " is now higher: " + str(currentPrice))
 
+def getLoyalty(access_token,accountId,session):
+
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'account-id': accountId,
+    }
+    response = session.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', headers=headers)
+    loyalty = response.json().get("payload").get("loyaltyInformation")
+    cAndANumber = loyalty.get("crownAndAnchorId")
+    cAndALevel = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
+    cAndAPoints = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints")
+    print("C&A: " + str(cAndANumber) + " " + cAndALevel + " " + str(cAndAPoints) + " Points")  
+    
+    
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
 
     headers = {
