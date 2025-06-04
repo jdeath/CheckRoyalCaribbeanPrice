@@ -254,6 +254,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
                 paidPrice = orderDetail.get("guests")[0].get("priceDetails").get("subtotal")
+                if paidPrice == 0:
+                    continue
                 # These packages report total price, must divide by number of days
                 if prefix == "pt_beverage" or prefix == "pt_internet":
                    paidPrice = round(paidPrice / numberOfNights,2)
