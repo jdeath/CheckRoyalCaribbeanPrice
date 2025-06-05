@@ -9,7 +9,7 @@ Latest version will tell you the remaining balance on your booked cruises. Post 
 
 Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested yet.
 
-Thanks to @tecmage for get the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card.
+Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card.
 
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/ . Consider using that for a simpler solution.  
 
