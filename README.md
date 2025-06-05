@@ -119,6 +119,7 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Rebook at the lower price.
 1. It takes about a week for Royal to refund your credit card, but they charge you new price right away!
 1. Enjoy youtube videos on cruising from: `https://www.royalcaribbeanblog.com/`, `https://www.youtube.com/royalcaribbeanblog` and `https://www.youtube.com/@LifeWellCruised`
+1. If you cancel the Ultimate Dinning Package and rebook, all your reservations will be cancelled. Doing this too close to the cruise may cause you to not get your old reservation times. Reddit says to go to any open restaurant when you board to book/switch to your prefered times.
 1. Maybe Matt or Ilana will feature this tool in a video !
 1. Update: Mentioned on RoyalCaribbeanBlog.com: `https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers` 
 
