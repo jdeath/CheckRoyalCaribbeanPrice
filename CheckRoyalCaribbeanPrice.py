@@ -8,7 +8,6 @@ import re
 import base64
 import json
 
-
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
 def main():
@@ -68,7 +67,7 @@ def login(username,password,session,cruiseLineName):
     response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     
     if response.status_code != 200:
-        print(cruiseLineName + " Website Might Be Down. Quitting")
+        print(cruiseLineName + " Website Might Be Down. Quitting.")
         quit()
           
     access_token = response.json().get("access_token")
@@ -80,7 +79,7 @@ def login(username,password,session,cruiseLineName):
     accountId = auth_info["sub"]
     return access_token,accountId,session
 
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj):    
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId):
     
     headers = {
         'Access-Token': access_token,
@@ -92,6 +91,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         'reservationId': reservationId,
         'startDate': startDate,
         'currencyIso': 'USD',
+        'passengerId': passengerId,
     }
 
     response = session.get(
@@ -175,7 +175,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
             
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
     
-def getRoyalUp(access_token,accountId,session,apobj):
+def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     # Unused, need javascript parsing to see offer
     # Could notify when Royal Up is available, but not too useful.
     headers = {
@@ -253,6 +253,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 order_title = orderDetail.get("productSummary").get("title")
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
+                if prefix == "pt_internet":
+                    product = orderDetail.get("productSummary").get("baseId")
                 paidPrice = orderDetail.get("guests")[0].get("priceDetails").get("subtotal")
                 if paidPrice == 0:
                     continue
@@ -261,7 +263,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                       if not order_title.startswith("Evian") and not order_title.startswith("Specialty Coffee"):
                           paidPrice = round(paidPrice / numberOfNights,2)
                    
-                getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj)
+                getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId)
 
 def get_cruise_price(url, paidPrice, apobj):
     headers = {

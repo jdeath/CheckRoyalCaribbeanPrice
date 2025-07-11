@@ -17,7 +17,7 @@ There is a free website that does price checks for beverage packages/excursions 
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the raw files from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `cd CheckRoyalCaribbeanPrice`
-1. `pip install requests Apprise`
+1. `pip install requests Apprise bs4`
 
 ## Install (Not Recommended, Windows 11 Only)
 1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/0.7/CheckRoyalCaribbeanPrice.exe) from releases
@@ -25,7 +25,7 @@ There is a free website that does price checks for beverage packages/excursions 
     -   Note: Python code in repo may be newer than .exe file
 
 ## Edit Config File
-Edit `config.yaml` and make sure in the same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe`
+Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and make sure in the same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe`.
 ```
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
