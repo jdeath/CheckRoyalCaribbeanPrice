@@ -11,7 +11,9 @@ Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested y
 
 Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card.
 
-There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: https://royalpricetracker.com/ . Consider using that for a simpler solution.  
+There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: `https://royalpricetracker.com/` . Consider using that for a simpler solution.  
+
+Without an account, you can also go to: `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/`  and look up your cruise. It will point you to all the beverage, shore, internet packages right on the royal caribbean website to see the prices. Thanks to redditer @illuminated0ne for finding that. I may add looking up cruises you have not booked at a later time.
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
