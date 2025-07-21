@@ -10,6 +10,8 @@ import json
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
+foundItems = []
+
 def main():
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -79,7 +81,7 @@ def login(username,password,session,cruiseLineName):
     accountId = auth_info["sub"]
     return access_token,accountId,session
 
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName):
     
     headers = {
         'Access-Token': access_token,
@@ -100,6 +102,9 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         headers=headers,
     )
     
+    if response.json().get("payload") is None:
+        return
+        
     title = response.json().get("payload").get("title")
     
     try:
@@ -107,6 +112,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     except:
         print(title + " is No Longer For Sale")
         return
+        
         
     currentPrice = newPricePayload.get("adultPromotionalPrice")
     
@@ -118,7 +124,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         print(text)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
-        print(reservationId + ": " + "You have the best price for " + title +  " of: " + str(paidPrice))
+        print(reservationId + ": " + passengerName + " has the best price for " + title +  " of: " + str(paidPrice))
         
     if currentPrice > paidPrice:
         print(reservationId + ": \t " + "Price of " + title + " is now higher: " + str(currentPrice))
@@ -174,6 +180,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
             print(reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")))
             
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
+        print("")
     
 def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     # Unused, need javascript parsing to see offer
@@ -262,8 +269,25 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 if prefix == "pt_beverage" or prefix == "pt_internet":
                       if not order_title.startswith("Evian") and not order_title.startswith("Specialty Coffee"):
                           paidPrice = round(paidPrice / numberOfNights,2)
-                   
-                getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId)
+                #print(orderDetail)
+                
+                guests = orderDetail.get("guests")
+                #pretty_json_string = json.dumps(guests, indent=4)
+                #print(pretty_json_string)
+                
+                for guest in guests:
+                    passengerId = guest.get("id")
+                    firstName = guest.get("firstName").capitalize()
+                    reservationId = guest.get("reservationId")
+                    
+                    # Skip if item checked already
+                    newKey = passengerId + reservationId + prefix + product
+                    if newKey in foundItems:
+                        continue
+                        
+                    foundItems.append(newKey)
+                    
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName)
 
 def get_cruise_price(url, paidPrice, apobj):
     headers = {
