@@ -75,7 +75,7 @@ cruises:
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser. It is possible the room is not available. Going to the cruiseURL directly might give you a false alarm and you will look like an idiot calling your travel agent!
 1. If it is lower than you paid for, the cabin is stil bookable, and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
-1. Update the pricePaid field to the new price. Remove the `$` and any `,
+1. Update the pricePaid field to the new price. Remove the `$` and any `,`
 1. Only tested on a Guarantee Cabin, where multiple of same cabin exist for purchase. If you use for a specific room (like "You Pick the Room"), if that room is booked the code will notify you. Suggest picking a GTY room for this code and use that as an indicator if your "pick you room" room changed, even though it may not correlate. I may try to add the capability to scan for an available room in the same class.
 1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
    
