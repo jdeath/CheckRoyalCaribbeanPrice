@@ -15,6 +15,7 @@ foundItems = []
 def main():
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(" ")
     print(timestamp)
     
     apobj = Apprise()
@@ -180,7 +181,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
             print(reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")))
             
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
-        print("")
+        print(" ")
     
 def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     # Unused, need javascript parsing to see offer
