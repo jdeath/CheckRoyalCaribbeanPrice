@@ -12,8 +12,9 @@ appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
 foundItems = []
 
-RED = '\033[91m'
+#RED = '\033[91m'
 #GREEN = '\033[92m'
+RED = '\033[1;31;40m'
 GREEN = '\033[1;32m'
 YELLOW = '\033[33m'
 RESET = '\033[0m' # Resets color to default
