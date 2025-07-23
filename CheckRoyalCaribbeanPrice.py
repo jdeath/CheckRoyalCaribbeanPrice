@@ -12,6 +12,12 @@ appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
 foundItems = []
 
+RED = '\033[91m'
+GREEN = '\033[92m'
+YELLOW = '\033[33m'
+RESET = '\033[0m' # Resets color to default
+
+
 def main():
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -122,13 +128,15 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     
     if currentPrice < paidPrice:
         text = reservationId + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
-        print(text)
+        print(RED + text + RESET)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
-        print(reservationId + ": " + passengerName + " has the best price for " + title +  " of: " + str(paidPrice))
+        tempString = GREEN + reservationId + ": " + passengerName + " has the best price for " + title +  " of: " + str(paidPrice) + RESET
+        if currentPrice > paidPrice:
+            tempString += " (now " + str(currentPrice) + ")"
+        print(tempString)
         
-    if currentPrice > paidPrice:
-        print(reservationId + ": \t " + "Price of " + title + " is now higher: " + str(currentPrice))
+    
 
 def getLoyalty(access_token,accountId,session):
 
@@ -178,7 +186,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
         
         print(reservationId + ": " + sailDate + " " + shipCode + " Room " + booking.get("stateroomNumber"))
         if booking.get("balanceDue") is True:
-            print(reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")))
+            print(YELLOW + reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
             
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
         print(" ")
@@ -285,7 +293,6 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     newKey = passengerId + reservationId + prefix + product
                     if newKey in foundItems:
                         continue
-                        
                     foundItems.append(newKey)
                     
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName)
@@ -351,7 +358,7 @@ def get_cruise_price(url, paidPrice, apobj):
             return
         else:
             textString = preString + " No Longer Available To Book"
-            print(textString)
+            print(YELLOW + textString + RESET)
             apobj.notify(body=textString, title='Cruise Room Not Available')
             return
     
@@ -363,12 +370,13 @@ def get_cruise_price(url, paidPrice, apobj):
     
     if price < paidPrice: 
         textString = "Rebook! " + preString + " New Price of "  + str(price) + " is lower than " + str(paidPrice)
-        print(textString)
+        print(RED + textString + RESET)
         apobj.notify(body=textString, title='Cruise Price Alert')
     else:
-        print(preString + ": You have best Price of " + str(paidPrice) )
+        tempString = GREEN + preString + ": You have best Price of " + str(paidPrice) + RESET
         if price > paidPrice:
-            print("\t Current Price is higher: " + str(price) )
+            tempString += " (now " + str(price) + ")"
+            print(tempString)
 
 if __name__ == "__main__":
     main()
