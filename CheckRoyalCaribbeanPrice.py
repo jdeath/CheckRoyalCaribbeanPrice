@@ -133,7 +133,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         print(RED + text + RESET)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
-        tempString = GREEN + reservationId + ": " + passengerName.ljust(10) + " (" + room + ") has the best price for " + title +  " of: " + str(paidPrice) + RESET
+        tempString = GREEN + reservationId + ": " + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + RESET
         if currentPrice > paidPrice:
             tempString += " (now " + str(currentPrice) + ")"
         print(tempString)
@@ -371,11 +371,11 @@ def get_cruise_price(url, paidPrice, apobj):
     price = float(priceOnlyString)
     
     if price < paidPrice: 
-        textString = "Rebook! " + preString + " New Price of "  + str(price) + " is lower than " + str(paidPrice)
+        textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
         print(RED + textString + RESET)
         apobj.notify(body=textString, title='Cruise Price Alert')
     else:
-        tempString = GREEN + preString + ": You have best Price of " + str(paidPrice) + RESET
+        tempString = GREEN + preString + ": You have best price of " + str(paidPrice) + RESET
         if price > paidPrice:
             tempString += " (now " + str(price) + ")"
             print(tempString)
