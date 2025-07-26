@@ -185,8 +185,18 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
         sailDate = booking.get("sailDate")
         numberOfNights = booking.get("numberOfNights")
         shipCode = booking.get("shipCode")
+        guests = booking.get("passengers")
+                
+        passengerNames = ""
+        for guest in guests:
+            firstName = guest.get("firstName").capitalize()
+            passengerNames += firstName + ", "
         
-        print(reservationId + ": " + sailDate + " " + shipCode + " Room " + booking.get("stateroomNumber"))
+        passengerNames = passengerNames.rstrip()
+        passengerNames = passengerNames[:-1]
+        
+        
+        print(reservationId + ": " + sailDate + " " + shipCode + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
             
