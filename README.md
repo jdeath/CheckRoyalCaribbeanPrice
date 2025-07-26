@@ -13,7 +13,9 @@ Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested y
 
 Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card.
 
-Thanks to @jipis for fixing internet pricing and identifying how to find specials for individual passengers. I changed the logic to check every single passenger's order to find specials only available to them (like an unlisted 40% refreshment package July 2025 sale only available to teens) which the code was not finding. Code also avoids checking orders multiple times, which can happen when reservations are linked. For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I will try to fix in the future, the passengers are booked in the correct room!
+Thanks to @jipis for fixing internet pricing and identifying how to find specials for individual passengers. I changed the logic to check every single passenger's order to find specials only available to them (like an unlisted 40% refreshment package July 2025 sale only available to teens) which the code was not finding. Code also avoids checking orders multiple times, which can happen when reservations are linked. 
+
+For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The passengers' first names booked in each room will be shown at the start of each booking.
 
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: `https://royalpricetracker.com/` . Consider using that for a simpler solution.  
 
