@@ -90,7 +90,7 @@ def login(username,password,session,cruiseLineName):
     accountId = auth_info["sub"]
     return access_token,accountId,session
 
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName,room):
     
     headers = {
         'Access-Token': access_token,
@@ -129,11 +129,11 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         currentPrice = newPricePayload.get("adultShipboardPrice")
     
     if currentPrice < paidPrice:
-        text = reservationId + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+        text = reservationId + " " + passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         print(RED + text + RESET)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
-        tempString = GREEN + reservationId + ": " + passengerName + " has the best price for " + title +  " of: " + str(paidPrice) + RESET
+        tempString = GREEN + reservationId + ": " + passengerName.ljust(10) + " (" + room + ") has the best price for " + title +  " of: " + str(paidPrice) + RESET
         if currentPrice > paidPrice:
             tempString += " (now " + str(currentPrice) + ")"
         print(tempString)
@@ -296,8 +296,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     if newKey in foundItems:
                         continue
                     foundItems.append(newKey)
-                    
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName)
+                    room = guest.get("stateroomNumber")
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName,room)
 
 def get_cruise_price(url, paidPrice, apobj):
     headers = {
