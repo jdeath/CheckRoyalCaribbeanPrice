@@ -7,6 +7,8 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 Latest version will tell you the remaining balance on your booked cruises. Post an issue if this is less than your Travel Agent says you owe. My cruise shows about 10% lower than the original total fare (eg. add your paid deposit back in). I wonder if this is the TA profit?
 
+Pulls passengers' room numbers from the API. Sometimes individual excursions/packages have rooms returned by the API, where the booking stil reports QTY (garuteee=room not yet assigned). If the room returned by the booking is the room you are assigned, please post an issue so this feature can be confirmed.
+
 Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested yet.
 
 Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card.
