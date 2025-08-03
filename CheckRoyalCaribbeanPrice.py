@@ -203,40 +203,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
         print(" ")
     
-def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
-    # Unused, need javascript parsing to see offer
-    # Could notify when Royal Up is available, but not too useful.
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.5',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'X-Requested-With': 'XMLHttpRequest',
-        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
-        'Access-Token': access_token,
-        'vds-id': accountId,
-        'Account-Id': accountId,
-        'X-Request-Id': '67e0a0c8e15b1c327581b154',
-        'Req-App-Id': 'Royal.Web.PlanMyCruise',
-        'Req-App-Vers': '1.73.0',
-        'Content-Type': 'application/json',
-        'Origin': 'https://www.'+cruiseLineName+'.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.'+cruiseLineName+'.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        'Priority': 'u=0',
-        # Requests doesn't support trailers
-        # 'TE': 'trailers',
-    }
-    
-    
-    response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
-    for booking in response.json().get("payload"):
-        print( booking.get("bookingId") + " " + booking.get("offerUrl") )
+
     
 def getOrders(access_token,accountId,session,reservationId,passengerId,ship,startDate,numberOfNights,apobj):
     
@@ -363,10 +330,11 @@ def get_cruise_price(url, paidPrice, apobj):
         if m is not None:
             redirectString = m.group(1)
             textString = preString + ": URL Not Working - Redirecting to suggested room"
-            print(textString)
+            # Uncomment these print statements, if get into a loop
+            #print(textString)
             newURL = "https://www." + cruiseLineName + ".com" + redirectString
             get_cruise_price(newURL, paidPrice, apobj)
-            print("Update url to: " + newURL)
+            #print("Update url to: " + newURL)
             return
         else:
             textString = preString + " No Longer Available To Book"
@@ -389,6 +357,133 @@ def get_cruise_price(url, paidPrice, apobj):
         if price > paidPrice:
             tempString += " (now " + str(price) + ")"
             print(tempString)
+
+# Unused Functions
+# For Future Capability
+
+# Get List of Ships From API
+def getShips():
+
+    headers = {
+        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'accept': 'application/json',
+        'appversion': '1.54.0',
+        'accept-language': 'en',
+        'user-agent': 'okhttp/4.10.0',
+    }
+
+    params = {
+        'sort': 'name',
+    }
+
+    response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+
+    shipCodes = []
+    ships = response.json().get("payload").get("ships")
+    for ship in ships:
+        shipCode = ship.get("shipCode")
+        shipCodes.append(shipCode)
+        name = ship.get("name")
+        classificationCode = ship.get("classificationCode")
+        brand = ship.get("brand")
+        print(shipCode + " " + name)
+    return shipCodes
+
+
+# Get SailDates From a Ship Code
+def getSailDates(shipCode):
+    headers = {
+        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'accept': 'application/json',
+        'appversion': '1.54.0',
+        'accept-language': 'en',
+        'user-agent': 'okhttp/4.10.0',
+    }
+
+    params = {
+        'resultSet': '100',
+    }
+
+
+    response = requests.get('https://api.rccl.com/en/royal/mobile/v3/ships/' + shipCode + '/voyages', params=params, headers=headers)
+    voyages = response.json().get("payload").get("voyages")
+    
+    sailDates = []
+    for voyage in voyages:
+        sailDate = voyage.get("sailDate")
+        sailDates.append(sailDate)
+        voyageDescription = voyage.get("voyageDescription")
+        voyageId = voyage.get("voyageId")
+        voyageCode = voyage.get("voyageCode")
+        print(sailDate + " " + voyageDescription)
+
+    return sailDates
+
+# Get Available Products from shipcode and saildate
+def getProducts(shipCode, sailDate):
+    
+    headers = {
+        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'accept': 'application/json',
+        'appversion': '1.54.0',
+        'accept-language': 'en',
+        'user-agent': 'okhttp/4.10.0',
+    }
+
+    params = {
+        'sailingID': shipCode + sailDate,
+        'offset': '0',
+        'availableForSale': 'all',
+    }
+
+    response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
+
+    products = response.json().get("payload").get("products")
+    for product in products:
+        productTitle = product.get("productTitle")
+        startingFromPrice = product.get("startingFromPrice")
+        
+        availableForSale = product.get("availableForSale")
+        if not startingFromPrice or not availableForSale:
+            continue
+            
+        adultPrice = startingFromPrice.get("adultPrice")
+        print(productTitle + " " + str(adultPrice))
+
+def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
+    # Unused, need javascript parsing to see offer
+    # Could notify when Royal Up is available, but not too useful.
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.5',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'X-Requested-With': 'XMLHttpRequest',
+        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
+        'Access-Token': access_token,
+        'vds-id': accountId,
+        'Account-Id': accountId,
+        'X-Request-Id': '67e0a0c8e15b1c327581b154',
+        'Req-App-Id': 'Royal.Web.PlanMyCruise',
+        'Req-App-Vers': '1.73.0',
+        'Content-Type': 'application/json',
+        'Origin': 'https://www.'+cruiseLineName+'.com',
+        'DNT': '1',
+        'Sec-GPC': '1',
+        'Connection': 'keep-alive',
+        'Referer': 'https://www.'+cruiseLineName+'.com/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'Priority': 'u=0',
+        # Requests doesn't support trailers
+        # 'TE': 'trailers',
+    }
+    
+    response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
+    for booking in response.json().get("payload"):
+        print( booking.get("bookingId") + " " + booking.get("offerUrl") )
+
 
 if __name__ == "__main__":
     main()
