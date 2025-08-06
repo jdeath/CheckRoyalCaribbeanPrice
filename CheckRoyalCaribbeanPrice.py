@@ -1,7 +1,7 @@
 import requests
 import yaml
 from apprise import Apprise
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
 import re
@@ -65,6 +65,8 @@ def main():
                     cruiseURL = cruises['cruiseURL'] 
                     paidPrice = float(cruises['paidPrice'])
                     get_cruise_price(cruiseURL, paidPrice, apobj)
+
+                    
             
 def login(username,password,session,cruiseLineName):
     headers = {
@@ -89,6 +91,8 @@ def login(username,password,session,cruiseLineName):
     auth_info = json.loads(decoded_bytes.decode('utf-8'))
     accountId = auth_info["sub"]
     return access_token,accountId,session
+
+
 
 def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName,room):
     
@@ -137,8 +141,51 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         if currentPrice > paidPrice:
             tempString += " (now " + str(currentPrice) + ")"
         print(tempString)
+
+
         
+def getBeveragePrice(access_token,accountId,session, reservationId, brandCode, cartId, email, endDate, guests, passengerId, shipCode, startDate):
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'vds-id': accountId,
+        'Content-Type': 'application/json'
+    }
+
+    # Create guests obj for request
+    guestsIds = [{'id': guest["passengerId"], 'reservationId': reservationId} for guest in guests]
+
+    body = {
+        'brandCode': brandCode,
+        # 'cartId': '809664-147142022',
+        'categoryId': 'pt_beverage',
+        'channel': 'WEB',
+        'email': email,
+        'endDate': endDate,
+        'guests': guestsIds,
+        'passengerId': passengerId,
+        'productCode': '3222',
+        'reservationId': reservationId,
+        'shipCode': shipCode,
+        'startDate': startDate,
+    }
+    data = json.dumps(body)
+
+    response = session.post(
+        'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/eligibility/v1/eligibility',
+        data=data,        
+        headers=headers,
+    )
+
+    offerings = response.json().get("payload").get("offerings")
     
+    for offer in offerings:
+        promoPrice = offer["pricing"]["adultPromotionalPrice"]
+        promoPercentage = offer["pricing"]["adultDiscountPercentage"]
+
+        print(f"{offer["name"]}: ${promoPrice} ({promoPercentage}% off)")
+
+
 
 def getLoyalty(access_token,accountId,session):
 
@@ -182,8 +229,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
     for booking in response.json().get("payload").get("profileBookings"):
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
-        sailDate = booking.get("sailDate")
         numberOfNights = booking.get("numberOfNights")
+        sailDate = booking.get("sailDate")
+        endDate = getEndDate(startDate=sailDate, num_nights=numberOfNights)
         shipCode = booking.get("shipCode")
         guests = booking.get("passengers")
                 
@@ -201,6 +249,20 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
             print(YELLOW + reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
             
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
+        getBeveragePrice(
+            access_token=access_token,
+            accountId=accountId,
+            session=session,
+            brandCode=brandCode,
+            cartId="", # REQUEST MAY NOT NEED THIS
+            email=guests[0]['email'],
+            endDate=endDate,
+            guests=guests,
+            passengerId=passengerId,
+            reservationId=reservationId,
+            shipCode=shipCode,
+            startDate=sailDate
+        )
         print(" ")
     
 
@@ -484,6 +546,19 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     for booking in response.json().get("payload"):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
 
+
+def getEndDate(startDate: str, num_nights: str|int):
+    date_obj = datetime.strptime(startDate, "%Y%m%d")
+
+    # Convert number to an int
+    if isinstance(num_nights, str):
+        num_nights = int(num_nights)
+    
+    # Add 'x' number of nights to get the final date
+    end_date_obj = date_obj + timedelta(days=num_nights)
+    end_date = end_date_obj.strftime("%Y%m%d")
+
+    return end_date
 
 if __name__ == "__main__":
     main()
