@@ -44,6 +44,8 @@ def main():
             print("Apprise Notification Sent...quitting")
             quit()
 
+        checkForDBPPrice = data['alertForDBP'] if data['alertForDBP'] != None else False
+
         
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
@@ -61,7 +63,7 @@ def main():
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,checkForDBPPrice)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
@@ -224,7 +226,7 @@ def getLoyalty(access_token,accountId,session):
     print("C&A: " + str(cAndANumber) + " " + cAndALevel + " " + str(cAndAPoints) + " Points")  
     
     
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,alertForDBP):
 
     headers = {
         'Access-Token': access_token,
@@ -271,20 +273,22 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
             print(YELLOW + reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
             
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
-        getDBPPrice(
-            access_token=access_token,
-            accountId=accountId,
-            session=session,
-            apobj=apobj,
-            brandCode=brandCode,
-            email=guests[0]['email'],
-            endDate=endDate,
-            guests=guests,
-            passengerId=passengerId,
-            reservationId=reservationId,
-            shipCode=shipCode,
-            startDate=sailDate
-        )
+        
+        if alertForDBP:
+            getDBPPrice(
+                access_token=access_token,
+                accountId=accountId,
+                session=session,
+                apobj=apobj,
+                brandCode=brandCode,
+                email=guests[0]['email'],
+                endDate=endDate,
+                guests=guests,
+                passengerId=passengerId,
+                reservationId=reservationId,
+                shipCode=shipCode,
+                startDate=sailDate
+            )
         print(" ")
     
 
