@@ -1,3 +1,4 @@
+import os
 import requests
 import yaml
 from apprise import Apprise
@@ -9,6 +10,8 @@ import base64
 import json
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
+
+priceFile = "price.json"
 
 foundItems = []
 
@@ -144,7 +147,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
 
 
         
-def getBeveragePrice(access_token,accountId,session, reservationId, brandCode, cartId, email, endDate, guests, passengerId, shipCode, startDate):
+def getDBPPrice(access_token, accountId, session, apobj, reservationId, brandCode, email, endDate, guests, passengerId, shipCode, startDate):
     headers = {
         'Access-Token': access_token,
         'AppKey': appKey,
@@ -157,7 +160,6 @@ def getBeveragePrice(access_token,accountId,session, reservationId, brandCode, c
 
     body = {
         'brandCode': brandCode,
-        # 'cartId': '809664-147142022',
         'categoryId': 'pt_beverage',
         'channel': 'WEB',
         'email': email,
@@ -184,6 +186,26 @@ def getBeveragePrice(access_token,accountId,session, reservationId, brandCode, c
         promoPercentage = offer["pricing"]["adultDiscountPercentage"]
 
         print(f"{offer["name"]}: ${promoPrice} ({promoPercentage}% off)")
+
+        storedDbpPrice, storedDbpDiscountPercentage = load_dbp_price()
+        
+        if storedDbpPrice and storedDbpPrice > promoPrice:
+            text = f"{reservationId}: Price Decrease! {offer["name"]}'s price is lower than the last time we checked. New -> ${promoPrice} ({promoPercentage}%). Original -> ${storedDbpPrice} ({storedDbpDiscountPercentage}%)."
+            print(GREEN + text + RESET)
+            apobj.notify(body=text, title='Deluxe Beverage Package Price Decrease')
+            save_dbp_price(promoPrice, promoPercentage)
+        elif storedDbpPrice and storedDbpPrice < promoPrice:
+            text = f"{reservationId}: Price Decrease! {offer["name"]}'s price is higher than the last time we checked. New -> ${promoPrice} ({promoPercentage}%). Original -> ${storedDbpPrice} ({storedDbpDiscountPercentage}%)."
+            print(RED + text + RESET)
+            apobj.notify(body=text, title='Deluxe Beverage Package Price Increase')
+            save_dbp_price(promoPrice, promoPercentage)
+        elif storedDbpPrice and storedDbpPrice == promoPrice:
+            text = f'{offer["name"]} is the same price.'
+            print(GREEN + text + RESET)
+        else:
+            text = f"{reservationId}: First time we are checking for the price of {offer["name"]}. Price -> ${promoPrice} ({promoPercentage}%)."
+            print(GREEN + text + RESET)
+            save_dbp_price(promoPrice, promoPercentage)
 
 
 
@@ -249,12 +271,12 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
             print(YELLOW + reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
             
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
-        getBeveragePrice(
+        getDBPPrice(
             access_token=access_token,
             accountId=accountId,
             session=session,
+            apobj=apobj,
             brandCode=brandCode,
-            cartId="", # REQUEST MAY NOT NEED THIS
             email=guests[0]['email'],
             endDate=endDate,
             guests=guests,
@@ -559,6 +581,22 @@ def getEndDate(startDate: str, num_nights: str|int):
     end_date = end_date_obj.strftime("%Y%m%d")
 
     return end_date
+
+def load_dbp_price():
+    """Load stored price and discount percentage from JSON file if it exists."""
+    if os.path.exists(priceFile):
+        with open(priceFile, "r") as f:
+            data = json.load(f)
+            return (data.get("dbpPrice"), data.get("dbpDiscountPercentage"))
+    return (None, None)
+
+def save_dbp_price(price, percentage):
+    """Save the price and discount percentage to JSON file."""
+    with open(priceFile, "w") as f:
+        json.dump({
+            "dbpPrice": price, 
+            "dbpDiscountPercentage": percentage
+        }, f)
 
 if __name__ == "__main__":
     main()
