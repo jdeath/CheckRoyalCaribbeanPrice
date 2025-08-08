@@ -130,7 +130,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if not currentPrice:
         currentPrice = newPricePayload.get("adultShipboardPrice")
     
-    if currentPrice < paidPrice + 1:
+    if currentPrice < paidPrice:
         text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.royalcaribbean.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
         print(RED + text + RESET)
