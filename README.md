@@ -98,6 +98,8 @@ cruises:
     - It will indicate if you should rebook or if you have the best price
     - It will also tell you if the price has gone up since you purchased (do not rebook in that case!)
     - If you setup apprise, it will notify you via your preferred method(s) if you should rebook
+    - Will provide you a link to the order history for that cruise and also tell you the date/order number to cancel from that list
+    - After cancelling/modify the order, click the product image to reorder.
 
 ## Output
 Will output information on your purchases
@@ -109,7 +111,7 @@ CONFNUM2: 	Price of Deluxe Beverage Package is now higher: 72.99
 CONFNUM2: You have the best price for VOOM SURF + STREAM Internet Package of: 17.99
 2025-12-27 VI OUTSIDE 4N: You have best Price of 3612.12 
 ```
-If any of the prices are lower, it will send a notification if you set up apprise.
+If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel
 
 ## Automating
 1. Linux: Put in a cron job, if running in linux, I am sure you know how!
@@ -134,7 +136,6 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Update: Mentioned on RoyalCaribbeanBlog.com: `https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers` 
 
 # Issues
-1. I am probably not going to update much, unless I find an issue. I can only see my own account purchases.
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
 1. May not handle all orders correctly.
