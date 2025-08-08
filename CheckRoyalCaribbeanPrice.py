@@ -7,6 +7,8 @@ from urllib.parse import urlparse, parse_qs
 import re
 import base64
 import json
+import locale
+from datetime import datetime
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
@@ -22,7 +24,7 @@ RESET = '\033[0m' # Resets color to default
 
 def main():
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime("%x %X")
     print(" ")
     print(timestamp)
     
@@ -90,7 +92,7 @@ def login(username,password,session,cruiseLineName):
     accountId = auth_info["sub"]
     return access_token,accountId,session
 
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName,room):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName,room, orderCode, orderDate):
     
     headers = {
         'Access-Token': access_token,
@@ -128,12 +130,13 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if not currentPrice:
         currentPrice = newPricePayload.get("adultShipboardPrice")
     
-    if currentPrice < paidPrice:
-        text = reservationId + " " + passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+    if currentPrice < paidPrice + 1:
+        text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+        text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.royalcaribbean.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
         print(RED + text + RESET)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
-        tempString = GREEN + reservationId + ": " + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + RESET
+        tempString = GREEN + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + RESET
         if currentPrice > paidPrice:
             tempString += " (now " + str(currentPrice) + ")"
         print(tempString)
@@ -231,6 +234,10 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
     for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
         orderCode = order.get("orderCode")
         
+        # Match Order Date with Website (assuming Website follows locale)
+        date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
+        orderDate = date_obj.strftime("%x")
+        
         # Only get Valid Orders That Cost Money
         if order.get("orderTotals").get("total") > 0: 
             
@@ -274,7 +281,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                         continue
                     foundItems.append(newKey)
                     room = guest.get("stateroomNumber")
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName,room)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName,room,orderCode,orderDate)
 
 def get_cruise_price(url, paidPrice, apobj):
     headers = {
