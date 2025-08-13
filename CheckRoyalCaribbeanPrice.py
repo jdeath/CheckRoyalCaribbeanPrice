@@ -92,7 +92,7 @@ def login(username,password,session,cruiseLineName):
     accountId = auth_info["sub"]
     return access_token,accountId,session
 
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName,room, orderCode, orderDate):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner):
     
     headers = {
         'Access-Token': access_token,
@@ -133,6 +133,10 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if currentPrice < paidPrice:
         text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.royalcaribbean.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
+        
+        if not owner:
+            text += " " + "This was booked by another in your party. They will have to cancel/rebook for you!"
+            
         print(RED + text + RESET)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
@@ -233,11 +237,12 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
     # Check for my orders and orders others booked for me
     for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
         orderCode = order.get("orderCode")
-        
+
         # Match Order Date with Website (assuming Website follows locale)
         date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
         orderDate = date_obj.strftime("%x")
-        
+        owner = order.get("owner")
+            
         # Only get Valid Orders That Cost Money
         if order.get("orderTotals").get("total") > 0: 
             
@@ -252,6 +257,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 # check for cancelled status at item-level
                 if orderDetail.get("guests")[0].get("orderStatus") == "CANCELLED":
                     continue
+                    
                 order_title = orderDetail.get("productSummary").get("title")
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
@@ -281,7 +287,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                         continue
                     foundItems.append(newKey)
                     room = guest.get("stateroomNumber")
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName,room,orderCode,orderDate)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
 
 def get_cruise_price(url, paidPrice, apobj):
     headers = {
