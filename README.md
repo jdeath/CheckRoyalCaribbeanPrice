@@ -33,7 +33,7 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
     -   Note: Python code in repo may be newer than .exe file
 
 ## Edit Config File
-Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and make sure in the same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe`.
+Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`.
 ```
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -115,7 +115,7 @@ CONFNUM2: You have the best price for VOOM SURF + STREAM Internet Package of: 17
 If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel
 
 ## Automating
-1. Linux: Put in a cron job, if running in linux, I am sure you know how!
+1. Linux: Put in a cron job, if running in linux, I am sure you know how! Be sure to either provide optional argument for the `config.yaml` path or be sure to execute the script from within the directory where the configuration script is present.
 1. Home Assistant: Use directions in my [repo](https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck)
 1. Windows: Use windows task schedular
 1. Create a basic task. Select a daily trigger, suggest a little before you wake up
