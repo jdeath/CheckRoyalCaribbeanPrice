@@ -7,3 +7,6 @@ cruises: # Optional, Only needed if you want to check cruise price
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user:password@gmail.com"
   - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
+reservationFriendlyNames: # Optional, only used if you want to display a name next to the reservation id
+  '1234567': "Summer Cruise"
+  '8912345': "Winter Cruise

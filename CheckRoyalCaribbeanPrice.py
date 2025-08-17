@@ -8,7 +8,6 @@ import re
 import base64
 import json
 import locale
-from datetime import datetime
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
@@ -21,6 +20,7 @@ GREEN = '\033[1;32m'
 YELLOW = '\033[33m'
 RESET = '\033[0m' # Resets color to default
 
+DATEFORMATDISAPLAY = "%m/%d/%Y" # Display date format for sail dates
 
 def main():
 
@@ -43,6 +43,9 @@ def main():
             print("Apprise Notification Sent...quitting")
             quit()
 
+        reservationFriendlyNames = {}
+        if 'reservationFriendlyNames' in data:
+            reservationFriendlyNames=data.get('reservationFriendlyNames', {})
         
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
@@ -60,7 +63,7 @@ def main():
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
@@ -162,7 +165,7 @@ def getLoyalty(access_token,accountId,session):
     print("C&A: " + str(cAndANumber) + " " + cAndALevel + " " + str(cAndAPoints) + " Points")  
     
     
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames):
 
     headers = {
         'Access-Token': access_token,
@@ -201,12 +204,16 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName):
         
         passengerNames = passengerNames.rstrip()
         passengerNames = passengerNames[:-1]
-        
-        
-        print(reservationId + ": " + sailDate + " " + shipCode + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
+
+        reservationDisplay = str(reservationId)
+        # Use friendly name if available
+        if str(reservationId) in reservationFriendlyNames:
+            reservationDisplay += " (" + reservationFriendlyNames.get(str(reservationId)) + ")"
+        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(DATEFORMATDISAPLAY)
+        print(reservationDisplay + ": " + sailDateDisplay + " " + shipCode + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
         if booking.get("balanceDue") is True:
-            print(YELLOW + reservationId + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
-            
+            print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
+
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
         print(" ")
     
