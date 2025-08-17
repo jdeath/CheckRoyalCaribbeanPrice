@@ -7,8 +7,8 @@ from urllib.parse import urlparse, parse_qs
 import re
 import base64
 import json
-import locale
 from datetime import datetime
+import argparse
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
@@ -22,7 +22,12 @@ YELLOW = '\033[33m'
 RESET = '\033[0m' # Resets color to default
 
 
+
 def main():
+    parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
+    parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
+    args = parser.parse_args()
+    config_path = args.config
 
     timestamp = datetime.now().strftime("%x %X")
     print(" ")
@@ -30,7 +35,8 @@ def main():
     
     apobj = Apprise()
         
-    with open('config.yaml', 'r') as file:
+
+    with open(config_path, 'r') as file:
         data = yaml.safe_load(file)
         
         if 'apprise' in data:
