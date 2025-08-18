@@ -69,6 +69,19 @@ cruises:
     paidPrice: "3833.74" 
 ```
 
+
+If you would like to assign names to cruise reservation numbers to more easily correlate which cruise is being displayed populate the following section:
+```
+reservationFriendlyNames:
+  '1234567': "Summer Cruise"
+  '8912345': "Winter Cruise
+```
+
+To override the system's default date format, set the dateDisplayFormat config value to your desired format:
+```
+dateDisplayFormat: "%m/%d/%Y"
+```
+
 ## Get Cruise URL (Optional)
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
