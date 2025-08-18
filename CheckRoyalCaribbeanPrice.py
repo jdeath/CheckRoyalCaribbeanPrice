@@ -283,7 +283,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 if paidPrice == 0:
                     continue
                 # These packages report total price, must divide by number of days
-                if prefix == "pt_beverage" or prefix == "pt_internet":
+                if prefix == "pt_beverage" or prefix == "pt_internet" or order_title == "The Key":
                       if not order_title.startswith("Evian") and not order_title.startswith("Specialty Coffee"):
                           paidPrice = round(paidPrice / numberOfNights,2)
                 #print(orderDetail)
