@@ -77,6 +77,11 @@ reservationFriendlyNames:
   '8912345': "Winter Cruise
 ```
 
+To override the system's default date format, set the dateDisplayFormat config value to your desired format:
+```
+dateDisplayFormat: "%m/%d/%Y"
+```
+
 ## Get Cruise URL (Optional)
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.

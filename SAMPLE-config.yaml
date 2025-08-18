@@ -10,3 +10,4 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 reservationFriendlyNames: # Optional, only used if you want to display a name next to the reservation id
   '1234567': "Summer Cruise"
   '8912345': "Winter Cruise
+dateDisplayFormat: "%m/%d/%Y" # Optional, only needed if you want to override the system's default date display formatting

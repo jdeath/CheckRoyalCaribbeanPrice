@@ -20,8 +20,7 @@ GREEN = '\033[1;32m'
 YELLOW = '\033[33m'
 RESET = '\033[0m' # Resets color to default
 
-DATEFORMATDISAPLAY = "%m/%d/%Y" # Display date format for sail dates
-
+dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by config
 
 def main():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
@@ -29,16 +28,20 @@ def main():
     args = parser.parse_args()
     config_path = args.config
 
-    timestamp = datetime.now().strftime("%x %X")
+    timestamp = datetime.now()
     print(" ")
-    print(timestamp)
     
     apobj = Apprise()
         
 
     with open(config_path, 'r') as file:
         data = yaml.safe_load(file)
-        
+        if 'dateDisplayFormat' in data:
+            global dateDisplayFormat
+            dateDisplayFormat = data['dateDisplayFormat']
+
+        print(timestamp.strftime(dateDisplayFormat + " %X"))
+
         if 'apprise' in data:
             for apprise in data['apprise']:
                 url = apprise['url']
@@ -215,7 +218,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         # Use friendly name if available
         if str(reservationId) in reservationFriendlyNames:
             reservationDisplay += " (" + reservationFriendlyNames.get(str(reservationId)) + ")"
-        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(DATEFORMATDISAPLAY)
+        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         print(reservationDisplay + ": " + sailDateDisplay + " " + shipCode + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
@@ -253,7 +256,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
 
         # Match Order Date with Website (assuming Website follows locale)
         date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
-        orderDate = date_obj.strftime("%x")
+        orderDate = date_obj.strftime(dateDisplayFormat)
         owner = order.get("owner")
             
         # Only get Valid Orders That Cost Money
