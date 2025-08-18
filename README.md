@@ -11,11 +11,13 @@ Pulls passengers' room numbers from the API. Sometimes individual excursions/pac
 
 Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested yet.
 
-Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card.
+Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card. Thanks to @iareanthony for fixing "The Key"
 
 Thanks to @jipis for fixing internet pricing and identifying how to find specials for individual passengers. I changed the logic to check every single passenger's order to find specials only available to them (like an unlisted 40% refreshment package July 2025 sale only available to teens) which the code was not finding. Code also avoids checking orders multiple times, which can happen when reservations are linked. 
 
 For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The passengers' first names booked in each room will be shown at the start of each booking.
+
+Thanks to @ProxesOnBoxes for various improvements for date display options, custom configuration files, and setting a cruise friendly name.
 
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: `https://royalpricetracker.com/` . Consider using that for a simpler solution.  
 
@@ -153,6 +155,6 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
 1. May not handle all orders correctly.
-1. Prices of internet and beverage packages are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
+1. Prices of internet, beverage packages, and "The Key" are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
 1. If other prices are per day, it will not work. Let me know if other daily purchases are not calculating correctly.
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
