@@ -345,7 +345,10 @@ def get_cruise_price(url, paidPrice, apobj):
     
     response = requests.get('https://www.'+cruiseLineName+'.com/checkout/guest-info', params=params,headers=headers)
     
-    preString = params.get("sailDate")[0] + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
+    sailDate = params.get("sailDate")[0]
+    sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
+    
+    preString = sailDateDisplay + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
     
     roomNumberList = params.get("r0j")
     if roomNumberList:
