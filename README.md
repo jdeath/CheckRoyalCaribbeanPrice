@@ -85,7 +85,7 @@ dateDisplayFormat: "%m/%d/%Y"
 ```
 
 ## Get Cruise URL (Optional)
-1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in a later step will not work.
+1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
