@@ -15,7 +15,7 @@ Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card,
 
 Thanks to @jipis for fixing internet pricing and identifying how to find specials for individual passengers. I changed the logic to check every single passenger's order to find specials only available to them (like an unlisted 40% refreshment package July 2025 sale only available to teens) which the code was not finding. Code also avoids checking orders multiple times, which can happen when reservations are linked. 
 
-For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The passengers' first names booked in each room will be shown at the start of each booking.
+For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The passengers' first names booked in each room will be shown at the start of each booking. This code will support multiple accounts, but if you simply want to monitor prices for a friend, just link their cruise to your account. If you have their reservation number, name, birthdate link the cruise in your account (select my name is not listed). Then this code will check their packages which is better than having their username/password.
 
 Thanks to @ProxesOnBoxes for various improvements for date display options, custom configuration files, and setting a cruise friendly name.
 
