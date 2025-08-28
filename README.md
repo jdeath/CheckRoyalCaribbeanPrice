@@ -34,7 +34,7 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
     -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
     -   Note: Python code in repo may be newer than .exe file
 
-## Install (Docker)
+## Install (Docker Option - thanks @JDare)
 ### Option 1: Using Pre-built Image
 1. Create a `docker-compose.yml` file:
 ```yaml
