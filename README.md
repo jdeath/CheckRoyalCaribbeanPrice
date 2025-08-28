@@ -29,6 +29,38 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
 1. `cd CheckRoyalCaribbeanPrice`
 1. `pip install requests Apprise bs4`
 
+## Install (Docker)
+### Option 1: Using Pre-built Image
+1. Create a `docker-compose.yml` file:
+```yaml
+services:
+  cruise-price-checker:
+    image: ghcr.io/jdeath/checkroyalcaribbeanprice:latest
+    container_name: cruise-price-checker
+    restart: unless-stopped
+    environment:
+      # Cron schedule: 7 AM and 7 PM daily (adjust as needed)
+      - CRON_SCHEDULE=0 7,19 * * *
+    volumes:
+      # Mount your config file
+      - ./config.yaml:/app/config.yaml:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+2. Create your `config.yaml` file (see "Edit Config File" section below)
+3. Run: `docker compose up -d`
+
+### Option 2: Build from Source
+1. Clone this repository: `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
+2. `cd CheckRoyalCaribbeanPrice`
+3. Create your `config.yaml` file (see "Edit Config File" section below)
+4. Run: `docker compose up -d`
+
+The Docker container runs the price checker on a schedule (default: 7 AM and 7 PM daily). You can customize the schedule by changing the `CRON_SCHEDULE` environment variable using standard cron format.
+
 ## Install (Not Recommended, Windows 11 Only)
 1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/0.7/CheckRoyalCaribbeanPrice.exe) from releases
     -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`

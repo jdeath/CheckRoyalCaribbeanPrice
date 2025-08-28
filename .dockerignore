@@ -1,0 +1,25 @@
+# Exclude everything except what's needed for the Docker build
+*
+
+# Include only essential files
+!CheckRoyalCaribbeanPrice.py
+!requirements.txt
+!entrypoint.sh
+
+# Exclude common development files
+.git
+.gitignore
+*.md
+LICENSE
+*.spec
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache
+.coverage
+htmlcov/
+.DS_Store
+Thumbs.db
