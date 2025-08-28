@@ -92,7 +92,7 @@ def login(username,password,session,cruiseLineName):
     response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     
     if response.status_code != 200:
-        print(cruiseLineName + " Website Might Be Down. Quitting.")
+        print(cruiseLineName + " Website Might Be Down or Username/password incorrect. Quitting.")
         quit()
           
     access_token = response.json().get("access_token")
