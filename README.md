@@ -29,6 +29,11 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
 1. `cd CheckRoyalCaribbeanPrice`
 1. `pip install requests Apprise bs4`
 
+## Install (Not Recommended, Windows 11 Only)
+1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/0.7/CheckRoyalCaribbeanPrice.exe) from releases
+    -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
+    -   Note: Python code in repo may be newer than .exe file
+
 ## Install (Docker)
 ### Option 1: Using Pre-built Image
 1. Create a `docker-compose.yml` file:
@@ -60,11 +65,6 @@ services:
 4. Run: `docker compose up -d`
 
 The Docker container runs the price checker on a schedule (default: 7 AM and 7 PM daily). You can customize the schedule by changing the `CRON_SCHEDULE` environment variable using standard cron format.
-
-## Install (Not Recommended, Windows 11 Only)
-1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/0.7/CheckRoyalCaribbeanPrice.exe) from releases
-    -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
-    -   Note: Python code in repo may be newer than .exe file
 
 ## Edit Config File
 Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`.
