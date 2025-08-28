@@ -1,7 +1,5 @@
 FROM python:3.12-alpine
 
-# No additional packages needed - busybox crond is already included in Alpine
-
 # Set working directory
 WORKDIR /app
 
