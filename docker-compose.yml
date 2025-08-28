@@ -6,7 +6,7 @@ services:
     environment:
       # Cron schedule format: minute hour day month weekday
       # Default: 7 AM and 7 PM daily
-      - CRON_SCHEDULE=* * * * *
+      - CRON_SCHEDULE=0 7,19 * * *
     volumes:
       # Mount your config file (create config.yaml in this directory)
       - ./config.yaml:/app/config.yaml:ro
