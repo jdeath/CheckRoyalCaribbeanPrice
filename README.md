@@ -153,6 +153,7 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Update: Mentioned on RoyalCaribbeanBlog.com: `https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers` 
 
 # Issues
+1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
 1. May not handle all orders correctly.
