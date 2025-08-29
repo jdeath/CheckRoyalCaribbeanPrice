@@ -4,8 +4,12 @@ services:
     container_name: cruise-price-checker
     restart: unless-stopped
     environment:
+      # Timezone for cron execution (default: UTC)
+      # Examples: America/New_York, America/Chicago, America/Los_Angeles, Europe/London
+      # Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      - TZ=UTC
       # Cron schedule format: minute hour day month weekday
-      # Default: 7 AM and 7 PM daily
+      # Default: 7 AM and 7 PM daily (in the timezone specified above)
       - CRON_SCHEDULE=0 7,19 * * *
     volumes:
       # Mount your config file (create config.yaml in this directory)
