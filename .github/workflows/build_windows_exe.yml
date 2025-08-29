@@ -22,15 +22,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
           # If you have a requirements.txt file:
-          # pip install -r requirements.txt
+          pip install -r requirements.txt
 
       - name: Package Application with PyInstaller
         run: |
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
           pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
-          
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+
+      - name: upload windows artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-          name: Windows-Executable
-          path: dist/CheckRoyalCaribbeanPrice.exe # Adjust 'your_script.exe' to match your output filename
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/CheckRoyalCaribbeanPrice.exe
+          asset_name: CheckRoyalCaribbeanPrice.exe
+          asset_content_type: application/exe
