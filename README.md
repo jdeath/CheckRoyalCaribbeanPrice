@@ -35,7 +35,18 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
     -   Note: Python code in repo may be newer than .exe file
 
 ## Install (Docker Option - thanks @JDare)
-### Option 1: Using Pre-built Image
+
+### Single Execution (One-time price check)
+For a single price check without scheduling:
+```bash
+docker run --rm \
+  -v ./config.yaml:/app/config.yaml:ro \
+  ghcr.io/jdeath/checkroyalcaribbeanprice:latest \
+  check
+```
+
+### Scheduled Execution
+#### Option 1: Using Pre-built Image
 1. Create a `docker-compose.yml` file:
 ```yaml
 services:
@@ -58,7 +69,7 @@ services:
 2. Create your `config.yaml` file (see "Edit Config File" section below)
 3. Run: `docker compose up -d`
 
-### Option 2: Build from Source
+#### Option 2: Build from Source
 1. Clone this repository: `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 2. `cd CheckRoyalCaribbeanPrice`
 3. Create your `config.yaml` file (see "Edit Config File" section below)
