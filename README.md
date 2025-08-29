@@ -55,7 +55,11 @@ services:
     container_name: cruise-price-checker
     restart: unless-stopped
     environment:
-      # Cron schedule: 7 AM and 7 PM daily (adjust as needed)
+      # Timezone for cron execution (default: UTC)
+      # Examples: America/New_York, America/Chicago, America/Los_Angeles, Europe/London
+      # Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      - TZ=America/New_York
+      # Cron schedule: 7 AM and 7 PM daily in the specified timezone
       - CRON_SCHEDULE=0 7,19 * * *
     volumes:
       # Mount your config file
@@ -75,8 +79,7 @@ services:
 3. Create your `config.yaml` file (see "Edit Config File" section below)
 4. Run: `docker compose up -d`
 
-The Docker container runs the price checker on a schedule (default: 7 AM and 7 PM daily). You can customize the schedule by changing the `CRON_SCHEDULE` environment variable using standard cron format.
-
+The Docker container will run the price checker on the schedule you have defined.
 ## Edit Config File
 Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`.
 ```

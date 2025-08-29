@@ -1,5 +1,8 @@
 FROM python:3.12-alpine
 
+# Install timezone data
+RUN apk add --no-cache tzdata
+
 # Set working directory
 WORKDIR /app
 
@@ -17,8 +20,9 @@ RUN chmod +x entrypoint.sh
 # Create directory for cron logs
 RUN mkdir -p /var/log
 
-# Set default environment variable for cron schedule
+# Set default environment variables
 ENV CRON_SCHEDULE="0 7,19 * * *"
+ENV TZ="UTC"
 
 # Use our entrypoint script
 ENTRYPOINT ["./entrypoint.sh"]
