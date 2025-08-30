@@ -7,7 +7,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-
+    permissions:
+      contents: write # Grants write access to repository contents for this job only
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
