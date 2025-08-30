@@ -1,0 +1,40 @@
+name: Build Windows Executable with PyInstaller
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12' # Specify your desired Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          # If you have a requirements.txt file:
+          pip install -r requirements.txt
+
+      - name: Package Application with PyInstaller
+        run: |
+          # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
+          pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
+
+      - name: upload windows artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: dist/CheckRoyalCaribbeanPrice.exe
+          asset_name: CheckRoyalCaribbeanPrice.exe
+          asset_content_type: application/exe
