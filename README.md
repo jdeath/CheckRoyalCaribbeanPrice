@@ -29,7 +29,7 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
 1. `cd CheckRoyalCaribbeanPrice`
 1. `pip install requests Apprise bs4`
 
-## Install (Not Recommended, Windows 11 Only)
+## Install (Windows 10/11 Only)
 1. Download `CheckRoyalCaribbeanPrice.exe` from release assets
     -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` (you do not need to run this command)
     -   Note: Python code in repo may be newer than .exe file, but exe is auto created upon every release
