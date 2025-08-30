@@ -25,12 +25,11 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
-1. Download the raw files from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
-1. `cd CheckRoyalCaribbeanPrice`
+1. Download the `CheckRoyalCaribbeanPrice.py` from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise bs4`
 
 ## Install (Windows 10/11 Only)
-1. Download `CheckRoyalCaribbeanPrice.exe` from release assets
+1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
     -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` (you do not need to run this command)
     -   Note: Python code in repo may be newer than .exe file, but exe is auto created upon every release
 
