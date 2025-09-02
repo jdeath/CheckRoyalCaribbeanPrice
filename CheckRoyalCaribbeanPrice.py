@@ -4,6 +4,7 @@ from apprise import Apprise
 from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
+import urllib.parse
 import re
 import base64
 import json
@@ -87,12 +88,13 @@ def login(username,password,session,cruiseLineName):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
     }
     
+    
     data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email+vdsid'
     
     response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     
     if response.status_code != 200:
-        print(cruiseLineName + " Website Might Be Down, username/password incorrect, or have unsupported % symbol in password. Quitting.")
+        print(cruiseLineName + " Website Might Be Down. Quitting.")
         quit()
           
     access_token = response.json().get("access_token")
@@ -282,10 +284,13 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 paidPrice = orderDetail.get("guests")[0].get("priceDetails").get("subtotal")
                 if paidPrice == 0:
                     continue
-                # These packages report total price, must divide by number of days
-                if prefix == "pt_beverage" or prefix == "pt_internet" or order_title == "The Key":
-                      if not order_title.startswith("Evian") and not order_title.startswith("Specialty Coffee"):
-                          paidPrice = round(paidPrice / numberOfNights,2)
+                # These packages report total price, must divide by number of days (old logic, replaced below)
+                #if prefix == "pt_beverage" or prefix == "pt_internet" or order_title == "The Key":
+                    #  if not order_title.startswith("Evian") and not order_title.startswith("Specialty Coffee"):
+                
+                # New Per Day Logic From cyntil8 fork
+                if orderDetail.get("productSummary").get("salesUnit") in [ 'PER_NIGHT', 'PER_DAY' ]:
+                    paidPrice = round(paidPrice / numberOfNights,2)
                 #print(orderDetail)
                 
                 guests = orderDetail.get("guests")
