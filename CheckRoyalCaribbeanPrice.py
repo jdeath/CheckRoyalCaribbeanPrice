@@ -4,7 +4,6 @@ from apprise import Apprise
 from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
-import urllib.parse
 import re
 import base64
 import json
@@ -94,7 +93,7 @@ def login(username,password,session,cruiseLineName):
     response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     
     if response.status_code != 200:
-        print(cruiseLineName + " Website Might Be Down. Quitting.")
+        print(cruiseLineName + " Website Might Be Down, username/password incorrect, or have unsupported % symbol in password. Quitting.")
         quit()
           
     access_token = response.json().get("access_token")
