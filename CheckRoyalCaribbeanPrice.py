@@ -112,7 +112,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         'AppKey': appKey,
         'vds-id': accountId,
     }
-
+    
     params = {
         'reservationId': reservationId,
         'startDate': startDate,
@@ -272,35 +272,26 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
                 # check for cancelled status at item-level
-                if orderDetail.get("guests")[0].get("orderStatus") == "CANCELLED":
-                    continue
                     
                 order_title = orderDetail.get("productSummary").get("title")
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
                 if prefix == "pt_internet":
                     product = orderDetail.get("productSummary").get("baseId")
-                paidPrice = orderDetail.get("guests")[0].get("priceDetails").get("subtotal")
                 
-                if paidPrice == 0:
-                    continue
-                
-                
-                currency = orderDetail.get("guests")[0].get("priceDetails").get("currency")
-                # These packages report total price, must divide by number of days (old logic, replaced below)
-                #if prefix == "pt_beverage" or prefix == "pt_internet" or order_title == "The Key":
-                    #  if not order_title.startswith("Evian") and not order_title.startswith("Specialty Coffee"):
-                
-                # New Per Day Logic From cyntil8 fork
-                if orderDetail.get("productSummary").get("salesUnit") in [ 'PER_NIGHT', 'PER_DAY' ]:
-                    paidPrice = round(paidPrice / numberOfNights,2)
-                #print(orderDetail)
-                
+                salesUnit = orderDetail.get("productSummary").get("salesUnit")
                 guests = orderDetail.get("guests")
-                #pretty_json_string = json.dumps(guests, indent=4)
-                #print(pretty_json_string)
                 
                 for guest in guests:
+                    
+                    if guest.get("orderStatus") == "CANCELLED":
+                        continue
+                    
+                    paidPrice = guest.get("priceDetails").get("subtotal")
+                
+                    if paidPrice == 0:
+                        continue
+                        
                     passengerId = guest.get("id")
                     firstName = guest.get("firstName").capitalize()
                     reservationId = guest.get("reservationId")
@@ -310,6 +301,12 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     if newKey in foundItems:
                         continue
                     foundItems.append(newKey)
+                    
+                    # New Per Day Logic From cyntil8 fork
+                    if salesUnit in [ 'PER_NIGHT', 'PER_DAY' ]:
+                        paidPrice = round(paidPrice / numberOfNights,2)
+                
+                    currency = guest.get("priceDetails").get("currency")
                     room = guest.get("stateroomNumber")
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
 
