@@ -105,7 +105,7 @@ def login(username,password,session,cruiseLineName):
     accountId = auth_info["sub"]
     return access_token,accountId,session
 
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner):
     
     headers = {
         'Access-Token': access_token,
@@ -116,7 +116,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     params = {
         'reservationId': reservationId,
         'startDate': startDate,
-        'currencyIso': 'USD',
+        'currencyIso': currency,
         'passengerId': passengerId,
     }
 
@@ -241,7 +241,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         'passengerId': passengerId,
         'reservationId': reservationId,
         'sailingId': ship + startDate,
-        'currencyIso': 'USD',
+        #'currencyIso': 'USD',
         'includeMedia': 'false',
     }
     
@@ -281,8 +281,12 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 if prefix == "pt_internet":
                     product = orderDetail.get("productSummary").get("baseId")
                 paidPrice = orderDetail.get("guests")[0].get("priceDetails").get("subtotal")
+                
                 if paidPrice == 0:
                     continue
+                
+                
+                currency = orderDetail.get("guests")[0].get("priceDetails").get("currency")
                 # These packages report total price, must divide by number of days (old logic, replaced below)
                 #if prefix == "pt_beverage" or prefix == "pt_internet" or order_title == "The Key":
                     #  if not order_title.startswith("Evian") and not order_title.startswith("Specialty Coffee"):
@@ -307,7 +311,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                         continue
                     foundItems.append(newKey)
                     room = guest.get("stateroomNumber")
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
 
 def get_cruise_price(url, paidPrice, apobj):
     headers = {
