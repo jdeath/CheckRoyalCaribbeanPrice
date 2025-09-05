@@ -130,6 +130,11 @@ To override the system's default date format, set the dateDisplayFormat config v
 dateDisplayFormat: "%m/%d/%Y"
 ```
 
+To override the currancy from what the API returns (usually USD), set the dateDisplayFormat config value to your desired format:
+```
+currencyOverride: 'DKK'
+```
+
 ## Get Cruise URL (Optional)
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
