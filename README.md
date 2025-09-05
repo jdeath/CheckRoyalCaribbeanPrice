@@ -88,7 +88,6 @@ accountInfo:
   - username: "user@gmail.com" # Your Celebrity User Name
     password: "pa$$word" # Your Celebrity Password (ensure no % in password)
     cruiseLine: "celebrity" # Must indicate if celebrity
-currencyOverride: 'DKK' # Optional, use this to force a specific currancy to retrieve the current price
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74"
@@ -130,7 +129,7 @@ To override the system's default date format, set the dateDisplayFormat config v
 dateDisplayFormat: "%m/%d/%Y"
 ```
 
-To override the currancy from what the API returns (usually USD), set the dateDisplayFormat config value to your desired format:
+To override the currency from what the API returns (what you bought the item in), set the currencyOverride config value to your desired currencyOverride. This should not be needed and should now only be needed for testing.
 ```
 currencyOverride: 'DKK'
 ```
