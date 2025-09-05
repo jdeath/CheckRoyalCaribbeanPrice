@@ -30,8 +30,8 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
 
 ## Install (Windows 10/11 Only)
 1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
-    -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` (you do not need to run this command)
-    -   Note: Python code in repo may be newer than .exe file, but exe is auto created upon every release
+    -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` (you do not need to run this command, included in case you want to build the binary yourself)
+    -   Note: Python code in repo may be newer than .exe file, but a .exe is auto created upon every release
 
 ## Install (Docker Option - thanks @JDare)
 
