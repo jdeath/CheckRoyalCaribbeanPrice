@@ -11,6 +11,8 @@ import argparse
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
+currencyOverride = ""
+
 foundItems = []
 
 #RED = '\033[91m'
@@ -55,7 +57,11 @@ def main():
         reservationFriendlyNames = {}
         if 'reservationFriendlyNames' in data:
             reservationFriendlyNames=data.get('reservationFriendlyNames', {})
-        
+
+        if 'currencyOverride' in data:
+            global currencyOverride
+            currencyOverride = data['currencyOverride']
+            
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
@@ -113,6 +119,9 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         'vds-id': accountId,
     }
     
+    if currencyOverride != "":
+        currency = currencyOverride
+        
     params = {
         'reservationId': reservationId,
         'startDate': startDate,
@@ -237,11 +246,17 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         'Account-Id': accountId,
     }
     
+    if currencyOverride != "":
+        currency = currencyOverride
+    else:
+        currency = "USD"
+        
+        
     params = {
         'passengerId': passengerId,
         'reservationId': reservationId,
         'sailingId': ship + startDate,
-        #'currencyIso': 'USD',
+        'currencyIso': currency,
         'includeMedia': 'false',
     }
     
