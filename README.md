@@ -192,6 +192,7 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Ensure apprise notifications are working, because the window will close automatically after run.
    
 ## Notes
+1. Code will make a link to easily find the order. Link will only work if logged in to Royal Caribbean Website first.
 1. Confirm price is still lower on website, because it could have gone up since running this bot
 1. You need to first cancel your beverage package, shore excursion, internet, etc
 1. Wait about 10s
@@ -206,6 +207,7 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix
 1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
 1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
+1. It should give you the price of the item in the same currency you bought it in. Post an issue if not working correctly.
 1. May not handle all orders correctly.
 1. Prices of internet, beverage packages, and "The Key" are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
 1. If other prices are per day, it will not work. Let me know if other daily purchases are not calculating correctly.
