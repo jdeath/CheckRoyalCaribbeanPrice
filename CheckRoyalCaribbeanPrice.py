@@ -232,7 +232,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         print(reservationDisplay + ": " + sailDateDisplay + " " + shipCode + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
         if booking.get("balanceDue") is True:
-            print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is $" + str(booking.get("balanceDueAmount")) + RESET)
+            print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
 
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
         print(" ")
