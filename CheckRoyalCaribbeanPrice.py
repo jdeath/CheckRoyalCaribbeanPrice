@@ -61,7 +61,8 @@ def main():
         if 'currencyOverride' in data:
             global currencyOverride
             currencyOverride = data['currencyOverride']
-            
+            print(YELLOW + "Overriding Current Price Currency to " + currencyOverride + RESET)
+                
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
@@ -121,7 +122,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     
     if currencyOverride != "":
         currency = currencyOverride
-        
+    
     params = {
         'reservationId': reservationId,
         'startDate': startDate,
@@ -250,8 +251,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         currency = currencyOverride
     else:
         currency = "USD"
-        
-        
+          
     params = {
         'passengerId': passengerId,
         'reservationId': reservationId,
