@@ -3,13 +3,13 @@ A script that checks if you have cheapest price for beverage package, excursions
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website. Has saved me $200 on a cruise and $160 on execursions in one week since I wrote it! Hopefully it helps you too.
 
-~~If anyone can figure out how to get the AccountID programmatically, please do a PR. I cannot figure that out.~~ Thanks to anonymous for the fix!
+Thanks to anonymous for geting the AccountID programmatically!
 
-Latest version will tell you the remaining balance on your booked cruises. Post an issue if this is less than your Travel Agent says you owe. My cruise shows about 10% lower than the original total fare (eg. add your paid deposit back in). I wonder if this is the TA profit?
+Latest version will tell you the remaining balance on your booked cruises. If you used a TA, it may be less than what you really owe. The differnece is the TA's take!
 
 Pulls passengers' room numbers from the API. Sometimes individual excursions/packages have rooms returned by the API, where the booking still reports GTY (guarantee=room in promised class not yet assigned). If the room returned by the booking is the room you are assigned, please post an issue so this feature can be confirmed.
 
-Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested yet.
+Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested yet. Also contributed logic handle per-day priced items automatically.
 
 Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card. Thanks to @iareanthony for fixing "The Key"
 
@@ -19,9 +19,11 @@ Want to monitor a friend's cruise? You can either link their cruise to your acco
 
 Thanks to @ProxesOnBoxes for various improvements for date display options, custom configuration files, and setting a cruise friendly name.
 
-There is a free website that does price checks for beverage packages/excursions and does not log into your account. You have to add your packages manually and it will not find special deals exclusive to your account: `https://royalpricetracker.com/` . Consider using that for a simpler solution.  
+Now handles any currancy. The retrieved current price will be the same currancy in which you purchased it. 
 
-Without an account, you can also go to: `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/`  and look up your cruise. It will point you to all the beverage, shore, internet packages right on the royal caribbean website to see the prices. Thanks to redditer @illuminated0ne for finding that. I may add looking up cruises you have not booked at a later time.
+There is a free website that does price checks for beverage packages/excursions and does not log into your account. The draw back is you have to add your packages manually and it does not find special deals exclusive to your account (C&A status, age-based, etc): `https://royalpricetracker.com/` . Consider using that for a simpler solution. Does not hurt to use both!
+
+You can also go to: `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` and look up any cruise. No account needed. It will point you to all the beverage, shore, internet packages right on the royal caribbean website to see the prices. Thanks to redditer @illuminated0ne for finding that. I may add looking up cruises you have not booked at a later time.
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
@@ -30,8 +32,8 @@ Without an account, you can also go to: `https://cruisespotlight.com/royal-carib
 
 ## Install (Windows 10/11 Only)
 1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
-    -   Made with `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` (you do not need to run this command, included in case you want to build the binary yourself)
-    -   Note: Python code in repo may be newer than .exe file, but a .exe is auto created upon every release
+    -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
+    -   Only if you want to build a binary yourself, you can run `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
 
 ## Install (Docker Option - thanks @JDare)
 
@@ -204,11 +206,11 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Update: Mentioned on RoyalCaribbeanBlog.com: `https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers` 
 
 # Issues
-1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix
-1. Only checks adult prices, if only have child prices in an order it may not work. I don't have kids, so can not check.
-1. It should handle orders made by other people in your party (works in my partner's account for what I booked)
+1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix. PRs welcome
+1. Only checks adult prices (> 12 years old), if only have child prices in an order it may not work. I don't have kids, so I can not fix. PRs welcome
+1. Handles orders made by other people in your party or linked cruises (even if you are not sailing on it)
 1. It should give you the price of the item in the same currency you bought it in. Post an issue if not working correctly.
 1. May not handle all orders correctly.
-1. Prices of internet, beverage packages, and "The Key" are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly.
-1. If other prices are per day, it will not work. Let me know if other daily purchases are not calculating correctly.
+1. Prices of internet, beverage packages, and "The Key" are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly. If any per-day item is not calculated correctly, post an issue.
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
+1. Double check you are cancelling the item for the correct cruise!
