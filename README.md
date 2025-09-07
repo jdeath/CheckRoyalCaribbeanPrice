@@ -168,6 +168,7 @@ currencyOverride: 'DKK'
     - If you setup apprise, it will notify you via your preferred method(s) if you should rebook
     - Will provide you a link to the order history for that cruise and also tell you the date/order number to cancel from that list
     - (There does not appear to be a way to construct a Web link to that specific order. If you find one, please let me know via an issue)
+    - You should log in to Royal Caribbean on the web browser before clicking the link, or the link will not bring you to the correct location
     - After cancelling/modify the order, click the product image to reorder.
 
 ## Output
