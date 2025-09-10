@@ -5,7 +5,7 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 Thanks to anonymous for geting the AccountID programmatically!
 
-Latest version will tell you the remaining balance on your booked cruises. If you used a TA, it may be less than what you really owe. The differnece is the TA's take!
+Latest version will tell you the remaining balance on your booked cruises. If you used a TA, the code may display less than what you really owe. Royal only tracks what they are owed! The difference is the TA's take!
 
 Pulls passengers' room numbers from the API. Sometimes individual excursions/packages have rooms returned by the API, where the booking still reports GTY (guarantee=room in promised class not yet assigned). If the room returned by the booking is the room you are assigned, please post an issue so this feature can be confirmed.
 
@@ -13,13 +13,13 @@ Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested y
 
 Thanks to @tecmage for getting the tool to work mostly for the UDP, Coffee Card, and Evian Water purchases. Currently there is an issue if you buy 2x or more coffee cards. The API does not know how many you bought, so the tool will always say a cheaper price is available because it is comparing the price you paid for 2x cards with the price of a single card. Thanks to @iareanthony for fixing "The Key"
 
-Thanks to @jipis for fixing internet pricing and identifying how to find specials for individual passengers. I changed the logic to check every single passenger's order to find specials only available to them (like an unlisted 40% refreshment package July 2025 sale only available to teens) which the code was not finding. Code also avoids checking orders multiple times, which can happen when reservations are linked. 
+Thanks to @jipis for fixing internet pricing and identifying how to find specials for individual passengers. The code checks each passenger's order to find specials only available to them (like an unlisted 40% refreshment package July 2025 sale only available to teens, C&A status specials). Code avoids checking orders multiple times, which can happen when reservations are linked. 
 
-Want to monitor a friend's cruise? You can either link their cruise to your account or add their account the tracker's account list. You need their reservation number, name, and birthdate to link the cruise to your account (select my name is not listed). Then this code will check their packages which is better than having their username/password. For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The passengers' first names booked in each room will be shown at the start of each booking. If the item was purchased by someone besides the account being used to check the price, the email will notify you that someone else must cancel/rebook. The code cannot tell you who actually booked it. If you have their username/password, you can add it to the list of accounts in the config.yaml and it will cycle though accounts automatically.
+Want to monitor a friend's cruise? You can either link their cruise to your account or add their account the `config.yaml` account list. On the Royal Website, you need their reservation number, name, and birthdate to link the cruise to your account (select my name is not listed). Then this code will check their packages which avoids needing their username/password. For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The correct passengers' first names booked in each room will be shown for each booking. If the item was purchased by someone besides the account being used to check the price, the email will notify you that someone else must cancel/rebook. The code cannot tell you who actually booked it. If you have their username/password, you can add it to the list of accounts in the config.yaml and it will cycle though accounts automatically.
 
 Thanks to @ProxesOnBoxes for various improvements for date display options, custom configuration files, and setting a cruise friendly name.
 
-Now handles any currancy. The retrieved current price will be the same currancy in which you purchased it. 
+Now handles purchases in any currancy. The retrieved current price will be the same currancy in which you purchased it. 
 
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. The draw back is you have to add your packages manually and it does not find special deals exclusive to your account (C&A status, age-based, etc): `https://royalpricetracker.com/` . Consider using that for a simpler solution. Does not hurt to use both!
 
