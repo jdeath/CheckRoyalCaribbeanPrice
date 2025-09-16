@@ -20,7 +20,7 @@ def main():
     user_input = input("Enter Ship Number: ")
     if user_input == 'q' or user_input == 'Q':
         print("Have a nice day!")
-        quit()
+        return
 
     numShips = len(ships)
     user_input = int(user_input)    
@@ -33,7 +33,7 @@ def main():
         user_input = input("Enter Sailing Number: ")
         if user_input == 'q' or user_input == 'Q':
             print("Have a nice day!")
-            quit()
+            return
         
         user_input = int(user_input)    
         if user_input < numSailings and user_input >= 0:
@@ -216,8 +216,14 @@ def getAllProducts(shipCode,sailDate,currency):
             headers=headers,
             json=json_data,
         )
-
-        products = response.json().get("payload").get("products")
+        payload = response.json().get("payload")
+        if payload is None:
+            continue
+            
+        products = payload.get("products")
+        if products is None:
+            continue
+            
         for product in products:
             title = product.get("title")
             price = product.get("lowestAdultPrice")
@@ -226,9 +232,5 @@ def getAllProducts(shipCode,sailDate,currency):
             else:
                 print(title + " " + str(price) + " " + currency)
     
-
-
-
-
 if __name__ == "__main__":
     main()
