@@ -24,6 +24,8 @@ RESET = '\033[0m' # Resets color to default
 
 dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by config
 
+shipDictionary = {}
+
 def main():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
     parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
@@ -62,7 +64,10 @@ def main():
             global currencyOverride
             currencyOverride = data['currencyOverride']
             print(YELLOW + "Overriding Current Price Currency to " + currencyOverride + RESET)
-                
+
+        global shipDictionary
+        shipDictionary = getShipDictionary()
+        
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
@@ -230,7 +235,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         if str(reservationId) in reservationFriendlyNames:
             reservationDisplay += " (" + reservationFriendlyNames.get(str(reservationId)) + ")"
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
-        print(reservationDisplay + ": " + sailDateDisplay + " " + shipCode + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
+        print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary[shipCode] + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
 
@@ -360,6 +365,7 @@ def get_cruise_price(url, paidPrice, apobj):
     
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
+
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
     
@@ -367,8 +373,8 @@ def get_cruise_price(url, paidPrice, apobj):
     
     sailDate = params.get("sailDate")[0]
     sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
-    
-    preString = sailDateDisplay + " " + params.get("shipCode")[0]+ " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
+    shipName = shipDictionary[params.get("shipCode")[0]]    
+    preString = sailDateDisplay + " " + shipName + " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
     
     roomNumberList = params.get("r0j")
     if roomNumberList:
@@ -441,6 +447,30 @@ def getShips():
         print(shipCode + " " + name)
     return shipCodes
 
+def getShipDictionary():
+
+    headers = {
+        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'accept': 'application/json',
+        'appversion': '1.54.0',
+        'accept-language': 'en',
+        'user-agent': 'okhttp/4.10.0',
+    }
+
+    params = {
+        'sort': 'name',
+    }
+
+    response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    ships = response.json().get("payload").get("ships")
+    
+    shipCodes = {}
+    
+    for ship in ships:
+        shipCode = ship.get("shipCode")
+        name = ship.get("name")
+        shipCodes[shipCode] = name
+    return shipCodes
 
 # Get SailDates From a Ship Code
 def getSailDates(shipCode):
