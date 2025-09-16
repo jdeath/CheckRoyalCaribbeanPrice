@@ -39,3 +39,18 @@ jobs:
           asset_path: D:\a\CheckRoyalCaribbeanPrice\CheckRoyalCaribbeanPrice\dist\CheckRoyalCaribbeanPrice.exe
           asset_name: CheckRoyalCaribbeanPrice.exe
           asset_content_type: application/exe
+      
+      - name: Package BrowseApplication with PyInstaller
+        run: |
+          # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
+          pyinstaller -F BrowseRoyalCaribbeanPrice.py
+
+      - name: upload windows artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: D:\a\CheckRoyalCaribbeanPrice\CheckRoyalCaribbeanPrice\dist\BrowseRoyalCaribbeanPrice.exe
+          asset_name: BrowseRoyalCaribbeanPrice.exe
+          asset_content_type: application/exe
