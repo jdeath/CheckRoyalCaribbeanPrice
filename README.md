@@ -217,8 +217,8 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. It should give you the price of the item in the same currency you bought it in. Post an issue if not working correctly.
 1. May not handle all orders correctly.
 1. Prices of internet, beverage packages, and "The Key" are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly. If any per-day item is not calculated correctly, post an issue.
+1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
+1. Double check you are cancelling the item for the correct cruis
 
 # Browse RoyalCaribbean Prices
-This is a new script that will browse any Royal Caribbean sailing and show current public prices. Your price if you book the cruise could be lower. You simply run the script `python BrowseRoyalCaribbeanPrice.py` . It will prompt you for the ship and sailing you are interested in. It will provide a link to the Royal Caribbean website which has the prices and it will print all the prices for you. This does not require a Royal Caribbean account and can be used by anyone. Inspired by `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` . Edit line `4` of the code if you want to change the currency.
-1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
-1. Double check you are cancelling the item for the correct cruise!
+This is a new script that will browse any Royal Caribbean sailing and show current public prices. Your price if you book the cruise could be lower. You simply run the script `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe`. It will prompt you for the ship and sailing you are interested in. It will provide a link to the Royal Caribbean website which has the prices and it will print all the prices for you. This does not require a Royal Caribbean account and can be used by anyone. Inspired by `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` . Defaults to USD currency. If you want a differnet currency, like DKK run `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
