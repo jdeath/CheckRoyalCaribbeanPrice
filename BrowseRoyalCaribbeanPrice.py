@@ -1,11 +1,53 @@
 import requests
 from datetime import datetime
+import argparse
 
 dateDisplayFormat = "%x"
-currency = "USD"
 
 ##########
 # Get Ships
+
+def main():
+    parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
+    parser.add_argument('-c', '--currency', type=str, default='USD', help='currency (default: USD)')
+    args = parser.parse_args()
+    
+    currency = args.currency
+    print("Select Ship")
+    ships = getShips()
+    print("q - Quit")
+
+    user_input = input("Enter Ship Number: ")
+    if user_input == 'q' or user_input == 'Q':
+        print("Have a nice day!")
+        quit()
+
+    numShips = len(ships)
+    user_input = int(user_input)    
+    if user_input < numShips and user_input >= 0:
+        ship = ships[user_input]
+        sailings = getSailings(ship)
+        print("q - Quit")
+        
+        numSailings = len(sailings)
+        user_input = input("Enter Sailing Number: ")
+        if user_input == 'q' or user_input == 'Q':
+            print("Have a nice day!")
+            quit()
+        
+        user_input = int(user_input)    
+        if user_input < numSailings and user_input >= 0:
+            sailing = sailings[user_input]
+            print("")
+            print("Direct Link To Royal Caribbean Website: ")
+            print("https://www.royalcaribbean.com/account/cruise-planner/category/beverage?bookingId=000000&shipCode=" + ship + "&sailDate=" + sailing)
+            print("")
+            print("These are public prices, sale prices for you could be less")
+            print("")
+            getAllProducts(ship,sailing,currency)
+
+print("Have a nice day!")
+    
 
 def getShips():
 
@@ -113,7 +155,7 @@ def getProducts(shipCode, sailDate):
         print(productTitle + " " + str(adultPrice))
        
 #############################
-def getAllProducts(shipCode,sailDate):
+def getAllProducts(shipCode,sailDate,currency):
     productMap = {}
     productMap["beverage"] = "Beverage Packages"
     productMap["shorex"] = "Shore Excursions"
@@ -180,41 +222,13 @@ def getAllProducts(shipCode,sailDate):
             title = product.get("title")
             price = product.get("lowestAdultPrice")
             if product.get("salesUnit") in [ 'PER_NIGHT', 'PER_DAY' ]:
-                print(title + " " + str(price) + " per night")
+                print(title + " " + str(price) + " " + currency + " per night")
             else:
-                print(title + " " + str(price))
+                print(title + " " + str(price) + " " + currency)
     
-print("Select Ship")
-ships = getShips()
-print("q - Quit")
 
-user_input = input("Enter Ship Number: ")
-if user_input == 'q' or user_input == 'Q':
-    print("Have a nice day!")
-    quit()
 
-numShips = len(ships)
-user_input = int(user_input)    
-if user_input < numShips and user_input >= 0:
-    ship = ships[user_input]
-    sailings = getSailings(ship)
-    print("q - Quit")
-    
-    numSailings = len(sailings)
-    user_input = input("Enter Sailing Number: ")
-    if user_input == 'q' or user_input == 'Q':
-        print("Have a nice day!")
-        quit()
-    
-    user_input = int(user_input)    
-    if user_input < numSailings and user_input >= 0:
-        sailing = sailings[user_input]
-        print("")
-        print("Direct Link To Royal Caribbean Website: ")
-        print("https://www.royalcaribbean.com/account/cruise-planner/category/beverage?bookingId=000000&shipCode=" + ship + "&sailDate=" + sailing)
-        print("")
-        print("These are public prices, sale prices for you could be less")
-        print("")
-        getAllProducts(ship,sailing)
 
-print("Have a nice day!")
+
+if __name__ == "__main__":
+    main()
