@@ -1,6 +1,7 @@
 # CheckRoyalCaribbeanPrice
-A script that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually, inside a cron job (linux), in docker, or [task scheduler](https://www.windowscentral.com/how-create-automated-task-using-task-scheduler-windows-10) (windows). If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
+A script `CheckRoyalCaribbeanPrice.py`that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually, inside a cron job (linux), in docker, or [task scheduler](https://www.windowscentral.com/how-create-automated-task-using-task-scheduler-windows-10) (windows). If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
 
+Also is a new script `BrowseRoyalCaribbeanPrice.py` which lets you browse prices of any sailing. This does not require any setup or config.
 [![Stargazers repo roster for @jdeath/CheckRoyalCaribbeanPrice](https://reporoster.com/stars/jdeath/CheckRoyalCaribbeanPrice)](https://github.com/jdeath/CheckRoyalCaribbeanPrice/stargazers)
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website. Has saved me $200 on a cruise and $160 on execursions in one week since I wrote it! Hopefully it helps you too.
@@ -215,5 +216,8 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. It should give you the price of the item in the same currency you bought it in. Post an issue if not working correctly.
 1. May not handle all orders correctly.
 1. Prices of internet, beverage packages, and "The Key" are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly. If any per-day item is not calculated correctly, post an issue.
+
+# Browse RoyalCaribbean Prices
+This is a new script that will browse any Royal Caribbean sailing and show current public prices. Your price if you book the cruise could be lower. You simply run the script `python BrowseRoyalCaribbeanPrice.py` . It will prompt you for the ship and sailing you are interested in. It will provide a link to the Royal Caribbean website which has the prices and it will print all the prices for you. This does not require a Royal Caribbean account and can be used by anyone. Inspired by `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` . Edit line `4` of the code if you want to change the currency.
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
 1. Double check you are cancelling the item for the correct cruise!
