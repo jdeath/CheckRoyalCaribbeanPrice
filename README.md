@@ -1,7 +1,8 @@
 # CheckRoyalCaribbeanPrice
 A script `CheckRoyalCaribbeanPrice.py` that checks if you have cheapest price for beverage package, excursions, internet, etc that you have purchased. Finds all purchased packages on your account, no need to enter them yourself. Can also check the price of a cabin if you provide the Royal Caribbean booking URL (no Royal account needed). You need to run this tool manually, inside a cron job (linux), in docker, or [task scheduler](https://www.windowscentral.com/how-create-automated-task-using-task-scheduler-windows-10) (windows). If you run Home Assistant, an addon is posted in my [addon repo](https://github.com/jdeath/homeassistant-addons) which can be called automatically.
 
-Also is a new script `BrowseRoyalCaribbeanPrice.py` which lets you browse prices of any sailing. This does not require any setup or config.
+Also is a new script `BrowseRoyalCaribbeanPrice.py` which lets you browse prices of any sailing. This does not require any setup or your account information. It prints the publicly available prices for most everything offered on the cruise. It does not compare to what you paid. Similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` 
+
 [![Stargazers repo roster for @jdeath/CheckRoyalCaribbeanPrice](https://reporoster.com/stars/jdeath/CheckRoyalCaribbeanPrice)](https://github.com/jdeath/CheckRoyalCaribbeanPrice/stargazers)
 
 This is not a hack. Developed only with Firefox and python. All the API calls are public and visible in the Firefox inspector. Everything in this code your browser is doing when you log into the Royal Caribbean website. Has saved me $200 on a cruise and $160 on execursions in one week since I wrote it! Hopefully it helps you too.
