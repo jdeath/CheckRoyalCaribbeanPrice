@@ -227,10 +227,23 @@ def getAllProducts(shipCode,sailDate,currency):
         for product in products:
             title = product.get("title")
             price = product.get("lowestAdultPrice")
-            if product.get("salesUnit") in [ 'PER_NIGHT', 'PER_DAY' ]:
-                print(title + " " + str(price) + " " + currency + " per night")
-            else:
-                print(title + " " + str(price) + " " + currency)
-    
+            if price == 0:
+                continue
+                           
+            printString = title + " " + str(price) + " " + currency
+            
+            if product.get("salesUnit") in [ 'PER_DAY' ]:
+                printString =  printString + " per day" 
+            
+            if product.get("salesUnit") in [ 'PER_NIGHT' ]:
+                printString =  printString + " per night"
+             
+            # Promo % off is basically a scam, do not print it 
+            #promoDescription = product.get("promoDescription")    
+            #if promoDescription is not None:
+            #    printString = printString + " - " + promoDescription.get("displayName")
+            
+            print(printString)
+            
 if __name__ == "__main__":
     main()
