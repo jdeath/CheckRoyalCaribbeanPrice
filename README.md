@@ -27,7 +27,7 @@ Now handles purchases in any currancy. The retrieved current price will be the s
 
 There is a free website that does price checks for beverage packages/excursions and does not log into your account. The draw back is you have to add your packages manually and it does not find special deals exclusive to your account (C&A status, age-based, etc): `https://royalpricetracker.com/` . Consider using that for a simpler solution. Does not hurt to use both!
 
-You can also go to: `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` and look up any cruise. No account needed. It will point you to all the beverage, shore, internet packages right on the royal caribbean website to see the prices. Thanks to redditer @illuminated0ne for finding that. I may add looking up cruises you have not booked at a later time.
+You can also go to: `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` and look up any cruise. No account needed. It will point you to all the beverage, shore, internet packages right on the royal caribbean website to see the prices. Thanks to redditer @illuminated0ne for finding that. See my `BrowseRoyalCaribbeanPrice.py` script for similar capability.
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
