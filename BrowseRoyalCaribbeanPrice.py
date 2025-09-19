@@ -46,7 +46,8 @@ def main():
             print("")
             getAllProducts(ship,sailing,currency)
 
-print("Have a nice day!")
+    user_input = input("Hit any key to quit: ")
+    print("Have a nice day!")
     
 
 def getShips():
