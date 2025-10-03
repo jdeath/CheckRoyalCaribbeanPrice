@@ -179,7 +179,10 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. In "Start in (optional)" enter the directory of the .exe/.yaml (you can copy the "Program/script" field, paste it, and remove the CheckRoyalCaribbeanPrice.exe)
 1. After clicking finish, you can right click on task, go to triggers, and add more times to trigger the script. Suggest a time right before you get home from work. Twice a day should be sufficient
 1. Ensure apprise notifications are working, because the window will close automatically after run.
-   
+
+## Linking Cruises
+Want to monitor a friend's cruise? You can either link their cruise to your account or add their account the `config.yaml` account list. On the Royal Website, you need their reservation number, name, and birthdate to link the cruise to your account (select my name is not listed). Then this code will check their packages which avoids needing their username/password. For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The correct passengers' first names booked in each room will be shown for each booking. If the item was purchased by someone besides the account being used to check the price, the email will notify you that someone else must cancel/rebook. The code cannot tell you who actually booked it. If you have their username/password, you can add it to the list of accounts in the config.yaml and it will cycle though accounts automatically.
+
 ## Related Tools
 
 - [RoyalPriceTracker.com](https://royalpricetracker.com/) – simpler, but you must enter purchases manually, public price only  
