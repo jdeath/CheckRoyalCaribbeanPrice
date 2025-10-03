@@ -9,9 +9,9 @@ This is not a hack. Developed only with Firefox and python. All the API calls ar
 
 Thanks to anonymous for geting the AccountID programmatically!
 
-Latest version will tell you the remaining balance on your booked cruises. If you used a TA, the code may display less than what you really owe. Royal only tracks what they are owed! The difference is the TA's take!
+Tells you the remaining balance on your booked cruises. If you used a TA, the code may display less than what you really owe. Royal only tracks what they are owed! The difference is the TA's take!
 
-Pulls passengers' room numbers from the API. Sometimes individual excursions/packages have rooms returned by the API, where the booking still reports GTY (guarantee=room in promised class not yet assigned). If the room returned by the booking is the room you are assigned, please post an issue so this feature can be confirmed.
+**Provides advance notice of GTY assignment!** If your booking reports GTY (guarantee=room in promised class not yet assigned), your excursions will report an assigned room via the API. For authors' GTY, the excursion room number was eventually assigned as the actual room 30 days out. Please post an issue to confirm if this worked for you.
 
 Thanks to help from @cyntil8, supports Celebrity Cruises too. Not fully tested yet. Also contributed logic handle per-day priced items automatically.
 
