@@ -2,8 +2,8 @@
 Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
 - ✅ Automatically finds your purchased packages (no need to enter them manually)  
 - ✅ Alerts you if a lower price is available
-- ✅ Shows currently assigned cabin in Royal's system when you have a "GTY" room
-- ✅ Shows how much Royal's system thinks you owe on cruise (can then calculate TA's take!)
+- ✅ Shows currently assigned cabin Royal's system (likely what you GTY room will be assigned)
+- ✅ Shows how much Royal's system thinks is owed on cruise (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises 
 - ✅ Can also check **cabin prices** with just a booking URL (no login required)  
 - ✅ Works on Linux, Windows, macOS, Docker, and Home Assistant
