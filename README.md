@@ -1,15 +1,15 @@
 # CheckRoyalCaribbeanPrice
 Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
-- ✅ Automatically finds your purchased packages (no need to enter them manually)  
+- ✅ Automatically checks your purchased packages (no need to enter them manually)  
 - ✅ Alerts you if a lower price is available
-- ✅ Shows currently assigned cabin in Royal's backend system (likely the room you will be assigned if purchased a GTY)
-- ✅ Shows how much Royal's backend system thinks is owed on cruise (does not include TA's take!)
+- ✅ Shows currently assigned cabin in Royal's backend system (*likely* the room you will get if purchased a GTY "We choose your room")
+- ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises 
 - ✅ Can also check **cabin prices** with just a booking URL (no login required)  
-- ✅ Works on Linux, Windows, macOS, Docker, and Home Assistant
+- ✅ Runs on Windows, macOS, Linux, Docker, and Home Assistant.
 - ✅ Seperate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required  
 
-> ⚠️ This is **not a hack**. All API calls are publicly available and visible in the browser. The script simply automates what you can already see on the Royal Caribbean website.
+> ⚠️ This is **not a hack**. All API calls and data are publicly available and visible in the browser. The script simply automates you can do on Royal Caribbean website.
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
@@ -172,16 +172,19 @@ If any of the prices are lower, it will send a notification if you set up appris
 ## Automating
 1. Linux: Put in a cron job, if running in linux, I am sure you know how! Be sure to either provide optional argument for the `config.yaml` path or be sure to execute the script from within the directory where the configuration script is present.
 1. Home Assistant: Use directions in my [repo](https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck)
+1. Docker: See directions in docker section above
 1. Windows: Use windows task schedular
-1. Create a basic task. Select a daily trigger, suggest a little before you wake up
-1. Action, select "Start a Program"
-1. In "Program/script" Select the CheckRoyalCaribbeanPrice.exe file you download from here. Make sure the config.yaml is in same directory as .exe (if running python script, should be able to put python.exe the full path of this the script location)
-1. In "Start in (optional)" enter the directory of the .exe/.yaml (you can copy the "Program/script" field, paste it, and remove the CheckRoyalCaribbeanPrice.exe)
-1. After clicking finish, you can right click on task, go to triggers, and add more times to trigger the script. Suggest a time right before you get home from work. Twice a day should be sufficient
-1. Ensure apprise notifications are working, because the window will close automatically after run.
+    1. Create a basic task. Select a daily trigger, suggest a little before you wake up
+    1. Action, select "Start a Program"
+    1. In "Program/script" Select the CheckRoyalCaribbeanPrice.exe file you download from here. Make sure the config.yaml is in same directory as .exe (if running python script, should be able to put python.exe the full path of this the script location)
+    1. In "Start in (optional)" enter the directory of the .exe/.yaml (you can copy the "Program/script" field, paste it, and remove the CheckRoyalCaribbeanPrice.exe)
+    1. After clicking finish, you can right click on task, go to triggers, and add more times to trigger the script. Suggest a time right before you get home from work. Twice a day should be sufficient
+    1. Ensure apprise notifications are working, because the window will close automatically after run.
 
-## Linking Cruises
-Want to monitor a friend's cruise? You can either link their cruise to your account or add their account the `config.yaml` account list. On the Royal Website, you need their reservation number, name, and birthdate to link the cruise to your account (select my name is not listed). Then this code will check their packages which avoids needing their username/password. For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The correct passengers' first names booked in each room will be shown for each booking. If the item was purchased by someone besides the account being used to check the price, the email will notify you that someone else must cancel/rebook. The code cannot tell you who actually booked it. If you have their username/password, you can add it to the list of accounts in the config.yaml and it will cycle though accounts automatically.
+## Other Notes
+**Want to monitor a friend's cruise?** You can either link their cruise to your account or add their account the `config.yaml` account list. On the Royal Website, you need their reservation number, name, and birthdate to link the cruise to your account (select my name is not listed). Then this code will check their packages which avoids needing their username/password. For linked reservations, the passenger may appear to be in the wrong room. This is just a feature of the code which I cannot seem to fix. The correct passengers' first names booked in each room will be shown for each booking. If the item was purchased by someone besides the account being used to check the price, the email will notify you that someone else must cancel/rebook. The code cannot tell you who actually booked it. If you have their username/password, you can add it to the list of accounts in the config.yaml and it will cycle though accounts automatically.
+
+**Do you have a GTY Room and want to know the room you will likely get?** If a room is not officially assigned yet, the code displays GTY (meaning guarantee) for your room number. However, any execursion purchased will show the passengers's name and the room number currently associated with that excursion. Guess what? That room number is likely the room you will be officially assigned. Confirmed by the author, please post an issue if you can confirm this as well.
 
 ## Related Tools
 
