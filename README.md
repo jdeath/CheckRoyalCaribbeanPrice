@@ -171,10 +171,10 @@ Will output information on your purchases (redacted output below)
 royalcaribbean me@email.com
 C&A: XXXXXXXXX DIAMOND 100 Points
 CONFNUM1: 09/11/25 Quantum of the Seas Room 1234 (Mary, Jane)
-Mary      (1234) has best price for La Cava de Marcelo: The Cheese Cave of: 84.99 (now 134.0)
-Jane      (1234) has best price for La Cava de Marcelo: The Cheese Cave of: 84.99 (now 134.0)
-Mary      (1234) has best price for Deluxe Beverage Package of: 56.99 (now 62.99)
-Jane      (1234) has best price for Deluxe Beverage Package of: 56.99 (now 62.99)
+Mary   (1234) has best price for La Cava de Marcelo: The Cheese Cave of: 84.99 (now 134.0)
+Jane   (1234) has best price for La Cava de Marcelo: The Cheese Cave of: 84.99 (now 134.0)
+Mary   (1234) has best price for Deluxe Beverage Package of: 56.99 (now 62.99)
+Jane   (1234) has best price for Deluxe Beverage Package of: 56.99 (now 62.99)
 
 CONFNUM2: 09/15/25 Brilliance of the Seas Room GTY (John, Mary)
 John   (1234) has best price for Old and New San Juan City Tour with Airport Drop-Off of: 54.99 (now 99.0)
