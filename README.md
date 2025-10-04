@@ -13,6 +13,10 @@ Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available and visible in the browser. The script simply automates you can do on Royal Caribbean website.
 
+[![Stargazers repo roster for @jdeath/CheckRoyalCaribbeanPrice](https://reporoster.com/stars/jdeath/CheckRoyalCaribbeanPrice)](https://github.com/jdeath/CheckRoyalCaribbeanPrice/stargazers)
+
+If the code saved you money, star the repo or post your success on [r/RoyalCaribbean](https://www.reddit.com/r/royalcaribbean/) !
+
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the `CheckRoyalCaribbeanPrice.py` from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
