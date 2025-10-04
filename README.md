@@ -165,16 +165,27 @@ currencyOverride: 'DKK'
     - After cancelling/modify the order, click the product image to reorder.
 
 ## Output
-Will output information on your purchases
+Will output information on your purchases (redacted output below)
 ```
-CONFNUM1: You have the best price for Chacchoben Ruins Exclusive Drive of: 122.99
-CONFNUM1: You have the best price for Tabyana Beach Break of: 66.99
-CONFNUM2: You have the best price for Deluxe Beverage Package of: 67.99
-CONFNUM2: 	Price of Deluxe Beverage Package is now higher: 72.99
-CONFNUM2: You have the best price for VOOM SURF + STREAM Internet Package of: 17.99
-2025-12-27 VI OUTSIDE 4N: You have best Price of 3612.12 
+09/04/25 06:02:01
+royalcaribbean me@email.com
+C&A: XXXXXXXXX DIAMOND 100 Points
+CONFNUM1: 09/11/25 Quantum of the Seas Room 1234 (Mary, Jane)
+Mary      (1234) has best price for La Cava de Marcelo: The Cheese Cave of: 84.99 (now 134.0)
+Jane      (1234) has best price for La Cava de Marcelo: The Cheese Cave of: 84.99 (now 134.0)
+Mary      (1234) has best price for Deluxe Beverage Package of: 56.99 (now 62.99)
+Jane      (1234) has best price for Deluxe Beverage Package of: 56.99 (now 62.99)
+
+CONFNUM2: 09/15/25 Brilliance of the Seas Room GTY (John, Mary)
+John   (1234) has best price for Old and New San Juan City Tour with Airport Drop-Off of: 54.99 (now 99.0)
+Mary   (1234) has best price for Old and New San Juan City Tour with Airport Drop-Off of: 54.99 (now 99.0)
+John   (1234) has best price for Deluxe Beverage Package of: 62.99 (now 72.99)
+Mary   (1234) has best price for Deluxe Beverage Package of: 62.99 (now 72.99)
+Mary   (1234) has best price for VOOM SURF + STREAM Internet Package of: 16.99 (now 18.99)
+
+2025-12-27 Vision of the Seas OUTSIDE 4N: You have best Price of 3612.12 
 ```
-If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel
+If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel. Notice on the 2nd reservation, the official room is GTY but the excursions show the currently assigned room in the Royal backend system. This room is likely what you will get!
 
 ## Automating
 1. Linux: Put in a cron job, if running in linux, I am sure you know how! Be sure to either provide optional argument for the `config.yaml` path or be sure to execute the script from within the directory where the configuration script is present.
