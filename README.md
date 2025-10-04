@@ -2,7 +2,7 @@
 Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
 - ✅ Automatically checks your purchased packages (no need to enter them manually)  
 - ✅ Alerts you if a lower price is available
-- ✅ Finds deals specific to each passenger (loyality or casio status, age-based specials) where other trackers only find publically available prices
+- ✅ Finds deals specific to each passenger (loyality or casino status, age-based specials) where other trackers only find publically available prices
 - ✅ Shows currently assigned cabin in Royal's backend system (*likely* the room you will get if purchased a GTY "We choose your room")
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises 
