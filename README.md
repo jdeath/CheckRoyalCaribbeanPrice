@@ -16,7 +16,7 @@ Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises
 
 [![Stargazers repo roster for @jdeath/CheckRoyalCaribbeanPrice](https://reporoster.com/stars/jdeath/CheckRoyalCaribbeanPrice)](https://github.com/jdeath/CheckRoyalCaribbeanPrice/stargazers)
 
-If the code saved you money, star the repo or post your success on [r/RoyalCaribbean](https://www.reddit.com/r/royalcaribbean/) !
+If the code saved you money or correctly predicted your cabin number, star the repo and/or post your success on [r/RoyalCaribbean](https://www.reddit.com/r/royalcaribbean/) !
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
