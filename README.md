@@ -20,7 +20,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 
 ## Install (Recommended, any Operating System, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
-1. Download the `CheckRoyalCaribbeanPrice.py` from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
+1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise bs4`
 
 ## Install (Windows 10/11 Only)
