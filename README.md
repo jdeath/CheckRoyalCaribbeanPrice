@@ -12,7 +12,7 @@ Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required  
 
-> ⚠️ This is **not a hack**. All API calls and data are publicly available and visible in the browser. The script simply automates you can do on Royal Caribbean website.
+> ⚠️ This is **not a hack**. All API calls and data are publicly available. The script simply automates what you can do on the Royal Caribbean website.
 
 [![Stargazers repo roster for @jdeath/CheckRoyalCaribbeanPrice](https://reporoster.com/stars/jdeath/CheckRoyalCaribbeanPrice)](https://github.com/jdeath/CheckRoyalCaribbeanPrice/stargazers)
 
