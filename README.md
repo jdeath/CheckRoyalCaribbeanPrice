@@ -2,11 +2,13 @@
 Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
 - ✅ Automatically checks your purchased packages (no need to enter them manually)  
 - ✅ Alerts you if a lower price is available
+- ✅ Finds deals specific to each passenger (loyality or casio status, age-based specials) where other trackers only find publically available prices
 - ✅ Shows currently assigned cabin in Royal's backend system (*likely* the room you will get if purchased a GTY "We choose your room")
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises 
 - ✅ Can also check **cabin prices** with just a booking URL (no login required)  
 - ✅ Runs on Windows, macOS, Linux, Docker, and Home Assistant.
+- ✅ Completly open source, free to use or modify.
 - ✅ Seperate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required  
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available and visible in the browser. The script simply automates you can do on Royal Caribbean website.
