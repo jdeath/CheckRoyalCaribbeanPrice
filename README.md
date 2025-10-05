@@ -1,5 +1,5 @@
 # CheckRoyalCaribbeanPrice
-Track and compare the prices of your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
+Checks if you have the cheapest price for your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
 - ✅ Automatically checks your purchased packages (no need to enter them manually)  
 - ✅ Alerts you if a lower price is available
 - ✅ Finds deals specific to each passenger (loyalty or casino status, age-based specials) where other trackers only find publicly available prices
