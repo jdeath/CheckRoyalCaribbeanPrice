@@ -414,7 +414,7 @@ def get_cruise_price(url, paidPrice, apobj):
         tempString = GREEN + preString + ": You have best price of " + str(paidPrice) + RESET
         if price > paidPrice:
             tempString += " (now " + str(price) + ")"
-            print(tempString)
+        print(tempString)
 
 # Unused Functions
 # For Future Capability
