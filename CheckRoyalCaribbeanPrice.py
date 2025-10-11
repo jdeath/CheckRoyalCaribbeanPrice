@@ -150,7 +150,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     newPricePayload = payload.get("startingFromPrice")
 
     if newPricePayload is None:
-        tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " No Longer for Sale" + RESET
+        tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " (No Longer for Sale)" + RESET
         print(tempString)
         return
         
