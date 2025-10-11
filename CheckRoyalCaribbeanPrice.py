@@ -141,17 +141,18 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         headers=headers,
     )
     
-    if response.json().get("payload") is None:
+    payload = response.json().get("payload")
+    if payload is None:
         return
-        
-    title = response.json().get("payload").get("title")
     
-    try:
-        newPricePayload = response.json().get("payload").get("startingFromPrice")
-    except:
-        print(title + " is No Longer For Sale")
+    
+    title = payload.get("title")    
+    newPricePayload = payload.get("startingFromPrice")
+
+    if newPricePayload is None:
+        tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " No Longer for Sale" + RESET
+        print(tempString)
         return
-        
         
     currentPrice = newPricePayload.get("adultPromotionalPrice")
     
@@ -295,7 +296,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 params=params,
                 headers=headers,
             )
-                    
+            
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
                 # check for cancelled status at item-level
                     
