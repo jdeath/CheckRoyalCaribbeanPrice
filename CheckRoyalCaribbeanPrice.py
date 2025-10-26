@@ -385,7 +385,7 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
         roomNumber = roomNumberList[0]
         preString = preString + " Cabin " + roomNumber
     
-    if iteration > 4:
+    if iteration > 8:
         print("Check Cruise URL - No room available for " + preString)
         return
     
