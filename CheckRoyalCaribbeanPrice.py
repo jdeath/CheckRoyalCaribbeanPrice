@@ -47,7 +47,7 @@ def main():
             dateDisplayFormat = data['dateDisplayFormat']
         
         print(timestamp.strftime(dateDisplayFormat + " %X"))
-        quit()
+        
         if 'apprise' in data:
             for apprise in data['apprise']:
                 url = apprise['url']
