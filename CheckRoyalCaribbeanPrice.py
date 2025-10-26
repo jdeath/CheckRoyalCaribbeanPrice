@@ -337,7 +337,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     room = guest.get("stateroomNumber")
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
 
-def get_cruise_price(url, paidPrice, apobj):
+def get_cruise_price(url, paidPrice, apobj, iteration = 0):
+        
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'en-US,en;q=0.9',
@@ -369,14 +370,8 @@ def get_cruise_price(url, paidPrice, apobj):
         url=url[0:findindex1-1]+url[findindex2:len(url)]
         
     
-    
-    m = re.search('www.(.*).com', url)
-    cruiseLineName = m.group(1)
-
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
-    
-    response = requests.get('https://www.'+cruiseLineName+'.com/checkout/guest-info', params=params,headers=headers)
     
     sailDate = params.get("sailDate")[0]
     sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
@@ -388,6 +383,15 @@ def get_cruise_price(url, paidPrice, apobj):
         roomNumber = roomNumberList[0]
         preString = preString + " Cabin " + roomNumber
     
+    if iteration > 4:
+        print("Check Cruise URL - No room available for " + preString)
+        return
+    
+    m = re.search('www.(.*).com', url)
+    cruiseLineName = m.group(1)
+    
+    response = requests.get('https://www.'+cruiseLineName+'.com/checkout/guest-info', params=params,headers=headers)
+    
     soup = BeautifulSoup(response.text, "html.parser")
     soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"})
     if soupFind is None:
@@ -398,7 +402,8 @@ def get_cruise_price(url, paidPrice, apobj):
             # Uncomment these print statements, if get into a loop
             #print(textString)
             newURL = "https://www." + cruiseLineName + ".com" + redirectString
-            get_cruise_price(newURL, paidPrice, apobj)
+            iteration = iteration + 1
+            get_cruise_price(newURL, paidPrice, apobj,iteration)
             #print("Update url to: " + newURL)
             return
         else:
