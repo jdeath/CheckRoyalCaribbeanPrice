@@ -8,6 +8,7 @@ import re
 import base64
 import json
 import argparse
+import locale
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
@@ -32,20 +33,21 @@ def main():
     args = parser.parse_args()
     config_path = args.config
 
+    # Set Time with AM/PM or 24h based on locale    
+    locale.setlocale(locale.LC_TIME,'')
     timestamp = datetime.now()
     print(" ")
     
     apobj = Apprise()
         
-
     with open(config_path, 'r') as file:
         data = yaml.safe_load(file)
         if 'dateDisplayFormat' in data:
             global dateDisplayFormat
             dateDisplayFormat = data['dateDisplayFormat']
-
+        
         print(timestamp.strftime(dateDisplayFormat + " %X"))
-
+        quit()
         if 'apprise' in data:
             for apprise in data['apprise']:
                 url = apprise['url']
