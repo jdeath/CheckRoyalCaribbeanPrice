@@ -219,7 +219,7 @@ Thanks to contributors:
 - @iareanthony (fixed "The Key")  
 - @jipis (internet pricing & passenger specials)  
 - @ProxesOnBoxes (date display options, config improvements)  
-
+- @RoyalCaribbeanBlog.com for featuring in an [article](https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers)
 # Issues
 1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix. PRs welcome
 1. Only checks adult prices (> 12 years old), if only have child prices in an order it may not work. I don't have kids, so I can not fix. PRs welcome
