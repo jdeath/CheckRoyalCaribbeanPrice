@@ -11,7 +11,8 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Runs on Windows, macOS, Linux, Docker, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
-- ✅ Separate `GetRoyalCaribbeanFocus.py` works only from Ship's Wifi, but will making things come into Focus!   
+- ✅ Separate `GetRoyalCaribbeanFocus.py` works only from the Ship's Wifi and makes things come out of Focus! 📷 
+   
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available. The script simply automates what you can do on the Royal Caribbean website.
 
