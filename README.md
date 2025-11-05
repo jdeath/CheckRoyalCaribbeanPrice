@@ -238,4 +238,4 @@ This is a new script that will browse any Royal Caribbean or Celebrity sailing a
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
 
 # Get Royal Caribbean Focus
-This is a new script which brings this into focus when you are on board. You must run from a laptop that is on the Ship's Wifi, although you *do not* need the internet package. The script requires the same `config.yaml` as the price checker, but only needs the account information fields. Drop a note in the issues section if like it.
+This is a new script which brings things out of Focus. You must run from a laptop that is on the Ship's Wifi, although you *do not* need the internet package. The script requires the same `config.yaml` as the price checker, but only needs the account information fields. Drop a note in the issues section if like it.
