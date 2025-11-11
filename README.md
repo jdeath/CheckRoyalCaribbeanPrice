@@ -11,7 +11,6 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Runs on Windows, macOS, Linux, Docker, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
-- ✅ Separate `GetRoyalCaribbeanFocus.py` works only from the Ship's Wifi and makes things come out of Focus! 📷 
    
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available. The script simply automates what you can do on the Royal Caribbean website.
@@ -237,6 +236,3 @@ Thanks to contributors:
 This is a new script that will browse any Royal Caribbean or Celebrity sailing and show current public prices for excursions/drink packages/etc. If you book the cruise, the price could be lower than shown due to C&A or casino specials. You simply run the script `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe`. It will prompt you to select the ship and sailing. It will provide a link to the Royal Caribbean website which has the product prices for that cruise (be sure to be logged out of the RC website or link will not work). Code will also print all the prices. This does not require a Royal Caribbean or Celebrity account and can be used by anyone. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/`. Defaults to USD currency. If you want a different currency, for example DKK, run `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
 
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
-
-# Get Royal Caribbean Focus
-This is a new script which brings things out of Focus. You must run from a laptop that is on the Ship's Wifi, although you *do not* need the internet package. The script requires the same `config.yaml` as the price checker, but only needs the account information fields. Drop a note in the issues section if like it.
