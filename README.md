@@ -29,7 +29,8 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
     -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
     -   Only if you want to build a binary yourself, you can run `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
-
+2. Make the config.yaml file as described below in the Edit Config File section
+   -   Note: if you make a text file in windows with New->Text file , it may look like it is named `config.yaml`, but it is actually named `config.yaml.txt` . In the windows file browser, go to View->Show and make sure "File Name Extensions" is checked. Then remove the .txt from the end of the file so it is actually named `config.yaml`.
 ## Install (Docker Option - thanks @JDare)
 
 ### Single Execution (One-time price check)
