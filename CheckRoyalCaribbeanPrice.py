@@ -376,6 +376,12 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
     params = parse_qs(parsed_url.query)
     
     sailDate = params.get("sailDate")[0]
+    currencyCodeList = params.get("selectedCurrencyCode")
+    if currencyCodeList is None:
+        currencyCode = "USD"
+    else:
+        currencyCode = currencyCodeList[0]
+        
     sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
     shipName = shipDictionary[params.get("shipCode")[0]]    
     preString = sailDateDisplay + " " + shipName + " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
@@ -416,7 +422,7 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
     
     priceString = soupFind.text
     priceString = priceString.replace(",", "")
-    m = re.search("\\$(.*)USD", priceString)
+    m = re.search("\\$(.*)" + currencyCode, priceString)
     priceOnlyString = m.group(1)
     price = float(priceOnlyString)
     
