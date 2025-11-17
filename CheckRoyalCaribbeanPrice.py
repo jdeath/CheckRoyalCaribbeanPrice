@@ -196,7 +196,8 @@ def getLoyalty(access_token,accountId,session):
     cAndANumber = loyalty.get("crownAndAnchorId")
     cAndALevel = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
     cAndAPoints = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints")
-    print("C&A: " + str(cAndANumber) + " " + cAndALevel + " " + str(cAndAPoints) + " Points")  
+    cAndASharedPoints = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints")
+    print("C&A: " + str(cAndANumber) + " " + cAndALevel + " - " + str(cAndASharedPoints) + " Shared Points (" + str(cAndAPoints) + " Individual Points)")  
     
     
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames):
