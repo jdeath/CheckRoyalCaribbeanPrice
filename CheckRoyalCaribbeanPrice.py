@@ -119,6 +119,83 @@ def login(username,password,session,cruiseLineName):
     accountId = auth_info["sub"]
     return access_token,accountId,session
 
+
+def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest, passengerId,passengerName,room, orderCode, orderDate, owner):
+        
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0',
+    'Accept': 'application/json',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'X-Requested-With': 'XMLHttpRequest',
+    'Access-Token': access_token,
+    'AppKey': appKey,
+    'vds-id': accountId,
+    'Account-Id': accountId,
+    'channel': 'web',
+    'Req-App-Id': 'Royal.Web.PlanMyCruise',
+    'Req-App-Vers': '1.81.3',
+    'Content-Type': 'application/json',
+    'Origin': 'https://www.royalcaribbean.com',
+    'DNT': '1',
+    'Sec-GPC': '1',
+    'Connection': 'keep-alive',
+    'Referer': 'https://www.royalcaribbean.com/',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'cross-site',
+    'Priority': 'u=0',
+    # Requests doesn't support trailers
+    # 'TE': 'trailers',
+    }
+
+    params = {
+        'sailingId': ship + startDate,
+        'currencyIso': currency,
+        'categoryId': prefix,
+    }
+
+    
+    json_data = {
+        'productCode': product,
+        'quantity': quantity,
+        'signOnReservationId': reservationId,
+        'signOnPassengerId': passengerId,
+        'guests': [
+            {
+                'id': passengerId,
+                'firstName': guest.get("firstName"),
+                'lastName': guest.get("lastName"),
+                'selected': False,
+                'dob': guest.get("dob"),
+                'reservationId': reservationId,
+                'attachedToReservation': False,
+            },
+        ],
+        'offeringId': product,
+    }
+
+    response = requests.post(
+        'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/price',
+        params=params,
+        headers=headers,
+        json=json_data,
+    )
+    
+    payload = response.json().get("payload")
+    #print('response')
+    if payload is None:
+        print("Payload Not Returned")
+        return
+        
+    unitType = payload.get("prices")[0].get("unitType")
+    
+    if unitType in [ 'perNight', 'perDay' ]:
+        price = payload.get("prices")[0].get("promoDailyPrice")
+    else:
+        price = payload.get("prices")[0].get("promoPrice")
+        
+    print("Paid Price: " + str(paidPrice) + " Cart Price: " + str(price))
+    
 def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner):
     
     headers = {
@@ -136,7 +213,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         'currencyIso': currency,
         'passengerId': passengerId,
     }
-
+    
     response = session.get(
         'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/' + ship + '/categories/' + prefix + '/products/' + str(product),
         params=params,
@@ -301,14 +378,15 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
             )
             
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
-                # check for cancelled status at item-level
-                    
+                # check for canceled status at item-level
+                
+                quantity = orderDetail.get("priceDetails").get("quantity")
                 order_title = orderDetail.get("productSummary").get("title")
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
                 if prefix == "pt_internet":
                     product = orderDetail.get("productSummary").get("baseId")
-                
+                    
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
                 guests = orderDetail.get("guests")
                 
@@ -318,7 +396,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                         continue
                     
                     paidPrice = guest.get("priceDetails").get("subtotal")
-                
+                    paidQuantity = guest.get("priceDetails").get("quantity")
+                    
                     if paidPrice == 0:
                         continue
                         
@@ -336,8 +415,13 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     if salesUnit in [ 'PER_NIGHT', 'PER_DAY' ]:
                         paidPrice = round(paidPrice / numberOfNights,2)
                 
+                    if paidQuantity > 0:
+                        paidPrice = round(paidPrice / paidQuantity,2)
+                        
                     currency = guest.get("priceDetails").get("currency")
-                    room = guest.get("stateroomNumber")
+                    room = guest.get("stateroomNumber") 
+                    #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,passengerId,firstName,room,orderCode,orderDate,owner)
+                    
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
 
 def get_cruise_price(url, paidPrice, apobj, iteration = 0):
