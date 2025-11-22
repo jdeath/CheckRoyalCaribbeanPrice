@@ -224,10 +224,18 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if payload is None:
         return
     
-    
     title = payload.get("title")    
+    variant = ""
+    try:
+        variant = payload.get("baseOptions")[0].get("selected").get("variantOptionQualifiers")[0].get("value")
+    except:
+        pass
+    
+    if "Bottles" in variant:
+        title = title + " (" + variant + ")"
+    
     newPricePayload = payload.get("startingFromPrice")
-
+    
     if newPricePayload is None:
         tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " (No Longer for Sale)" + RESET
         print(tempString)
@@ -382,11 +390,13 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 
                 quantity = orderDetail.get("priceDetails").get("quantity")
                 order_title = orderDetail.get("productSummary").get("title")
+                
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
-                if prefix == "pt_internet":
+                
+                if prefix == "pt_internet" or prefix == "pt_beverage":
                     product = orderDetail.get("productSummary").get("baseId")
-                    
+                
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
                 guests = orderDetail.get("guests")
                 
