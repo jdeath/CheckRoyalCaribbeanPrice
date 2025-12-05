@@ -277,6 +277,7 @@ def getLoyalty(access_token,accountId,session):
         'account-id': accountId,
     }
     response = session.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', headers=headers)
+
     loyalty = response.json().get("payload").get("loyaltyInformation")
     cAndANumber = loyalty.get("crownAndAnchorId")
     cAndALevel = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
@@ -284,6 +285,11 @@ def getLoyalty(access_token,accountId,session):
     cAndASharedPoints = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints")
     print("C&A: " + str(cAndANumber) + " " + cAndALevel + " - " + str(cAndASharedPoints) + " Shared Points (" + str(cAndAPoints) + " Individual Points)")  
     
+    clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
+    if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
+        clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
+        print("Casino: " + clubRoyaleLoyaltyTier + " - " + str(clubRoyaleLoyaltyIndividualPoints) + " Points")
+
     
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames):
 
