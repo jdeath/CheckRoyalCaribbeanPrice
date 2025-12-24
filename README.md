@@ -36,6 +36,7 @@ This version is stripped down to work on the free Python iPhone app. It does not
 
 1. Get Python From Appstore. `https://apps.apple.com/us/app/python-coding-editor-ide-app/id6444399635`
    -   Free version is fine, no need to make inapp purchases
+   -   Please let me know if Android equivalent that works
 2. Download `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
    -   Use a text editor to add your username and password between the "" a few lines down.
    -   If you are are using a Celebrity account, remove `#` before `#cruiseLineName = "celebritycruises"`
