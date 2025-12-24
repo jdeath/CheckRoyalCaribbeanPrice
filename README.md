@@ -39,6 +39,7 @@ This version is stripped down to work on the free Python iPhone app. It does not
 2. Download `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
    -   Use a text editor to add your username and password between the "" a few lines down.
    -   If you are are using a Celebrity account, remove `#` before `#cruiseLineName = "celebritycruises"`
+   -   Ignore the `Edit Config File` section below, that only pretains to computer installations
 3. Email yourself the edited `PhonePriceCheck.py`
    -    On your iPhone, save the emailed to your files section. Click the attachment, share to saved files
 4. Open Python App
