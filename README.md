@@ -8,7 +8,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
 - ✅ Can also check **cabin prices** with just a booking URL (no login required)  
-- ✅ Runs on Windows, macOS, Linux, Docker, iOS (via Python App) and Home Assistant.
+- ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
    
@@ -31,23 +31,23 @@ If the code saved you money or correctly predicted your cabin number, star the r
 2. Make the config.yaml file as described below in the Edit Config File section
    -   Note: if you make a text file in windows with New->Text file , it may look like it is named `config.yaml`, but it is actually named `config.yaml.txt` . In the windows file browser, go to View->Show and make sure "File Name Extensions" is checked. Then remove the .txt from the end of the file so it is actually named `config.yaml`.
 
-## Install (iOS - May work for Android too)
-This version is stripped down to work on the free Python iPhone app. It does not support apprise or cruise price checks. You will have to watch the log to see any price drops. You need to edit the file (directions below), it does not use a config.yaml file
+## Install (iOS / iPhone - May work for Android too)
+This will run a stripped down version to work on the free Python iPhone app. It does not support apprise notification or cruise fair price checks. You will have to watch the log to see any price drops. You need to edit the python file directly (directions below), it does not use the config.yaml file
 
 1. Get Python From Appstore. `https://apps.apple.com/us/app/python-coding-editor-ide-app/id6444399635`
    -   Free version is fine, no need to make inapp purchases
-   -   Please let me know if Android equivalent that works
+   -   Please let me know if there is an Android app equivalent that works
 2. Download `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
    -   Use a text editor to add your username and password between the "" a few lines down.
    -   If you are are using a Celebrity account, remove `#` before `#cruiseLineName = "celebritycruises"`
    -   Ignore the `Edit Config File` section below, that only pretains to computer installations
 3. Email yourself the edited `PhonePriceCheck.py`
-   -    On your iPhone, save the emailed to your files section. Click the attachment, share to saved files
+   -    On your iPhone, save the emailed `PhonePriceCheck.py` to your files section. This can be done by clicking the attachment, select share, then select saved files
 4. Open Python App
    -    Tap the blue hamburger icon just below the adverstisement
    -    Tap "Load from File"
    -    Select the PhonePriceCheck.py file you downloaded
-   -    Tap the arrow icon at top of phone. (between a bug icon and a `...` icon)
+   -    To run: tap the arrow icon at top right of screen (between a bug icon and a `...` icon)
 6. Look for any price drops in the output
 
 ## Install (Docker Option - thanks @JDare)
