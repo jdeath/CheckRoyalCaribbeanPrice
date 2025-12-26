@@ -40,9 +40,6 @@ def main():
         global shipDictionary
         shipDictionary = getShipDictionary()
         
-        
-        
-
         reservationFriendlyNames = []
         apobj = None
         print(cruiseLineName + " " + username)
@@ -356,11 +353,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 quantity = orderDetail.get("priceDetails").get("quantity")
                 order_title = orderDetail.get("productSummary").get("title")
                 
-                product = orderDetail.get("productSummary").get("id")
+                product = orderDetail.get("productSummary").get("baseId")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
-                
-                if prefix == "pt_internet" or prefix == "pt_beverage":
-                    product = orderDetail.get("productSummary").get("baseId")
                 
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
                 guests = orderDetail.get("guests")
