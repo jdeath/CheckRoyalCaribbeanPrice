@@ -400,7 +400,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 product = orderDetail.get("productSummary").get("id")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
                 
-                if prefix == "pt_internet" or prefix == "pt_beverage":
+                if prefix == "pt_internet" or prefix == "pt_beverage" or prefix == "pt_packages":
                     product = orderDetail.get("productSummary").get("baseId")
                 
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
