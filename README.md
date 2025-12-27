@@ -242,7 +242,7 @@ If you have their username/password, you can add it to the list of accounts in t
 
 Thanks to contributors:
 - Anonymous (Retrieve AccountID programmatically)
-- @cyntil8 (Celebrity support, per-day pricing)  
+- @cyntil8 (Celebrity support, per-day pricing, various bug fixes)  
 - @tecmage (UDP, Coffee Card, Evian Water logic)  
 - @iareanthony (fixed "The Key")  
 - @jipis (internet pricing & passenger specials)  
