@@ -169,6 +169,7 @@ def getAllProducts(shipCode,sailDate,currency):
     productMap["arcade"] = "Arcade"
     productMap["gifts"] = "Gifts and Gear"
     productMap["fitness"] = "Fitness"
+    productMap["preandpost"] = "Pre and Post"
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0',
