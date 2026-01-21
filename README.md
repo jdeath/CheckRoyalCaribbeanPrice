@@ -7,7 +7,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
-- ✅ Can also check **cabin prices** with just a booking URL (no login required, only USD and DKK currancy supported)  
+- ✅ Can also check **cabin prices** with just a booking URL (no login required, only USD and DKK currency supported)  
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
@@ -162,7 +162,7 @@ currencyOverride: 'DKK'
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser. It is possible the room is not available. Going to the cruiseURL directly might give you a false alarm and you will look like an idiot calling your travel agent!
 1. If it is lower than you paid for, the cabin is still bookable, and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
-1. Update the pricePaid field to the new price. Remove the `$` and any `,` (or `.` if non-USD currancy for thousands designator)
+1. Update the pricePaid field to the new price. Remove the `$` and any `,` (or `.` if non-USD currency for thousands designator)
 1. Works easiest on a Guarantee Cabin, where multiple of same cabin exist for purchase. If checking a "You Pick the Room", be sure to check the price of the same class of room you booked (Connecting Balcony, Balcony class 4D or 4A , etc). If the room you picked is no longer available, you need to get a URL of another room in that class. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to manually check back on the Royal website to see if a room opened up. The API does not return cruise prices, so we are left with scraping the website.
 1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
 1. Only supports USD and DKK currency. If have another currency, please make an issue and include the URL 
