@@ -70,6 +70,11 @@ def main():
         global shipDictionary
         shipDictionary = getShipDictionary()
         
+        # Load watch list configuration
+        watchListItems = []
+        if 'watchList' in data:
+            watchListItems = data['watchList']
+        
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
@@ -80,13 +85,13 @@ def main():
                    else:
                     cruiseLineName =  "royalcaribbean"
                 else:
-                   cruiseLineName =  "royalcaribbean"     
+                   cruiseLineName =  "royalcaribbean"
                     
                 print(cruiseLineName + " " + username)
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
@@ -196,7 +201,7 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
         
     print("Paid Price: " + str(paidPrice) + " Cart Price: " + str(price))
     
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner, forWatch, cruiseLineName):
     
     headers = {
         'Access-Token': access_token,
@@ -237,7 +242,10 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     newPricePayload = payload.get("startingFromPrice")
     
     if newPricePayload is None:
-        tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " (No Longer for Sale)" + RESET
+        if forWatch:
+            tempString = YELLOW + passengerName.ljust(10) + " (" + title +  ") watch price: " + str(paidPrice) + " (No Longer for Sale)" + RESET
+        else:
+            tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " (No Longer for Sale)" + RESET
         print(tempString)
         return
         
@@ -247,14 +255,20 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         currentPrice = newPricePayload.get("adultShipboardPrice")
     
     if currentPrice < paidPrice:
-        text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+        if forWatch:
+            text = passengerName + ": Book! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+        else:
+            text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         
         promoDescription = payload.get("promoDescription")
         if promoDescription:
             promotionTitle = promoDescription.get("displayName")
             text += '\n Promotion:' + promotionTitle
-            
-        text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.royalcaribbean.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
+
+        if forWatch:    
+            text += '\n' + 'Book at https://www.' + cruiseLineName + '.com/account/cruise-planner/?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
+        else:
+            text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.' + cruiseLineName + '.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
         
         if not owner:
             text += " " + "This was booked by another in your party. They will have to cancel/rebook for you!"
@@ -262,12 +276,40 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         print(RED + text + RESET)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
-        tempString = GREEN + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + RESET
+        if forWatch:
+            tempString = GREEN + passengerName.ljust(10) + " (" + title +  ") price is higher than watch price: " + str(paidPrice) + RESET
+        else:
+            tempString = GREEN + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + RESET
         if currentPrice > paidPrice:
             tempString += " (now " + str(currentPrice) + ")"
         print(tempString)
         
     
+
+def processWatchListForBooking(access_token, accountId, session, reservationId, ship, startDate, passengerId, passengerName, room, watchListItems, apobj, cruiseLineName):
+    """
+    Process watch list items for a specific booking to check for price drops
+    """
+    if not watchListItems:
+        return
+    
+    for watchItem in watchListItems:
+        name = watchItem.get('name', 'Unknown Item')
+        product = watchItem.get('product')
+        prefix = watchItem.get('prefix')
+        watchPrice = float(watchItem.get('price', 0))
+        
+        if not product or not prefix or watchPrice <= 0:
+            print(f"    {YELLOW}Skipping {name} - missing required fields{RESET}")
+            continue
+            
+        # Use watch list name as passenger name for clear identification
+        # Set placeholder values for order-specific fields since these aren't actual orders
+        getNewBeveragePrice(
+            access_token, accountId, session, reservationId, ship, startDate,
+            prefix, watchPrice, "USD", product, apobj, passengerId,
+            f"[WATCH] {name}", room, "WATCH-LIST", "Watch List", True, True, cruiseLineName
+        )
 
 def getLoyalty(access_token,accountId,session):
 
@@ -291,7 +333,7 @@ def getLoyalty(access_token,accountId,session):
         print("Casino: " + clubRoyaleLoyaltyTier + " - " + str(clubRoyaleLoyaltyIndividualPoints) + " Points")
 
     
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems):
 
     headers = {
         'Access-Token': access_token,
@@ -340,12 +382,17 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
 
-        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj)
+        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
-    
+        
+        if watchListItems:
+            processWatchListForBooking(access_token,accountId,session,reservationId,shipCode,sailDate,
+                                     passengerId,passengerNames,booking.get("stateroomNumber"),watchListItems,apobj,cruiseLineName)
+            print(" ")
+          
 
     
-def getOrders(access_token,accountId,session,reservationId,passengerId,ship,startDate,numberOfNights,apobj):
+def getOrders(access_token,accountId,session,reservationId,passengerId,ship,startDate,numberOfNights,apobj,cruiseLineName):
     
     headers = {
         'Access-Token': access_token,
@@ -436,7 +483,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     room = guest.get("stateroomNumber") 
                     #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,passengerId,firstName,room,orderCode,orderDate,owner)
                     
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner,False,cruiseLineName)
 
 def get_cruise_price(url, paidPrice, apobj, iteration = 0):
         
