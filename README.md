@@ -7,6 +7,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
+- ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)
 - ✅ Can also check **cabin prices** with just a booking URL (no login required, only USD and DKK currency supported)  
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
@@ -287,7 +288,8 @@ Thanks to contributors:
 - @tecmage (UDP, Coffee Card, Evian Water logic)  
 - @iareanthony (fixed "The Key")  
 - @jipis (internet pricing & passenger specials)  
-- @ProxesOnBoxes (date display options, config improvements)  
+- @ProxesOnBoxes (date display options, config improvements)
+- @jhedlund (Watchlist)
 - @RoyalCaribbeanBlog.com for featuring in an [article](https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers)
 # Issues
 1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix. PRs welcome
