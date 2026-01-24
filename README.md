@@ -165,8 +165,48 @@ currencyOverride: 'DKK'
 1. Update the pricePaid field to the new price. Remove the `$` and any `,` (or `.` if non-USD currency for thousands designator)
 1. Works easiest on a Guarantee Cabin, where multiple of same cabin exist for purchase. If checking a "You Pick the Room", be sure to check the price of the same class of room you booked (Connecting Balcony, Balcony class 4D or 4A , etc). If the room you picked is no longer available, you need to get a URL of another room in that class. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to manually check back on the Royal website to see if a room opened up. The API does not return cruise prices, so we are left with scraping the website.
 1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
-1. Only supports USD and DKK currency. If have another currency, please make an issue and include the URL 
+1. Only supports USD and DKK currency. If have another currency, please make an issue and include the URL
    
+## Watch List (Optional)
+The watch list feature allows you to monitor specific cruise add-ons for price drops across all your bookings. When enabled, the system will check each passenger individually for the specified items and alert you if prices drop below your target price.
+
+### Configuration
+Add a `watchList` section to your `config.yaml` file:
+
+```yaml
+watchList: # Optional, items to monitor for price drops across all your bookings
+  - name: "Deluxe Beverage Package"
+    prefix: "pt_beverage"  # Category prefix
+    product: "3005"        # Product ID
+    price: 85.00           # Alert if current price drops below this amount
+    enabled: true          # Set to false to temporarily disable this item
+  - name: "Premium WiFi 2 Device Package"
+    prefix: "pt_internet"
+    product: "33F1"
+    price: 30.00
+    enabled: false         # This item will be skipped
+```
+
+### How It Works
+- **Per-Passenger Checking**: Each watchlist item is checked individually for every passenger in your bookings
+- **Individual Pricing**: Passengers may have different pricing based on loyalty status, age, or room category
+- **Output Format**: Results show as `[WATCH] Item Name - Passenger (Room): Message`
+- **Enabled Control**: Use the `enabled` field to temporarily disable specific watchlist items without removing them
+
+### Finding Product Information
+To find the `prefix` and `product` values for items you want to watch:
+1. Go to your Cruise Planner website and browse to the package you want to watch
+2. Inspect the URL to find the `prefix` and `product`, for example for the Premium WIFI 2 Device Package the URL looks like:
+   `https://www.celebritycruises.com/account/cruise-planner/category/pt_internet/product/33F1?bookingId=&shipCode=&sailDate=`
+3. The `prefix` is the path following /category/ (`pt_internet` in this case)
+4. The `product` is the value following /product/ (`33F1` in this case)
+
+### Example Output
+```
+[WATCH] Deluxe Beverage Package - John (1234): Book! Deluxe Beverage Package Price is lower: 75.00 than 85.00
+[WATCH] Internet Package - Mary (1234): price is higher than watch price: 25.00 (now 30.00)
+```
+
 ## Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
 1. 99% of people probably have gmail, so you can use the default already setup in the sample config.yaml

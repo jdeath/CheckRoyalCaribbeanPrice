@@ -242,11 +242,9 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     newPricePayload = payload.get("startingFromPrice")
     
     if newPricePayload is None:
-        if forWatch:
-            tempString = YELLOW + passengerName.ljust(10) + " (" + title +  ") watch price: " + str(paidPrice) + " (No Longer for Sale)" + RESET
-        else:
+        if not forWatch:
             tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " (No Longer for Sale)" + RESET
-        print(tempString)
+            print(tempString)
         return
         
     currentPrice = newPricePayload.get("adultPromotionalPrice")
@@ -265,8 +263,8 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             promotionTitle = promoDescription.get("displayName")
             text += '\n Promotion:' + promotionTitle
 
-        if forWatch:    
-            text += '\n' + 'Book at https://www.' + cruiseLineName + '.com/account/cruise-planner/?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
+        if forWatch:
+            text += '\n' + 'Book at https://www.' + cruiseLineName + '.com/account/cruise-planner/category/' + prefix + '/product/' + str(product) + '?bookingId=' + reservationId + '&shipCode=' + ship + '&sailDate=' + startDate
         else:
             text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.' + cruiseLineName + '.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
         
@@ -288,7 +286,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
 
 def processWatchListForBooking(access_token, accountId, session, reservationId, ship, startDate, passengerId, passengerName, room, watchListItems, apobj, cruiseLineName):
     """
-    Process watch list items for a specific booking to check for price drops
+    Process watch list items for a specific passenger to check for price drops
     """
     if not watchListItems:
         return
@@ -298,17 +296,24 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
         product = watchItem.get('product')
         prefix = watchItem.get('prefix')
         watchPrice = float(watchItem.get('price', 0))
+        enabled = watchItem.get('enabled', True)  # Default to True if not specified
+        
+        # Skip disabled watchlist items
+        if not enabled:
+            continue
         
         if not product or not prefix or watchPrice <= 0:
             print(f"    {YELLOW}Skipping {name} - missing required fields{RESET}")
             continue
             
-        # Use watch list name as passenger name for clear identification
+        # Format: [WATCH] Item Name - Passenger (Room): Message
+        watchDisplayName = f"[WATCH] {name} - {passengerName} ({room})"
+        
         # Set placeholder values for order-specific fields since these aren't actual orders
         getNewBeveragePrice(
             access_token, accountId, session, reservationId, ship, startDate,
             prefix, watchPrice, "USD", product, apobj, passengerId,
-            f"[WATCH] {name}", room, "WATCH-LIST", "Watch List", True, True, cruiseLineName
+            watchDisplayName, room, "WATCH-LIST", "Watch List", True, True, cruiseLineName
         )
 
 def getLoyalty(access_token,accountId,session):
@@ -386,8 +391,15 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         print(" ")
         
         if watchListItems:
-            processWatchListForBooking(access_token,accountId,session,reservationId,shipCode,sailDate,
-                                     passengerId,passengerNames,booking.get("stateroomNumber"),watchListItems,apobj,cruiseLineName)
+            # Process watchlist for each individual passenger instead of per booking
+            for guest in guests:
+                firstName = guest.get("firstName").capitalize()
+                guestPassengerId = guest.get("id")
+                # Use the guest's specific room number if available, otherwise fall back to booking room
+                guestRoom = guest.get("stateroomNumber") or booking.get("stateroomNumber")
+                
+                processWatchListForBooking(access_token,accountId,session,reservationId,shipCode,sailDate,
+                                         guestPassengerId,firstName,guestRoom,watchListItems,apobj,cruiseLineName)
             print(" ")
           
 
