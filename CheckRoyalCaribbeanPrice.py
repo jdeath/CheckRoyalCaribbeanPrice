@@ -335,8 +335,19 @@ def getLoyalty(access_token,accountId,session):
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
-        print("Casino: " + clubRoyaleLoyaltyTier + " - " + str(clubRoyaleLoyaltyIndividualPoints) + " Points")
+        print("Casino Royale: " + clubRoyaleLoyaltyTier + " - " + str(clubRoyaleLoyaltyIndividualPoints) + " Points")
 
+    captainsClubId = loyalty.get("captainsClubId")
+    if captainsClubId is not None:
+        captainsClubLoyaltyTier = loyalty.get("captainsClubLoyaltyTier")
+        captainsClubLoyaltyIndividualPoints = loyalty.get("captainsClubLoyaltyIndividualPoints")
+        captainsClubLoyaltyRelationshipPoints = loyalty.get("captainsClubLoyaltyRelationshipPoints")
+        print("CC: " + str(captainsClubId) + " " + captainsClubLoyaltyTier + " - " + str(captainsClubLoyaltyRelationshipPoints) + " Shared Points (" + str(captainsClubLoyaltyIndividualPoints) + " Individual Points)")
+    
+    celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
+    if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
+        clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
+        print("Blue Chip: " + clubRoyaleLoyaltyTier + " - " + str(celebrityBlueChipLoyaltyIndividualPoints) + " Points")
     
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems):
 
