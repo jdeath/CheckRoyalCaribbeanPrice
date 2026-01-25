@@ -2,7 +2,7 @@
 Checks if you have the cheapest price for your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
 - ✅ Automatically checks your purchased packages (no need to enter them manually)  
 - ✅ Alerts you if a lower price is available
-- ✅ Finds deals specific to each passenger (loyalty or casino status, age-based or room specials) where other "royal" price trackers only find publicly available prices
+- ✅ Finds deals specific to each passenger (loyalty or casino status, age-based or room specials) where other "royal price trackers" only find publicly available (often higher) prices
 - ✅ Shows currently assigned cabin in Royal's backend system (*likely* the room you will get if purchased a GTY "We choose your room")
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
