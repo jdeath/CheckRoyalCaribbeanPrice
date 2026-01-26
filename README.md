@@ -153,11 +153,11 @@ To override the currency from what the API returns (what you bought the item in)
 currencyOverride: 'DKK'
 ```
 
-To display current cruise prices for your cruise, set displayCruisePrices to true.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true.
 ```
 displayCruisePrices: true
 ```
-If you want to compare cruise prices, include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a . or , for the decimal place, no indicator for thousands place. Only USD and DKK currency supported
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a . or , for the decimal place, no indicator for thousands place. Only USD and DKK currency supported. You must provide the price you paid, it is not possible to look up via the API.
 ```
 displayCruisePrices: true
 reservationPricePaid:
