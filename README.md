@@ -7,8 +7,9 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
-- ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)
-- ✅ Can also check **cabin prices** with just a booking URL (no login required, only USD and DKK currency supported)  
+- ✅ Can automatically check the price of any cruise you booked (only USD and DKK currency supported)
+- ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
+- ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, only USD and DKK currency supported)  
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
@@ -152,12 +153,19 @@ To override the currency from what the API returns (what you bought the item in)
 currencyOverride: 'DKK'
 ```
 
-To display current cruise prices for your cruise, set displayCruisePrices to true. This will only display the price for the base catagory. For instance, it will show the cheapest interior room, not a connecting interior or virtual balcony interior. These subclasses do not appear available from the API. Therefore use this for quick reference and not a substitute for a price check
+To display current cruise prices for your cruise, set displayCruisePrices to true.
 ```
 displayCruisePrices: true
 ```
+If you want to compare cruise prices, include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a . or , for the decimal place, no indicator for thousands place. Only USD and DKK currency supported
+```
+displayCruisePrices: true
+reservationPricePaid:
+  'XXXXXX': 4568.48
+  'YYYYYY': 4172.71
+```
 
-## Get Cruise URL (Optional)
+## Get Cruise URL for Watchlist Functionality (Optional - This is only for a cruise you have not booked!)
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
