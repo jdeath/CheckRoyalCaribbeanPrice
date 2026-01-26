@@ -75,6 +75,10 @@ def main():
         if 'watchList' in data:
             watchListItems = data['watchList']
         
+        displayCruisePrices = False
+        if 'displayCruisePrices' in data:
+            displayCruisePrices = data['displayCruisePrices']
+        
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
@@ -91,7 +95,7 @@ def main():
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
@@ -99,6 +103,12 @@ def main():
                     paidPrice = float(cruises['paidPrice'])
                     get_cruise_price(cruiseURL, paidPrice, apobj)
             
+
+def years_between(d1, d2):
+    dt1 = datetime.strptime(d1, "%Y%m%d")
+    dt2 = datetime.strptime(d2, "%Y%m%d")
+    return abs((dt2 - dt1).days) / 365.2425
+    
 def login(username,password,session,cruiseLineName):
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -349,7 +359,7 @@ def getLoyalty(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print("Blue Chip: " + clubRoyaleLoyaltyTier + " - " + str(celebrityBlueChipLoyaltyIndividualPoints) + " Points")
     
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices):
 
     headers = {
         'Access-Token': access_token,
@@ -374,16 +384,31 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
     )
 
     for booking in response.json().get("payload").get("profileBookings"):
+       
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
         sailDate = booking.get("sailDate")
         numberOfNights = booking.get("numberOfNights")
         shipCode = booking.get("shipCode")
         guests = booking.get("passengers")
-                
+        packageCode = booking.get("packageCode")
+        bookingCurrency = booking.get("bookingCurrency")
+        stateroomType = booking.get("stateroomType")
+        
         passengerNames = ""
+        numberOfPassengers = 0
+        numberOfChildren = 0
+        numberOfAdults = 0
         for guest in guests:
+            numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
+            birthDate = guest.get("birthdate")
+            yearsAtSailDate = years_between(birthDate, sailDate)
+            if yearsAtSailDate > 12:
+                numberOfAdults = numberOfAdults + 1
+            else:
+                numberOfChildren = numberOfChildren + 1
+                
             passengerNames += firstName + ", "
         
         passengerNames = passengerNames.rstrip()
@@ -397,7 +422,11 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary[shipCode] + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
-
+        
+        # Print Current Prices
+        if displayCruisePrices:
+            GetCruisePriceFromAPI(bookingCurrency, packageCode, sailDate,stateroomType, numberOfAdults, numberOfChildren)
+            
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
@@ -761,6 +790,144 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     for booking in response.json().get("payload"):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
 
+
+def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdults, numChildren):
+
+    cookies = {
+        '_abck': '297E795D527DA0176A3DC95A05D590C2~0~YAAQn5QZuCS0guqbAQAApcHz9Q/EeVXBhFP8GnaUZxrk099BVlGgBx/JfgS02ckMvEs4MwxQYFmvqwCv7OhfkzynaIls9q8fZEIFNEBwm3tVF2/cDgFc1CMISsW+qA3CE2HHT/mgJ3JUyiO8/kjGQTTReJGdgbyenLtdByLrkp9ui8tcNu5GCG6FE6S5DAy7afeoDF4D5HSGYGkQWqhfMHwCvSaBjA3P/S/UCjuldrtIQTgo+Xz7jT/fjp+dyND2fjjtuNHnvVu7wPJbSNK+xOZs3Ui8u45qhsaUyIGfWp4RUGsnO7i3v4zZ8kI6vfL1ShM7JKZBmeSa6uI+/OzKOHJq+boLwfvFBz0SsnCfxtDdj4mFX59FgTv/EoPF9qwQqeSaltYSaJVWz1n5hLSdr4+o7wRPwXJDtPuNHg686n+6W4dF3BGeUkjV1SfQkhALcddHpoksXzLAhlUxYwYHB/RwtbUJ1EWKlssjbygsxch4wv6how/w/f50EHn23Qwd9f3zZn7J69aT3eVeuGR0pr5jBKra3n6om7H/9JVHqfUYLpPICYC148lZs3FftUlW5p6jIHIpZlHX9uZvKmuMs4WI6DiWHMjfpIwonMVkJw024HIDZPqm/dC3WmaSRBt0d+R4E3rI5M/V9RmCIrtj99I6MLFK4NUBh5Q5UUPadyXkfJ4vomaFiQ6fgAzugLsOzwEFapSFUUhj9uRsh6zWTjN1qR4Mrrd+uAoXpE1gQAGRXdTI7h4HPRlsU0iQQrQesw73ziiLE8a3nlD9IHolQ1XMnlNTp9kHHwwB7/I0KrP4uHemyZWNmRSnOdzatqJy3h1ywy1/wHHDd9pVy7yLtMp1JH75YktTDQQ0eHc=~-1~-1~1769361460~AAQAAAAF%2f%2f%2f%2f%2f2vU5DuWauaTWH%2f58nvgf4OtMwpHGeMC7+T6wQ2cda8g%2fGgf9EJaEHMB51KuibNiz1WCjdHGr4scnnQ8mDzSvJmY7NmXZBmVnGQ368rMK7kgo879Hoq+dRAw1tcHZskMrEWYexo%3d~-1',
+        'AMCV_981337045329610C0A490D44%40AdobeOrg': '1585540135%7CMCMID%7C65518191893208271519119443450072481442%7CMCAID%7CNONE%7CMCOPTOUT-1769365115s%7CNONE%7CvVersion%7C4.4.0%7CMCIDTS%7C20478',
+        's_nr': '1769357915730-Repeat',
+        '__td_signed': 'true',
+        'consumerID': '200073083',
+        '_mibhv': 'anon-1742945302576-6531793573_9236',
+        'fe_sso': 'CtCG2D0Yhh5wbIxz-Zx7lIv9Lf0.*AAJTSQACMDEAAlNLABxSeW5VOVRWVjhqWDhMRUo1Y0ZRWWJPdzhyd1E9AAR0eXBlAANDVFMAAlMxAAA.*',
+        'OptanonConsent': 'isGpcEnabled=0&datestamp=Sun+Jan+25+2026+11%3A18%3A32+GMT-0500+(Eastern+Standard+Time)&version=202411.2.0&browserGpcFlag=1&isIABGlobal=false&hosts=&consentId=c7583ebe-4ed6-4e84-82e9-ac204537dbdf&interactionCount=3&isAnonUser=1&landingPath=NotLandingPage&groups=C0001%3A1%2CC0003%3A1%2CC0002%3A1%2CC0004%3A1%2CBG105%3A1&intType=1&geolocation=US%3BMA&AwaitingReconsent=false',
+        'mbox': 'PC#3612e3d0cc8244788deba6764ca74a48.34_0#1832602716|session#bca6333b847f4ae9b42b3143eb2ff460#1769359777',
+        'LPVID': 'JkZGM1NzJjZTE5ZTRlNGQ3',
+        'rwd_id': '5a99d17d-4b22-4fe0-81a9-2f40c2d224ad',
+        'departureDate': '20260216',
+        's_evar66cvp': '%5B%5B%27Direct%27%2C%271765722688585%27%5D%2C%5B%27Google-Organic-keyword%2520unavailable%27%2C%271765935647510%27%5D%2C%5B%27Direct%27%2C%271766017975418%27%5D%2C%5B%27Google-Organic-keyword%2520unavailable%27%2C%271766020200267%27%5D%2C%5B%27Direct%27%2C%271766351693796%27%5D%2C%5B%27Google-Organic-keyword%2520unavailable%27%2C%271766351858209%27%5D%2C%5B%27Direct%27%2C%271766790531749%27%5D%2C%5B%27Google-Organic-keyword%2520unavailable%27%2C%271766874132381%27%5D%2C%5B%27Direct%27%2C%271767839807232%27%5D%2C%5B%27Google-Organic-keyword%2520unavailable%27%2C%271767919145227%27%5D%2C%5B%27Direct%27%2C%271768154512055%27%5D%2C%5B%27cruisespotlight.com%27%2C%271768218912552%27%5D%2C%5B%27Direct%27%2C%271768260147314%27%5D%2C%5B%27cruisespotlight.com%27%2C%271768260250685%27%5D%2C%5B%27Direct%27%2C%271768353148518%27%5D%2C%5B%27Google-Organic-keyword%2520unavailable%27%2C%271768358317788%27%5D%2C%5B%27Direct%27%2C%271769357862467%27%5D%5D',
+        's_evar68cvp': '%5B%5B%27Direct%27%2C%271765722688586%27%5D%2C%5B%27Organic%27%2C%271765935647511%27%5D%2C%5B%27Direct%27%2C%271766017975419%27%5D%2C%5B%27Organic%27%2C%271766020200268%27%5D%2C%5B%27Direct%27%2C%271766351693796%27%5D%2C%5B%27Organic%27%2C%271766351858210%27%5D%2C%5B%27Direct%27%2C%271766790531750%27%5D%2C%5B%27Organic%27%2C%271766874132383%27%5D%2C%5B%27Direct%27%2C%271767839807232%27%5D%2C%5B%27Organic%27%2C%271767919145228%27%5D%2C%5B%27Direct%27%2C%271768154512055%27%5D%2C%5B%27Social%2520Media%2520-%2520Organic%27%2C%271768218912557%27%5D%2C%5B%27Direct%27%2C%271768260147314%27%5D%2C%5B%27Social%2520Media%2520-%2520Organic%27%2C%271768260250686%27%5D%2C%5B%27Direct%27%2C%271768353148519%27%5D%2C%5B%27Organic%27%2C%271768358317789%27%5D%2C%5B%27Direct%27%2C%271769357862470%27%5D%5D',
+        'tiktok_throttle': 'tiktok_ON',
+        'visitorType': 'New to Cruise',
+        'OptanonAlertBoxClosed': '2025-12-06T00:45:50.827Z',
+        'MCMID': '65518191893208271519119443450072481442',
+        's_fid': '212E3ECAA85E5D3B-342E120B9AEE1D74',
+        's_v21': '%5B%5B%27retargeting%2520active%27%2C%271768748708592%27%5D%5D',
+        '_fbp': 'fb.1.1765493910373.661147650104698682.Bg',
+        'rcclGuestCookie': '%7B%22packageCode%22%3A%22OY7BH145%22%2C%22shipCode%22%3A%22OY%22%2C%22sailDate%22%3A%222026-12-20%22%2C%22startDate%22%3A%222026-12-20%22%2C%22itineraryName%22%3A%227%20Night%20Perfect%20Day%20Bahamas%20Holiday%22%2C%22stateroomPricing%22%3A%22BALCONY%22%2C%22itineraryUrl%22%3A%22%2Froom-selection%2Frooms-and-guests%3FgroupId%3DOY07BYE-3974839358%26packageCode%3DOY7BH145%26sailDate%3D2026-12-20%26country%3DUSA%26selectedCurrencyCode%3DUSD%26shipCode%3DOY%26cabinClassType%3DBALCONY%26icid%3Dhprtrg_conten_crb_hm_hero_2058%22%2C%22numberOfAdults%22%3A2%2C%22numberOfChildren%22%3A0%2C%22numberOfRooms%22%3A1%2C%22groupId%22%3A%22OY07BYE-3974839358%22%2C%22searchQuery%22%3A%22%26groupId%3DOY07BYE-3974839358%22%2C%22dismissedRetaget%22%3Atrue%7D',
+        'VDS_ID': 'e0e406a2-b8a0-41c4-9a60-9fa9f62aace5',
+        'newUniversalNav': 'experienceB',
+        'ak_bmsc': '805F3596406A18068E68488799EA7C0F~000000000000000000000000000000~YAAQn5QZuAq0guqbAQAAor/z9R61sBRJS0jiQFiWig75Hhll0vzrxP7FlZNpMyn8PXa3idNWikyhV9qWBW3KUnCSeSrpyqUCb4yQXo/PjdjMKhPRM7h+hyHSa0d0I0qZB50K8pWNJb9iPUybSzBG41iw48rwh36iNERTNCBVKaYU+BbPB3ck/uVZZbDIEZbfVz/E9LCYepb1yYLgAUJV20lZQNk/qTmxyVdQUWCdrTYqnWewUM3qe/eGFPJx88w34UfI/wWRS99mMTeaeUf75KwKg/bBVnMO2XxkMIPHsITgWEI2YZLK2FHr8VFvecCIYTDxmdMspYRpd00UR6yBzftxxmKz1DpTR7NVTWJEHvbXMv/9j56IxbWPa1CdKXdM2ZEATJrgNS8Ffgx6n3Z3W9F7rfENtqKLohfF9DES8A7tixriaVDx',
+        'bm_sz': '60B095BB23F2F1B2FAED9B4B3557FFD1~YAAQn5QZuAu0guqbAQAAor/z9R6KY7C2cax04VXHtL5tgXelr23B/Yo20RpPYa/69m+3phTw9SfBd8gn9ScjvNHhUvjui/+4cAB3vtpSTu0M8CoQjLJvLPYeYjZ51q45OZ/fckCK75OxyV/EwJfeA9ctlqVvg/9VrSvokledM25x6s/erq9GbZn0TGNnYSBOHzHo5I49kFr7Jj6j1+728DNwVyZjk7/kl//KZOSaZeZb+utCN7z3d4CqYSTsvObxFl9cQAZ2/HyvgAxSNJ/7IlU+8SzFBOC5Kmkg1qsUquZ9/77BaBZUC1DpWZiCurH/HDBgYsOv4qJ83+EfHYCyfCUCEPbwTCL5/xWdZB6cKl3bxSYR6cDctppXYJMWc/FpFExXM2FXtPsQmo2ei05qoBe5Jjjwehr3cngMWrIxAKFNzyCEdEuGhzSdDx+WoNm0pBXQifgELg==~4272450~3162681',
+        'bm_sv': '0B62EE0F4717A50A6C451C8ABC5C053A~YAAQn5QZuLSpguqbAQAAEzXz9R4MkUhCu4jE3j4PC8GpWgEqUGF0+aBI7xgAeCT/2R+xF8+TcoYvIoMXjYTTPLTdG0B+jo9hC5EpejYbjxeow9WTBeaB6V/gjOsLhLOAt+IEtmx7appiX6mCLdwxDhkheI+ECxJcB7LPsie547mqYryVdSCpLnSJ9isnJMlpmjvFaEpoD4siykhG0POiZMg2LCK76nduwcMQ/ZSXBxxY7/OvqC1tHAhIBVIoolsJVG4/K9wAxs41~1',
+        '_cs_mk_aa': '0.4631365231879573_1769357861448',
+        'pdFlags': 'enable-rooms-section%3Dfalse',
+        's_dl': '1',
+        's_cm': 'Typed%2FBookmarkedTyped%2FBookmarkedundefined',
+        'cmCampaign': 'Direct',
+        'cmChannel': 'Direct',
+        'gpv_pn': 'findacruise',
+        'AKA_A2': 'A',
+        'bm_mi': 'C7617DFF47795E752FC57AA82F4FDF77~YAAQn5QZuDmlguqbAQAA6f7y9R6jie6pvjV+MXih0F+3ev+rRrjILM+48ZiFudmFCyfcAvUz44FTmC7WGAl4GB+5LwbovPED+K/zTzKjZ+ljuMgBLImwCwuEoAMRM78sHrY4X9Fr5amiLn9B5+mxshHu7YPAW+jaCMrKkD0v6eJKO6xAkf05r2pQ9x+UhAf3rmHTd03Kc9ivBMT/JLlqqgJ7XFBNAmskc9t28o2QBIsDtbVMSqLU0HUty7W3Rb8uuGY6f8Rr5hvT7oTfkyXaKsRxTDKDxBaPVvRyYDylLSBKrOPkTWuqq8CTh2NbS+V0lxPTBQ==~1',
+        'bgv': 'c2',
+        'gp': '0',
+        'pageNamePersistant': 'findacruise',
+        'at_check': 'true',
+        'AMCVS_981337045329610C0A490D44%40AdobeOrg': '1',
+        'country': 'USA',
+        'wuc': 'USA',
+        'language': 'en',
+        'wul': 'en',
+        'akacd_PRC_RCI_CRUISE_SEARCH_PRD_V2': '3946810702~rv=14~id=1dbb7396865ba7cae47bc83497415b43',
+        'akacd_PRC-ROYAL-GRAPH-PRD-V2': '3946810703~rv=42~id=5da16e27fbca0a5ebc80078eb6d3a43e',
+        's_cc': 'true',
+        'JSESSIONID': 'node05zh5ui1actnf1x2ka04hmal0b33661.node0',
+        'affinity': '"b329b0421a94a9e7"',
+        's_sq': '%5B%5BB%5D%5D',
+        'PIM-SESSION-ID': 'yANhcsLi4STtNgPA',
+        'utag_main': '_sn:83$vapi_domain:royalcaribbean.com$v_id:019aa96738f50019256ab4943cd005050003200d00919$dc_visit:74$_se:6%3Bexp-session$_ss:0%3Bexp-session$_st:1769359751354%3Bexp-session$ses_id:1769357860035%3Bexp-session$_pn:4%3Bexp-session$dc_event:5%3Bexp-session$count_dc:162%3Bexp-1832429914874$:85%3Bexp-1826850689333',
+        'cruiseSearchColor': 'green',
+        'rcgCohorts': 'cs:green|',
+        'currency': currency,
+        '_splunk_rum_sid': '%7B%22expiresAt%22%3A1769358851582%2C%22id%22%3A%22d03854aa9eacc0bd64fb2728f3f24b4b%22%2C%22startTime%22%3A1769357913181%7D',
+        'FavoritesExperience': 'redesign',
+        'legacyFavoritesUser': 'true',
+        's_plt': '4.25%2Cfindacruise',
+        '_td': 'cba14fcf-8e57-4766-99fb-bee41b5c76f5',
+    }
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Referer': 'https://www.royalcaribbean.com/cruises?promo=january-beat-the-clock-1000-is-0123-jan-2026&country=USA&icid=jnfs61_tctclp_jnf_hm_hero_4548',
+        'traceparent': '00-81a5fe03b3275b37a01c25bb6ec51c89-479036682032bbeb-00',
+        'content-type': 'application/json',
+        'brand': 'R',
+        'country': 'USA',
+        'language': 'en',
+        'currency': currency,
+        'office': 'MIA',
+        'countryalpha2code': 'US',
+        'apollographql-client-name': 'rci-NextGen-Cruise-Search',
+        'skip_authentication': 'true',
+        'request-timeout': '20',
+        'x-session-id': '5a99d17d-4b22-4fe0-81a9-2f40c2d224ad',
+        'apollographql-query-name': 'cruiseSearch_Cruises',
+        'Origin': 'https://www.royalcaribbean.com',
+        'DNT': '1',
+        'Sec-GPC': '1',
+        'Connection': 'keep-alive',
+    }
+    
+    filterString = f"id:{packageCode}|adults:{numAdults}|children:{numChildren}|startDate:{sailDate}~{sailDate}"
+    
+    json_data = {
+        'operationName': 'cruiseSearch_Cruises',
+        'variables': {
+            'filters': filterString,
+            'enableNewCasinoExperience': False,
+            'sort': {
+                'by': 'RECOMMENDED',
+            },
+            'pagination': {
+                'count': 100,
+                'skip': 0,
+            },
+        },
+        'query': 'query cruiseSearch_Cruises($filters: String) {cruiseSearch(filters: $filters) {results {cruises {id sailings {sailDate stateroomClassPricing {price {value currency { code }} stateroomClass {id name content { code } }}}}}}}',
+    }
+
+    resp = requests.post('https://www.royalcaribbean.com/cruises/graph', cookies=cookies, headers=headers, json=json_data)
+
+
+    sailings = resp.json()["data"]["cruiseSearch"]["results"]["cruises"][0]["sailings"]
+
+   
+    for sailing in sailings:
+       
+        if sailing["sailDate"].replace("-", "") != sailDate:
+            continue
+        prices = sailing["stateroomClassPricing"]
+        for price in prices:
+            cabinCode = price["stateroomClass"]["content"]["code"] 
+ 
+            if cabinCode == bookingType:
+                postString = " (your current room class) "
+            else:
+                postString = ""
+                
+            cabinType = price["stateroomClass"]["name"]
+            
+            if price["price"] is None:
+                print("         " + cabinType + " Not for sale")
+            else:    
+                cabinCostPerPerson = float(price["price"]["value"]) * (numAdults + numChildren)
+                print("         " + str(cabinCostPerPerson) + " : Current Cheapest " + cabinType + " Price " + "for " + str(numAdults + numChildren) + postString)
+            
+   
 
 if __name__ == "__main__":
     main()
