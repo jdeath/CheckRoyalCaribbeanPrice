@@ -152,6 +152,11 @@ To override the currency from what the API returns (what you bought the item in)
 currencyOverride: 'DKK'
 ```
 
+To display current cruise prices for your cruise, set displayCruisePrices to true. This will only display the price for the base catagory. For instance, it will show the cheapest interior room, not a connecting interior or virtual balcony interior. These subclasses do not appear available from the API. Therefore use this for quick reference and not a substitute for a price check
+```
+displayCruisePrices: true
+```
+
 ## Get Cruise URL (Optional)
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
