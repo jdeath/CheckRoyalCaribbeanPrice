@@ -157,7 +157,7 @@ To display current cabin prices for your **booked** cruise(s), set displayCruise
 ```
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a . or , for the decimal place, no indicator for thousands place. Only USD and DKK currency supported. You must provide the price you paid, it is not possible to look up via the API.
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a . or , for the decimal place, no indicator for thousands place. Only USD and DKK currency supported. You must provide the price you paid, it is not possible to look up via the API. If price is lower, do a mock booking on the website then call your travel agent if before the final payment date (even if you paid in full).
 ```
 displayCruisePrices: true
 reservationPricePaid:
@@ -166,6 +166,7 @@ reservationPricePaid:
 ```
 
 ## Get Cruise URL for Watchlist Functionality (Optional - This is only for a cruise you have not booked!)
+1. If you want to check the cabin price of a cruise you have booked, see above. This section if just for cruises you have not booked yet.
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
 1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
@@ -181,7 +182,7 @@ reservationPricePaid:
 1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
 1. Only supports USD and DKK currency. If have another currency, please make an issue and include the URL
    
-## Watch List (Optional)
+## Watch List for Beverage Packages/Excursions/etc (Optional)
 The watch list feature allows you to monitor specific cruise add-ons for price drops across all your bookings. When enabled, the system will check each passenger individually for the specified items and alert you if prices drop below your target price.
 
 ### Configuration
