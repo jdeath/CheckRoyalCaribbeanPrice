@@ -153,11 +153,11 @@ To override the currency from what the API returns (what you bought the item in)
 currencyOverride: 'DKK'
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a OBC credit/loyality special. The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale.
 ```
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a . or , for the decimal place, no indicator for thousands place. Only USD and DKK currency supported. You must provide the price you paid, it is not possible to look up via the API. If price is lower, do a mock booking on the website then call your travel agent if before the final payment date (even if you paid in full).
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. If price is lower, do a mock booking on the website to confirm then call your travel agent if before the final payment date (even if you paid in full).
 ```
 displayCruisePrices: true
 reservationPricePaid:
