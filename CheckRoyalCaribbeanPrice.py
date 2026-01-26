@@ -79,6 +79,11 @@ def main():
         if 'displayCruisePrices' in data:
             displayCruisePrices = data['displayCruisePrices']
         
+        reservationPricePaid = {}
+        if 'reservationPricePaid' in data:
+            reservationPricePaid=data.get('reservationPricePaid', {})
+        
+        
         if 'accountInfo' in data:
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
@@ -95,13 +100,13 @@ def main():
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
                     cruiseURL = cruises['cruiseURL'] 
                     paidPrice = float(cruises['paidPrice'])
-                    get_cruise_price(cruiseURL, paidPrice, apobj)
+                    get_cruise_price(cruiseURL, paidPrice, apobj, False)
             
 
 def years_between(d1, d2):
@@ -359,7 +364,7 @@ def getLoyalty(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print("Blue Chip: " + clubRoyaleLoyaltyTier + " - " + str(celebrityBlueChipLoyaltyIndividualPoints) + " Points")
     
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid):
 
     headers = {
         'Access-Token': access_token,
@@ -384,7 +389,6 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
     )
 
     for booking in response.json().get("payload").get("profileBookings"):
-       
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
         sailDate = booking.get("sailDate")
@@ -393,13 +397,27 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         guests = booking.get("passengers")
         packageCode = booking.get("packageCode")
         bookingCurrency = booking.get("bookingCurrency")
-        stateroomType = booking.get("stateroomType")
+        bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
         
+        stateroomType = booking.get("stateroomType")
+        stateroomCategoryCode = ""
+        stateroomTypeName = ""
+        
+        if stateroomType == "I":
+            stateroomTypeName = "INTERIOR"
+        if stateroomType == "O":
+            stateroomTypeName = "OUTSIDE"
+        if stateroomType == "B":
+            stateroomTypeName = "BALCONY"
+        if stateroomType == "D":
+            stateroomTypeName = "DELUXE"
+            
         passengerNames = ""
         numberOfPassengers = 0
         numberOfChildren = 0
         numberOfAdults = 0
         for guest in guests:
+            stateroomCategoryCode = guest.get("stateroomCategoryCode")
             numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
@@ -420,13 +438,26 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             reservationDisplay += " (" + reservationFriendlyNames.get(str(reservationId)) + ")"
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary[shipCode] + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
-        if booking.get("balanceDue") is True:
-            print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
+        
         
         # Print Current Prices
         if displayCruisePrices:
-            GetCruisePriceFromAPI(bookingCurrency, packageCode, sailDate,stateroomType, numberOfAdults, numberOfChildren)
+            #GetCruisePriceFromAPI(bookingCurrency, packageCode, sailDate,stateroomType, numberOfAdults, numberOfChildren)
+        
+            urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
+       
             
+            # This URL should avoid redirection issues
+            cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+            paidPrice = None
+            
+            if str(reservationId) in reservationPricePaid:
+                paidPrice = float(reservationPricePaid.get(str(reservationId)))
+                
+            get_cruise_price(cruisePriceURL, paidPrice, apobj, True, 0)
+        
+        if booking.get("balanceDue") is True:
+            print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
@@ -537,8 +568,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner,False,cruiseLineName)
 
-def get_cruise_price(url, paidPrice, apobj, iteration = 0):
-        
+def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
+    
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'en-US,en;q=0.9',
@@ -553,21 +584,21 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
     }
-
-    # clean url of r0y and r0x tags
-    findindex1=url.find("r0y")
-    findindex2=url.find("&",findindex1+1)
-    if findindex2==-1:
-        url=url[0:findindex1-1]
-    else:
-        url=url[0:findindex1-1]+url[findindex2:len(url)]
-    
-    findindex1=url.find("r0x")
-    findindex2=url.find("&",findindex1+1)
-    if findindex2==-1:
-        url=url[0:findindex1-1]
-    else:
-        url=url[0:findindex1-1]+url[findindex2:len(url)]
+    if paidPrice is None:
+        # clean url of r0y and r0x tags
+        findindex1=url.find("r0y")
+        findindex2=url.find("&",findindex1+1)
+        if findindex2==-1:
+            url=url[0:findindex1-1]
+        else:
+            url=url[0:findindex1-1]+url[findindex2:len(url)]
+        
+        findindex1=url.find("r0x")
+        findindex2=url.find("&",findindex1+1)
+        if findindex2==-1:
+            url=url[0:findindex1-1]
+        else:
+            url=url[0:findindex1-1]+url[findindex2:len(url)]
         
     
     parsed_url = urlparse(url)
@@ -582,7 +613,13 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
     
     sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
     shipName = shipDictionary[params.get("shipCode")[0]]    
-    preString = sailDateDisplay + " " + shipName + " " + params.get("cabinClassType")[0] + " " + params.get("r0f")[0]
+    
+    if params.get("cabinClassType") is not None:
+        cabinClassString = params.get("cabinClassType")[0]
+    else:
+        cabinClassString = params.get("r0d")[0]
+        
+    preString = "         " + sailDateDisplay + " " + shipName + " " + cabinClassString + " " + params.get("r0f")[0]
     
     roomNumberList = params.get("r0j")
     if roomNumberList:
@@ -596,12 +633,34 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
     
-    response = requests.get('https://www.'+cruiseLineName+'.com/checkout/guest-info', params=params,headers=headers)
-    
+    if not automaticURL:
+        response = requests.get('https://www.'+cruiseLineName+'.com/checkout/guest-info', params=params,headers=headers)
+    else:
+        response = requests.get(url,headers=headers)
+        
     soup = BeautifulSoup(response.text, "html.parser")
-    soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"})
+    
+    if not automaticURL:
+        soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"})
+    else:
+        soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1pd26rr5","data-testid":"pricing-total"})
+    
+    # if the room is available, this css will be found
+    # if not, your category or selected room is not found and no longer for sale
+    roomIsFound = re.search("NavigationCard_locationWrapper__tf0zt8", response.text)
+    if not roomIsFound:
+        textString = preString + " No Longer Available To Book"
+        print(YELLOW + textString + RESET)
+        
+        # If you specified the URL, provide a notification to update the URL
+        if not automaticURL:
+            apobj.notify(body=textString, title='Cruise Room Not Available')
+        return
+
     if soupFind is None:
+        
         m = re.search("\"B:0\",\"NEXT_REDIRECT;replace;(.*);307;", response.text)
+        
         if m is not None:
             redirectString = m.group(1)
             textString = preString + ": URL Not Working - Redirecting to suggested room"
@@ -609,7 +668,8 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
             #print(textString)
             newURL = "https://www." + cruiseLineName + ".com" + redirectString
             iteration = iteration + 1
-            get_cruise_price(newURL, paidPrice, apobj,iteration)
+            
+            get_cruise_price(newURL, paidPrice, automaticURL, apobj,iteration)
             #print("Update url to: " + newURL)
             return
         else:
@@ -630,6 +690,11 @@ def get_cruise_price(url, paidPrice, apobj, iteration = 0):
     priceOnlyString = m.group(1)
     price = float(priceOnlyString)
     
+    if paidPrice is None:
+        tempString = GREEN + preString + ": Current Price " + str(price) + RESET
+        print(tempString)
+        return
+        
     if price < paidPrice: 
         textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
         print(RED + textString + RESET)
