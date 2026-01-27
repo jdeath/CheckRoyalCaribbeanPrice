@@ -450,7 +450,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             # This URL should avoid redirection issues
             cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
             paidPrice = None
-            
+            print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
                 
@@ -458,7 +458,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
-        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
+        #getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
         if watchListItems:
@@ -645,9 +645,10 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     else:
         soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1pd26rr5","data-testid":"pricing-total"})
     
-    # if the room is available, this css will be found
-    # if not, your category or selected room is not found and no longer for sale
-    roomIsFound = re.search("NavigationCard_locationWrapper__tf0zt8", response.text)
+    # Check if Get to: Guest Info, Room Selection, Or Addons Panel
+    # These are the three types of webpages that occur if your room is available
+    roomIsFound = re.search("GuestInfoPanel_heading__6rnfam0|RoomLocationPanel_title__1vllntk0|AddOnsPanel_heading__gq4wr70", response.text) 
+    
     if not roomIsFound:
         textString = preString + " No Longer Available To Book"
         print(YELLOW + textString + RESET)
@@ -669,7 +670,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
             newURL = "https://www." + cruiseLineName + ".com" + redirectString
             iteration = iteration + 1
             
-            get_cruise_price(newURL, paidPrice, automaticURL, apobj,iteration)
+            get_cruise_price(newURL, paidPrice, apobj,automaticURL,iteration)
             #print("Update url to: " + newURL)
             return
         else:
