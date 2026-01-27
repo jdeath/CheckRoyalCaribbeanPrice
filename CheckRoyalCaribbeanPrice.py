@@ -458,7 +458,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
-        #getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
+        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
         if watchListItems:
