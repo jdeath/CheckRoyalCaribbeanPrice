@@ -107,7 +107,8 @@ accountInfo:
   - username: "user@gmail.com" # Your Celebrity User Name
     password: "pa$$word" # Your Celebrity Password (ensure no % in password)
     cruiseLine: "celebrity" # Must indicate if celebrity
-cruises:
+displayCruisePrices: true # Optional, this will display current price for your booked cruises
+cruises: # Optional, this allows you to watch the price of a cruise you have not booked yet
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74"
   - cruiseURL: "https://www.celebritycruises.com/checkout/guest-info?groupId=RF04FLL-1098868345&packageCode=RF4BH246&sailDate=2025-08-11&country=USA&selectedCurrencyCode=USD&shipCode=RF&cabinClassType=INTERIOR&category=I&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=Y&r0f=Y&r0g=BESTRATE&r0h=n&r0A=1127.6" # Can have as many URLS and price paid as you want. Supports Celebrity too
@@ -126,8 +127,26 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 ```
 
-
-If you only want to check cruise price and do not want emails, the account information is not needed by the tool. Config file can look like this:
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a OBC credit/loyality special. The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale.
+```
+accountInfo:
+  - username: "user@gmail.com" # Your Royal Caribbean User Name
+    password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
+    cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
+displayCruisePrices: true
+```
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. If price is lower, do a mock booking on the website to confirm then call your travel agent if before the final payment date (even if you paid in full).
+```
+accountInfo:
+  - username: "user@gmail.com" # Your Royal Caribbean User Name
+    password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
+    cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
+displayCruisePrices: true
+reservationPricePaid:
+  'XXXXXX': 4568.48
+  'YYYYYY': 4172.71
+```
+If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this:
 
 ```
 cruises:
@@ -153,17 +172,7 @@ To override the currency from what the API returns (what you bought the item in)
 currencyOverride: 'DKK'
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a OBC credit/loyality special. The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale.
-```
-displayCruisePrices: true
-```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. If price is lower, do a mock booking on the website to confirm then call your travel agent if before the final payment date (even if you paid in full).
-```
-displayCruisePrices: true
-reservationPricePaid:
-  'XXXXXX': 4568.48
-  'YYYYYY': 4172.71
-```
+
 
 ## Get Cruise URL for Watchlist Functionality (Optional - This is only for a cruise you have not booked!)
 1. If you want to check the cabin price of a cruise you have booked, see above. This section if just for cruises you have not booked yet.
@@ -223,7 +232,7 @@ To find the `prefix` and `product` values for items you want to watch:
 [WATCH] Internet Package - Mary (1234): price is higher than watch price: 25.00 (now 30.00)
 ```
 
-## Apprise (Optional)
+## Notification Emails/Pushbullet/etc via Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
 1. 99% of people probably have gmail, so you can use the default already setup in the sample config.yaml
 1. This will send you an email only if there is a price drop
