@@ -450,7 +450,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             # This URL should avoid redirection issues
             cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
             paidPrice = None
-            print(cruisePriceURL)
+            #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
                 
