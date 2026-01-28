@@ -27,6 +27,8 @@ dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by con
 
 shipDictionary = {}
 
+
+
 def main():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
     parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
@@ -113,6 +115,11 @@ def years_between(d1, d2):
     dt1 = datetime.strptime(d1, "%Y%m%d")
     dt2 = datetime.strptime(d2, "%Y%m%d")
     return abs((dt2 - dt1).days) / 365.2425
+
+def days_between(d1, d2):
+    dt1 = datetime.strptime(d1, "%Y%m%d")
+    dt2 = datetime.strptime(d2, "%Y%m%d")
+    return (dt2 - dt1).days
     
 def login(username,password,session,cruiseLineName):
     headers = {
@@ -649,8 +656,29 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     # These are the three types of webpages that occur if your room is available
     roomIsFound = re.search("GuestInfoPanel_heading__6rnfam0|RoomLocationPanel_title__1vllntk0|AddOnsPanel_heading__gq4wr70", response.text) 
     
+    # Extract Number of Nights from URL (Saved for future use)
+    if params.get("groupId") is not None:
+        groupID = params.get("groupId")[0]
+        numberOfNights = int(groupID[2:4])
+    if params.get("packageCode") is not None:
+        packageCode = params.get("packageCode")[0]
+        numberOfNights = int(packageCode[2:4])
+    
+    daysBeforeCruise = days_between(datetime.today().isoformat().replace('-', '')[0:8],sailDate.replace('-', ''))
+    finalPaymentDeadline = 0
+    
+    if numberOfNights < 5:
+        finalPaymentDeadline = 75
+    elif numberOfNights < 15:
+        finalPaymentDeadline = 90
+    else:
+        finalPaymentDeadline = 120
+    
     if not roomIsFound:
         textString = preString + " No Longer Available To Book"
+        if automaticURL and (daysBeforeCruise < finalPaymentDeadline):
+            textString = textString + " and Past Final Payment Date"
+            
         print(YELLOW + textString + RESET)
         
         # If you specified the URL, provide a notification to update the URL
@@ -674,9 +702,10 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
             #print("Update url to: " + newURL)
             return
         else:
-            textString = preString + " No Longer Available To Book"
-            print(YELLOW + textString + RESET)
-            apobj.notify(body=textString, title='Cruise Room Not Available')
+            if not automaticURL:
+                textString = preString + " No Longer Available To Book"
+                print(YELLOW + textString + RESET)
+                apobj.notify(body=textString, title='Cruise Room Not Available')
             return
     
     priceString = soupFind.text
@@ -695,11 +724,24 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         tempString = GREEN + preString + ": Current Price " + str(price) + RESET
         print(tempString)
         return
-        
+    
     if price < paidPrice: 
-        textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
-        print(RED + textString + RESET)
-        apobj.notify(body=textString, title='Cruise Price Alert')
+        # Notify if should rebook
+        if automaticURL and (daysBeforeCruise <= finalPaymentDeadline):
+            textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
+            print(RED + textString + RESET)
+            apobj.notify(body=textString, title='Cruise Price Alert')
+        # Don't notify if rebooking not possible
+        if  automaticURL and (daysBeforeCruise > finalPaymentDeadline):
+            textString = "Past Final Payment Date " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
+            print(YELLOW + textString + RESET)
+            # Do not notify as no need!
+            #apobj.notify(body=textString, title='Cruise Price Alert')
+        # Always notify if URL is manually provided
+        if not automaticURL:
+            textString = "Consider Booking! " + preString + " New price of "  + str(price) + " is lower than watchlist price of " + str(paidPrice)
+            print(RED + textString + RESET)
+            apobj.notify(body=textString, title='Cruise Price Alert')
     else:
         tempString = GREEN + preString + ": You have best price of " + str(paidPrice) + RESET
         if price > paidPrice:
