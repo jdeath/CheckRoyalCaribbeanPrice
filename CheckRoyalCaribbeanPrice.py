@@ -654,9 +654,9 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     # Check if Get to: Guest Info, Room Selection, Or Addons Panel
     # These are the three types of webpages that occur if your room is available
-    roomIsFound = re.search("GuestInfoPanel_heading__6rnfam0|RoomLocationPanel_title__1vllntk0|AddOnsPanel_heading__gq4wr70", response.text) 
-    
-    # Extract Number of Nights from URL (Saved for future use)
+    roomIsFound = re.search("GuestInfoPanel_heading|RoomLocationPanel_title|AddOnsPanel_heading", response.text) 
+
+    # Extract Number of Nights from URL
     if params.get("groupId") is not None:
         groupID = params.get("groupId")[0]
         numberOfNights = int(groupID[2:4])
@@ -709,14 +709,17 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
             return
     
     priceString = soupFind.text
-
     if currencyCode == "DKK":
         priceString = priceString.replace(".", "")
         priceString = priceString.replace(",", ".")
         m = re.search("(.*)" + "kr", priceString)
+    elif currencyCode == "GBP": 
+        priceString = priceString.replace(",", "")
+        m = re.search("\\£(.*)" + currencyCode, priceString)
     else:
         priceString = priceString.replace(",", "")
         m = re.search("\\$(.*)" + currencyCode, priceString)
+    
     priceOnlyString = m.group(1)
     price = float(priceOnlyString)
     
@@ -737,7 +740,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
             print(YELLOW + textString + RESET)
             # Do not notify as no need!
             #apobj.notify(body=textString, title='Cruise Price Alert')
-        # Always notify if URL is manually provided
+        # Always notify if URL is manually provided, assuming you have not booked it yet
         if not automaticURL:
             textString = "Consider Booking! " + preString + " New price of "  + str(price) + " is lower than watchlist price of " + str(paidPrice)
             print(RED + textString + RESET)
