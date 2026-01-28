@@ -676,7 +676,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     if not roomIsFound:
         textString = preString + " No Longer Available To Book"
-        if automaticURL and (daysBeforeCruise < finalPaymentDeadline):
+        if automaticURL and (daysBeforeCruise > finalPaymentDeadline):
             textString = textString + " and Past Final Payment Date"
             
         print(YELLOW + textString + RESET)
