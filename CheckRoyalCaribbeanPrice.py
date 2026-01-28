@@ -456,6 +456,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             
             # This URL should avoid redirection issues
             cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+            
             paidPrice = None
             #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
@@ -591,23 +592,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
     }
-    if paidPrice is None:
-        # clean url of r0y and r0x tags
-        findindex1=url.find("r0y")
-        findindex2=url.find("&",findindex1+1)
-        if findindex2==-1:
-            url=url[0:findindex1-1]
-        else:
-            url=url[0:findindex1-1]+url[findindex2:len(url)]
-        
-        findindex1=url.find("r0x")
-        findindex2=url.find("&",findindex1+1)
-        if findindex2==-1:
-            url=url[0:findindex1-1]
-        else:
-            url=url[0:findindex1-1]+url[findindex2:len(url)]
-        
     
+        
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
     
@@ -618,6 +604,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     else:
         currencyCode = currencyCodeList[0]
     
+    bookingOfficeCountryCode = params.get("country")[0] 
     sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
     shipName = shipDictionary[params.get("shipCode")[0]]    
     
@@ -628,10 +615,11 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         
     preString = "         " + sailDateDisplay + " " + shipName + " " + cabinClassString + " " + params.get("r0f")[0]
     
-    roomNumberList = params.get("r0j")
-    if roomNumberList:
-        roomNumber = roomNumberList[0]
-        preString = preString + " Cabin " + roomNumber
+    packageCode = params.get("packageCode")[0]
+    numberOfAdults = params.get("r0a")[0]
+    numberOfChildren = params.get("r0c")[0]
+    stateroomTypeName = params.get("r0d")[0]
+    stateroomCategoryCode = params.get("r0f")[0]
     
     if iteration > 8:
         print("Check Cruise URL - No room available for " + preString)
@@ -640,17 +628,15 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
     
+    # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
-        response = requests.get('https://www.'+cruiseLineName+'.com/checkout/guest-info', params=params,headers=headers)
-    else:
-        response = requests.get(url,headers=headers)
+        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+
+        
+    response = requests.get(url,headers=headers)
         
     soup = BeautifulSoup(response.text, "html.parser")
-    
-    if not automaticURL:
-        soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1nizh9x5","data-testid":"pricing-total"})
-    else:
-        soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1pd26rr5","data-testid":"pricing-total"})
+    soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1pd26rr5","data-testid":"pricing-total"})
     
     # Check if Get to: Guest Info, Room Selection, Or Addons Panel
     # These are the three types of webpages that occur if your room is available
@@ -687,26 +673,10 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         return
 
     if soupFind is None:
-        
-        m = re.search("\"B:0\",\"NEXT_REDIRECT;replace;(.*);307;", response.text)
-        
-        if m is not None:
-            redirectString = m.group(1)
-            textString = preString + ": URL Not Working - Redirecting to suggested room"
-            # Uncomment these print statements, if get into a loop
-            #print(textString)
-            newURL = "https://www." + cruiseLineName + ".com" + redirectString
-            iteration = iteration + 1
-            
-            get_cruise_price(newURL, paidPrice, apobj,automaticURL,iteration)
-            #print("Update url to: " + newURL)
-            return
-        else:
-            if not automaticURL:
-                textString = preString + " No Longer Available To Book"
-                print(YELLOW + textString + RESET)
-                apobj.notify(body=textString, title='Cruise Room Not Available')
-            return
+        textString = preString + " No Longer Available To Book"
+        print(YELLOW + textString + RESET)
+        apobj.notify(body=textString, title='Cruise Room Not Available')
+        return
     
     priceString = soupFind.text
     if currencyCode == "DKK":
