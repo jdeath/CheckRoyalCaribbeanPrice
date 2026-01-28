@@ -135,7 +135,7 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. If price is lower, do a mock booking on the website to confirm then call your travel agent if before the final payment date (even if you paid in full).
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes but excluding any upgrades or gratuities. If price is lower, do a mock booking on the website to confirm then call your travel agent if before the final payment date (even if you paid in full).
 ```
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
