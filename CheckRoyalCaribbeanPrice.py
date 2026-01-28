@@ -676,7 +676,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     if not roomIsFound:
         textString = preString + " No Longer Available To Book"
-        if automaticURL and (daysBeforeCruise > finalPaymentDeadline):
+        if automaticURL and (daysBeforeCruise < finalPaymentDeadline):
             textString = textString + " and Past Final Payment Date"
             
         print(YELLOW + textString + RESET)
@@ -727,12 +727,12 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     if price < paidPrice: 
         # Notify if should rebook
-        if automaticURL and (daysBeforeCruise <= finalPaymentDeadline):
+        if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
             textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
             print(RED + textString + RESET)
             apobj.notify(body=textString, title='Cruise Price Alert')
         # Don't notify if rebooking not possible
-        if  automaticURL and (daysBeforeCruise > finalPaymentDeadline):
+        if  automaticURL and (daysBeforeCruise < finalPaymentDeadline):
             textString = "Past Final Payment Date " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
             print(YELLOW + textString + RESET)
             # Do not notify as no need!
