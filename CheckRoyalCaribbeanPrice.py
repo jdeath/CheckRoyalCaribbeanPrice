@@ -405,9 +405,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         packageCode = booking.get("packageCode")
         bookingCurrency = booking.get("bookingCurrency")
         bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
-        
         stateroomType = booking.get("stateroomType")
-        
         
         stateroomTypeName = ""
         
@@ -456,7 +454,6 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
        
-            
             # This URL should avoid redirection issues
             cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
             
@@ -623,8 +620,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
     stateroomTypeName = params.get("r0d")[0]
-    stateroomCategoryCode1 = params.get("r0e")[0]
-    stateroomCategoryCode2 = params.get("r0f")[0]
+    stateroomSubtype = params.get("r0e")[0]
+    stateroomCategoryCode = params.get("r0f")[0]
     
     if iteration > 8:
         print("Check Cruise URL - No room available for " + preString)
@@ -635,7 +632,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
-        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode1}&r0f={stateroomCategoryCode2}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
     
     response = requests.get(url,headers=headers)
         
