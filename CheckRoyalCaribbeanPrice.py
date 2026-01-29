@@ -13,6 +13,7 @@ import locale
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
 currencyOverride = ""
+minimumSavingAlert = None
 
 foundItems = []
 
@@ -68,6 +69,11 @@ def main():
             global currencyOverride
             currencyOverride = data['currencyOverride']
             print(YELLOW + "Overriding Current Price Currency to " + currencyOverride + RESET)
+        
+        if 'minimumSavingAlert' in data:
+            global minimumSavingAlert
+            minimumSavingAlert = float(data['minimumSavingAlert'])
+            print(YELLOW + "Only alerting for savings >= " + str(minimumSavingAlert) + RESET)
 
         global shipDictionary
         shipDictionary = getShipDictionary()
@@ -281,6 +287,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         currentPrice = newPricePayload.get("adultShipboardPrice")
     
     if currentPrice < paidPrice:
+        saving = round(paidPrice - currentPrice, 2)
         if forWatch:
             text = passengerName + ": Book! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         else:
@@ -299,8 +306,12 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         if not owner:
             text += " " + "This was booked by another in your party. They will have to cancel/rebook for you!"
             
-        print(RED + text + RESET)
-        apobj.notify(body=text, title='Cruise Addon Price Alert')
+        if minimumSavingAlert is not None and saving < minimumSavingAlert:
+            text += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
+            print(YELLOW + text + RESET)
+        else:
+            print(RED + text + RESET)
+            apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
         if forWatch:
             tempString = GREEN + passengerName.ljust(10) + " (" + title +  ") price is higher than watch price: " + str(paidPrice) + RESET
@@ -708,11 +719,16 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         return
     
     if price < paidPrice: 
+        saving = round(paidPrice - price, 2)
         # Notify if should rebook
         if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
             textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
-            print(RED + textString + RESET)
-            apobj.notify(body=textString, title='Cruise Price Alert')
+            if minimumSavingAlert is not None and saving < minimumSavingAlert:
+                textString += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
+                print(YELLOW + textString + RESET)
+            else:
+                print(RED + textString + RESET)
+                apobj.notify(body=textString, title='Cruise Price Alert')
         # Don't notify if rebooking not possible
         if  automaticURL and (daysBeforeCruise < finalPaymentDeadline):
             textString = "Past Final Payment Date " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
@@ -722,8 +738,12 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         # Always notify if URL is manually provided, assuming you have not booked it yet
         if not automaticURL:
             textString = "Consider Booking! " + preString + " New price of "  + str(price) + " is lower than watchlist price of " + str(paidPrice)
-            print(RED + textString + RESET)
-            apobj.notify(body=textString, title='Cruise Price Alert')
+            if minimumSavingAlert is not None and saving < minimumSavingAlert:
+                textString += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
+                print(YELLOW + textString + RESET)
+            else:
+                print(RED + textString + RESET)
+                apobj.notify(body=textString, title='Cruise Price Alert')
     else:
         tempString = GREEN + preString + ": You have best price of " + str(paidPrice) + RESET
         if price > paidPrice:
