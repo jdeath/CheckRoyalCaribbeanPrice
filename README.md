@@ -127,7 +127,7 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a OBC credit/loyality special. The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a OBC credit/loyality special. The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
 ```
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -135,7 +135,7 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes but excluding any upgrades or gratuities. If price is lower, do a mock booking on the website to confirm then call your travel agent if before the final payment date (even if you paid in full).
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes but excluding any upgrades or gratuities. If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent.
 ```
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -147,13 +147,11 @@ reservationPricePaid:
   'YYYYYY': 4172.71
 ```
 If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this:
-
 ```
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74" 
 ```
-
 
 If you would like to assign names to cruise reservation numbers to more easily correlate which cruise is being displayed populate the following section:
 ```
@@ -173,9 +171,8 @@ currencyOverride: 'DKK'
 ```
 
 
-
 ## Get Cruise URL for Watchlist Functionality (Optional - This is only for a cruise you have not booked!)
-1. If you want to check the cabin price of a cruise you have booked, see above. This section if just for cruises you have not booked yet.
+1. If you want to check the cabin price of a cruise you have booked, see above. This section is just for cruises you have *not* booked yet.
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you want, with the same number of adults and kids
 1. Select a cruise and select your room type/room and complete until they ask for your personal information.
@@ -184,14 +181,13 @@ currencyOverride: 'DKK'
 1. Put the price you paid in the paidPrice field. Remove the `$` and any `,`
 1. Run the tool and see if it works
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
-1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Start over with your search, do not just put the cruiseURL in your browser. It is possible the room class is not available.
+1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser.
 1. If it is lower than you paid for and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they should (reports of pushback lately) reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
 1. Update the pricePaid field to the new price. Remove the `$` and any `,` (or `.` if non-USD currency for thousands designator)
 1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. 
-1. Note, if you actually booked the cruise see above. If you have the cruise booked, there is no need to select a specific room.
-1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
-1. Only supports USD , GBP, and DKK currency. If have another currency, please make an issue and include the URL
-1. The latest version checks availabily only for the class of room you have (not a specific room number). This new way is better
+1. If you only want to check the cruise prices with URL you provide, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
+1. Only supports USD , GBP, and DKK currency. If have another currency, please make an issue and include the URL.
+1. The latest version checks availabily only for the class of room you have (not a specific room number). This new way is better.
    
 ## Watch List for Beverage Packages/Excursions/etc (Optional)
 The watch list feature allows you to monitor specific cruise add-ons for price drops across all your bookings. When enabled, the system will check each passenger individually for the specified items and alert you if prices drop below your target price.
