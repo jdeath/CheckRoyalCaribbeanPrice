@@ -111,10 +111,16 @@ def main():
                     get_cruise_price(cruiseURL, paidPrice, apobj, False)
             
 
-def years_between(d1, d2):
-    dt1 = datetime.strptime(d1, "%Y%m%d")
-    dt2 = datetime.strptime(d2, "%Y%m%d")
-    return abs((dt2 - dt1).days) / 365.2425
+def aboveTwelveOnSailDate(birthDate, sailDate):
+    dt1 = datetime.strptime(birthDate, "%Y%m%d")
+    dt2 = datetime.strptime(sailDate, "%Y%m%d")
+    
+    age = dt2.year - dt1.year
+    # Adjust if birthday hasn’t happened yet this year
+    if (dt2.month, dt2.day) < (dt1.month, dt1.day):
+        age -= 1
+    
+    return age >= 12
 
 def days_between(d1, d2):
     dt1 = datetime.strptime(d1, "%Y%m%d")
@@ -429,8 +435,10 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
-            yearsAtSailDate = years_between(birthDate, sailDate)
-            if yearsAtSailDate > 12:
+            
+            isAdult = aboveTwelveOnSailDate(birthDate, sailDate)
+            
+            if isAdult:
                 numberOfAdults = numberOfAdults + 1
             else:
                 numberOfChildren = numberOfChildren + 1
