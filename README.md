@@ -7,7 +7,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
-- ✅ Can automatically check **cabin prices** for any cruise you booked (only USD and DKK currency supported)
+- ✅ Can automatically check **cabin prices** for any cruise you booked (only USD, GBP and DKK currency supported)
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
 - ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, only USD and DKK currency supported)  
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
