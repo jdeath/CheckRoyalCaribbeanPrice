@@ -14,6 +14,9 @@ appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
 currencyOverride = ""
 
+# Only alert when saving is at least this amount (in the relevant currency)
+minimumSavingAlert = 0
+
 foundItems = []
 
 #RED = '\033[91m'
@@ -69,6 +72,11 @@ def main():
             currencyOverride = data['currencyOverride']
             print(YELLOW + "Overriding Current Price Currency to " + currencyOverride + RESET)
 
+        global minimumSavingAlert
+        minimumSavingAlert = float(data.get('minimumSavingAlert', 0) or 0)
+        if minimumSavingAlert > 0:
+            print(YELLOW + f"Minimum saving required to alert: {minimumSavingAlert}" + RESET)
+
         global shipDictionary
         shipDictionary = getShipDictionary()
         
@@ -111,16 +119,10 @@ def main():
                     get_cruise_price(cruiseURL, paidPrice, apobj, False)
             
 
-def aboveTwelveOnSailDate(birthDate, sailDate):
-    dt1 = datetime.strptime(birthDate, "%Y%m%d")
-    dt2 = datetime.strptime(sailDate, "%Y%m%d")
-    
-    age = dt2.year - dt1.year
-    # Adjust if birthday hasn’t happened yet this year
-    if (dt2.month, dt2.day) < (dt1.month, dt1.day):
-        age -= 1
-    
-    return age >= 12
+def years_between(d1, d2):
+    dt1 = datetime.strptime(d1, "%Y%m%d")
+    dt2 = datetime.strptime(d2, "%Y%m%d")
+    return abs((dt2 - dt1).days) / 365.2425
 
 def days_between(d1, d2):
     dt1 = datetime.strptime(d1, "%Y%m%d")
@@ -280,7 +282,9 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if not currentPrice:
         currentPrice = newPricePayload.get("adultShipboardPrice")
     
-    if currentPrice < paidPrice:
+    saving = paidPrice - currentPrice
+
+    if currentPrice < paidPrice and saving >= minimumSavingAlert:
         if forWatch:
             text = passengerName + ": Book! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         else:
@@ -301,6 +305,11 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             
         print(RED + text + RESET)
         apobj.notify(body=text, title='Cruise Addon Price Alert')
+    elif currentPrice < paidPrice:
+        # Price dropped, but not enough to meet alert threshold
+        tempString = GREEN + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + RESET
+        tempString += f" (now {currentPrice}, saving {saving:.2f} < threshold {minimumSavingAlert})"
+        print(tempString)
     else:
         if forWatch:
             tempString = GREEN + passengerName.ljust(10) + " (" + title +  ") price is higher than watch price: " + str(paidPrice) + RESET
@@ -411,7 +420,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         packageCode = booking.get("packageCode")
         bookingCurrency = booking.get("bookingCurrency")
         bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
+        
         stateroomType = booking.get("stateroomType")
+        
         
         stateroomTypeName = ""
         
@@ -435,10 +446,8 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
-            
-            isAdult = aboveTwelveOnSailDate(birthDate, sailDate)
-            
-            if isAdult:
+            yearsAtSailDate = years_between(birthDate, sailDate)
+            if yearsAtSailDate > 12:
                 numberOfAdults = numberOfAdults + 1
             else:
                 numberOfChildren = numberOfChildren + 1
@@ -462,6 +471,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
        
+            
             # This URL should avoid redirection issues
             cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
             
@@ -628,8 +638,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
     stateroomTypeName = params.get("r0d")[0]
-    stateroomSubtype = params.get("r0e")[0]
-    stateroomCategoryCode = params.get("r0f")[0]
+    stateroomCategoryCode1 = params.get("r0e")[0]
+    stateroomCategoryCode2 = params.get("r0f")[0]
     
     if iteration > 8:
         print("Check Cruise URL - No room available for " + preString)
@@ -640,7 +650,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
-        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode1}&r0f={stateroomCategoryCode2}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
     
     response = requests.get(url,headers=headers)
         
@@ -707,21 +717,29 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         print(tempString)
         return
     
+    saving = paidPrice - price
+
+    # Only alert when saving meets/exceeds configured threshold
+    if price < paidPrice and saving < minimumSavingAlert:
+        tempString = GREEN + preString + f": Saving {saving:.2f} below alert threshold {minimumSavingAlert}" + RESET
+        print(tempString)
+        return
+
     if price < paidPrice: 
         # Notify if should rebook
         if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
-            textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
+            textString = "Rebook! " + preString + f" Saving {saving:.2f}. New price of {price} is lower than {paidPrice}"
             print(RED + textString + RESET)
             apobj.notify(body=textString, title='Cruise Price Alert')
         # Don't notify if rebooking not possible
         if  automaticURL and (daysBeforeCruise < finalPaymentDeadline):
-            textString = "Past Final Payment Date " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
+            textString = "Past Final Payment Date " + preString + f" Saving {saving:.2f}. New price of {price} is lower than {paidPrice}"
             print(YELLOW + textString + RESET)
             # Do not notify as no need!
             #apobj.notify(body=textString, title='Cruise Price Alert')
         # Always notify if URL is manually provided, assuming you have not booked it yet
         if not automaticURL:
-            textString = "Consider Booking! " + preString + " New price of "  + str(price) + " is lower than watchlist price of " + str(paidPrice)
+            textString = "Consider Booking! " + preString + f" Saving {saving:.2f}. New price of {price} is lower than watchlist price of {paidPrice}"
             print(RED + textString + RESET)
             apobj.notify(body=textString, title='Cruise Price Alert')
     else:
