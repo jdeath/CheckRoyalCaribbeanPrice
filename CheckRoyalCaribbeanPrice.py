@@ -407,7 +407,8 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
         
         stateroomType = booking.get("stateroomType")
-        stateroomCategoryCode = ""
+        
+        
         stateroomTypeName = ""
         
         if stateroomType == "I":
@@ -425,6 +426,8 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         numberOfAdults = 0
         for guest in guests:
             stateroomCategoryCode = guest.get("stateroomCategoryCode")
+            stateroomSubtype = booking.get("stateroomSubtype")
+            
             numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
@@ -455,7 +458,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
        
             
             # This URL should avoid redirection issues
-            cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+            cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
             
             paidPrice = None
             #print(cruisePriceURL)
