@@ -177,20 +177,21 @@ currencyOverride: 'DKK'
 ## Get Cruise URL for Watchlist Functionality (Optional - This is only for a cruise you have not booked!)
 1. If you want to check the cabin price of a cruise you have booked, see above. This section if just for cruises you have not booked yet.
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
-1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you have, with the same number of adults and kids
-1. Select a cruise and Select your room type/room and complete until they ask for your personal information.
+1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you want, with the same number of adults and kids
+1. Select a cruise and select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
 1. Put the price you paid in the paidPrice field. Remove the `$` and any `,`
 1. Run the tool and see if it works
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
-1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser. It is possible the room is not available. Going to the cruiseURL directly might give you a false alarm and you will look like an idiot calling your travel agent!
-1. If it is lower than you paid for, the cabin is still bookable, and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they will reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
+1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Start over with your search, do not just put the cruiseURL in your browser. It is possible the room class is not available.
+1. If it is lower than you paid for and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they should (reports of pushback lately) reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
 1. Update the pricePaid field to the new price. Remove the `$` and any `,` (or `.` if non-USD currency for thousands designator)
-1. Works easiest on a Guarantee Cabin, where multiple of same cabin exist for purchase. If checking a "You Pick the Room", be sure to check the price of the same class of room you booked (Connecting Balcony, Balcony class 4D or 4A , etc). If the room you picked is no longer available, you need to get a URL of another room in that class. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to manually check back on the Royal website to see if a room opened up. The API does not return cruise prices for your exact room, so we are left with scraping the website.
+1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. 
 1. Note, if you actually booked the cruise see above. If you have the cruise booked, there is no need to select a specific room.
 1. If you only want to check the cruise prices, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
-1. Only supports USD and DKK currency. If have another currency, please make an issue and include the URL
+1. Only supports USD , GBP, and DKK currency. If have another currency, please make an issue and include the URL
+1. The latest version checks availabily only for the class of room you have (not a specific room number). This new way is better
    
 ## Watch List for Beverage Packages/Excursions/etc (Optional)
 The watch list feature allows you to monitor specific cruise add-ons for price drops across all your bookings. When enabled, the system will check each passenger individually for the specified items and alert you if prices drop below your target price.
