@@ -654,11 +654,15 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     # Extract Number of Nights from URL
     if params.get("groupId") is not None:
         groupID = params.get("groupId")[0]
-        numberOfNights = int(groupID[2:4])
+        part = groupID[2:4]
+        
     if params.get("packageCode") is not None:
         packageCode = params.get("packageCode")[0]
-        numberOfNights = int(packageCode[2:4])
+        part = packageCode[2:4]
     
+    numbers_only = "".join(c for c in part if c.isdigit())
+    numberOfNights = int(numbers_only)
+        
     daysBeforeCruise = days_between(datetime.today().isoformat().replace('-', '')[0:8],sailDate.replace('-', ''))
     finalPaymentDeadline = 0
     
