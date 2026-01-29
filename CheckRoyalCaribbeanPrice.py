@@ -466,6 +466,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
+        
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
@@ -619,7 +620,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
     stateroomTypeName = params.get("r0d")[0]
-    stateroomCategoryCode = params.get("r0f")[0]
+    stateroomCategoryCode1 = params.get("r0e")[0]
+    stateroomCategoryCode2 = params.get("r0f")[0]
     
     if iteration > 8:
         print("Check Cruise URL - No room available for " + preString)
@@ -630,9 +632,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
-        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
-
-        
+        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomCategoryCode1}&r0f={stateroomCategoryCode2}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+    
     response = requests.get(url,headers=headers)
         
     soup = BeautifulSoup(response.text, "html.parser")
