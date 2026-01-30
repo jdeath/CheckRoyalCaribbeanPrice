@@ -412,8 +412,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         bookingCurrency = booking.get("bookingCurrency")
         bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
         stateroomType = booking.get("stateroomType")
+        stateroomNumber = booking.get("stateroomNumber")
         
-        stateroomTypeName = ""
+        stateroomTypeName = "INTERIOR"
         
         if stateroomType == "I":
             stateroomTypeName = "INTERIOR"
@@ -453,7 +454,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         if str(reservationId) in reservationFriendlyNames:
             reservationDisplay += " (" + reservationFriendlyNames.get(str(reservationId)) + ")"
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
-        print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary[shipCode] + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
+        print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary[shipCode] + " Room " + stateroomNumber + " (" + passengerNames + ")")
         
         
         # Print Current Prices
@@ -462,9 +463,11 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
        
-            # This URL should avoid redirection issues
-            cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
-            
+            if stateroomNumber == "GTY":
+                cruisePriceURL = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
+            else:
+                cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+                
             paidPrice = None
             #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
@@ -615,7 +618,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     bookingOfficeCountryCode = params.get("country")[0] 
     sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
-    shipName = shipDictionary[params.get("shipCode")[0]]    
+    shipCode = params.get("shipCode")[0]
+    shipName = shipDictionary[shipCode]    
     
     if params.get("cabinClassType") is not None:
         cabinClassString = params.get("cabinClassType")[0]
@@ -640,12 +644,16 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
-        url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipName}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+        if params.get("r0j") is None:
+            url = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
+        else:
+            url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
     
     response = requests.get(url,headers=headers)
         
     soup = BeautifulSoup(response.text, "html.parser")
-    soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1pd26rr5","data-testid":"pricing-total"})
+    #soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1pd26rr5","data-testid":"pricing-total"})
+    soupFind = soup.find("span",attrs={"data-testid":"pricing-total"})
     
     # Check if Get to: Guest Info, Room Selection, Or Addons Panel
     # These are the three types of webpages that occur if your room is available
