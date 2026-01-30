@@ -28,8 +28,6 @@ dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by con
 
 shipDictionary = {}
 
-
-
 def main():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
     parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
@@ -232,10 +230,10 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
         price = payload.get("prices")[0].get("promoDailyPrice")
     else:
         price = payload.get("prices")[0].get("promoPrice")
-        
+
     print("Paid Price: " + str(paidPrice) + " Cart Price: " + str(price))
     
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner, forWatch, cruiseLineName):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner, forWatch, cruiseLineName, salesUnit=None, numberOfNights=None):
     
     headers = {
         'Access-Token': access_token,
@@ -288,6 +286,11 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     
     if currentPrice < paidPrice:
         saving = round(paidPrice - currentPrice, 2)
+        savingForAlert = saving
+        savingLabel = "Saving " + str(saving)
+        if salesUnit in [ 'PER_NIGHT', 'PER_DAY' ] and numberOfNights:
+            savingForAlert = round(saving * numberOfNights, 2)
+            savingLabel = "Saving " + str(saving) + " per night (" + str(savingForAlert) + " total)"
         if forWatch:
             text = passengerName + ": Book! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         else:
@@ -306,8 +309,8 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         if not owner:
             text += " " + "This was booked by another in your party. They will have to cancel/rebook for you!"
             
-        if minimumSavingAlert is not None and saving < minimumSavingAlert:
-            text += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
+        if minimumSavingAlert is not None and savingForAlert < minimumSavingAlert:
+            text += " (" + savingLabel + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
             print(YELLOW + text + RESET)
         else:
             print(RED + text + RESET)
@@ -352,7 +355,7 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
         getNewBeveragePrice(
             access_token, accountId, session, reservationId, ship, startDate,
             prefix, watchPrice, "USD", product, apobj, passengerId,
-            watchDisplayName, room, "WATCH-LIST", "Watch List", True, True, cruiseLineName
+            watchDisplayName, room, "WATCH-LIST", "Watch List", True, True, cruiseLineName, None, None
         )
 
 def getLoyalty(access_token,accountId,session):
@@ -594,7 +597,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     room = guest.get("stateroomNumber") 
                     #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,passengerId,firstName,room,orderCode,orderDate,owner)
                     
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner,False,cruiseLineName)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
 def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
