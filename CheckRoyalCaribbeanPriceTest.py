@@ -624,17 +624,23 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     cabinClassString = ""
     if params.get("cabinClassType") is not None:
         cabinClassString = params.get("cabinClassType")[0]
-    if params.get("r0d") is not None:
+    elif params.get("r0d") is not None:
         cabinClassString = params.get("r0d")[0]
-        
-    preString = "         " + sailDateDisplay + " " + shipName + " " + cabinClassString + " " + params.get("r0f")[0]
+    
+    stateroomTypeName = params.get("r0d")[0]
+    stateroomSubtype = params.get("r0e")[0]
+    stateroomCategoryCode = params.get("r0f")[0]
+    
+    # Change URL
+    if stateroomCategoryCode is None:
+        stateroomCategoryCode = stateroomSubtype
+    
+    preString = "         " + sailDateDisplay + " " + shipName + " " + cabinClassString + " " + stateroomCategoryCode
     
     packageCode = params.get("packageCode")[0]
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
-    stateroomTypeName = params.get("r0d")[0]
-    stateroomSubtype = params.get("r0e")[0]
-    stateroomCategoryCode = params.get("r0f")[0]
+    
     
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
