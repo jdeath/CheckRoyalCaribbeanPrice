@@ -463,7 +463,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
        
-            if stateroomNumber == "GTY":
+            if stateroomNumber == "GTY": #GTY Room needs a different URL
                 cruisePriceURL = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
             else:
                 cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
@@ -621,9 +621,10 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     shipCode = params.get("shipCode")[0]
     shipName = shipDictionary[shipCode]    
     
+    cabinClassString = ""
     if params.get("cabinClassType") is not None:
         cabinClassString = params.get("cabinClassType")[0]
-    else:
+    if params.get("r0d") is not None:
         cabinClassString = params.get("r0d")[0]
         
     preString = "         " + sailDateDisplay + " " + shipName + " " + cabinClassString + " " + params.get("r0f")[0]
@@ -644,9 +645,9 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
     # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
-        if params.get("r0j") is None:
+        if params.get("r0j") is None: # This is for a GTY Room
             url = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
-        else:
+        else: # This is for a non GTY Room
             url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
     
     response = requests.get(url,headers=headers)
