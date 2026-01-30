@@ -464,7 +464,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
        
             if stateroomNumber == "GTY": #GTY Room needs a different URL
-                cruisePriceURL = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
+                cruisePriceURL = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
             else:
                 cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
                 
@@ -604,8 +604,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
     }
-    
-        
+      
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
     
@@ -636,16 +635,12 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     stateroomSubtype = params.get("r0e")[0]
     stateroomCategoryCode = params.get("r0f")[0]
     
-    if iteration > 8:
-        print("Check Cruise URL - No room available for " + preString)
-        return
-    
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
     
     # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
-        if params.get("r0j") is None: # This is for a GTY Room
+        if params.get("r0j") is None: # This is for a GTY Room, as r0j is the room number normally
             url = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
         else: # This is for a non GTY Room
             url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
@@ -653,7 +648,6 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     response = requests.get(url,headers=headers)
         
     soup = BeautifulSoup(response.text, "html.parser")
-    #soupFind = soup.find("span",attrs={"class":"SummaryPrice_title__1pd26rr5","data-testid":"pricing-total"})
     soupFind = soup.find("span",attrs={"data-testid":"pricing-total"})
     
     # Check if Get to: Guest Info, Room Selection, Or Addons Panel
