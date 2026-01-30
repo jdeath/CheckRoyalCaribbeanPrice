@@ -108,7 +108,7 @@ accountInfo:
     password: "pa$$word" # Your Celebrity Password (ensure no % in password)
     cruiseLine: "celebrity" # Must indicate if celebrity
 displayCruisePrices: true # Optional, this will display current price for your booked cruises
-minimumSavingAlert: 1.00 # Optional, only alert when savings are >= this amount
+minimumSavingAlert: 1.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
 cruises: # Optional, this allows you to watch the price of a cruise you have not booked yet
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74"
@@ -171,7 +171,7 @@ To override the currency from what the API returns (what you bought the item in)
 currencyOverride: 'DKK'
 ```
 
-To only alert when a price drop meets a minimum savings threshold, set minimumSavingAlert. If not set, alerts trigger on any price drop as before.
+To only alert when a price drop meets a minimum savings threshold, set minimumSavingAlert. If not set, alerts trigger on any price drop as before. For items priced per night/per day, the threshold compares against the total savings per item across the cruise.
 ```
 minimumSavingAlert: 50.00
 ```
