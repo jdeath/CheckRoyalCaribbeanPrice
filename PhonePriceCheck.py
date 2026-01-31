@@ -152,7 +152,7 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
         
     print("Paid Price: " + str(paidPrice) + " Cart Price: " + str(price))
     
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,passengerName,room, orderCode, orderDate, owner):
     
     headers = {
         'Access-Token': access_token,
@@ -197,10 +197,14 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         print(tempString)
         return
         
-    currentPrice = newPricePayload.get("adultPromotionalPrice")
-    
+    # This should pull correct infant, child, or adult price
+    currentPrice = newPricePayload.get(guestAgeString + "PromotionalPrice")
     if not currentPrice:
-        currentPrice = newPricePayload.get("adultShipboardPrice")
+        currentPrice = newPricePayload.get(guestAgeString + "ShipboardPrice")
+    # Infant price is often None, this just sets to 0 to avoid error
+    # Should never happen since should not check prices that are 0 to begin with
+    if not currentPrice:
+        currentPrice = 0
     
     if currentPrice < paidPrice:
         text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
@@ -373,7 +377,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     passengerId = guest.get("id")
                     firstName = guest.get("firstName").capitalize()
                     reservationId = guest.get("reservationId")
-                    
+                    guestAgeString = guest.get("guestType").lower()
+                        
                     # Skip if item checked already
                     newKey = passengerId + reservationId + prefix + product
                     if newKey in foundItems:
@@ -391,7 +396,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     room = guest.get("stateroomNumber") 
                     #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,passengerId,firstName,room,orderCode,orderDate,owner)
                     
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner)
 
 # Unused Functions
 # For Future Capability
