@@ -171,9 +171,9 @@ To override the currency from what the API returns (what you bought the item in)
 currencyOverride: 'DKK'
 ```
 
-To only alert when a price drop meets a minimum savings threshold, set minimumSavingAlert. If not set, alerts trigger on any price drop as before. For items priced per night/per day, the threshold compares against the total savings per item across the cruise.
+To only alert when a price drop meets a minimum savings threshold, set minimumSavingAlert. For items priced per night/per day, the threshold compares against the total savings per item across the cruise. Use case is prices change fluctuate and not worth it to you for cance/rebook. If not set or set to 0.00, alerts trigger on any price drop as before.
 ```
-minimumSavingAlert: 50.00
+minimumSavingAlert: 2.00
 ```
 
 
