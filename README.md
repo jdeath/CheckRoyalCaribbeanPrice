@@ -100,7 +100,7 @@ services:
 The Docker container will run the price checker on the schedule you have defined.
 ## Edit Config File
 Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`.
-```
+```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
@@ -121,7 +121,7 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
 ```
 
 If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
-```
+```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
@@ -129,7 +129,7 @@ accountInfo:
 ```
 
 To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a OBC credit/loyality special. The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
-```
+```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
@@ -137,7 +137,7 @@ accountInfo:
 displayCruisePrices: true
 ```
 If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes but excluding any upgrades or gratuities. If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent.
-```
+```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
@@ -148,31 +148,31 @@ reservationPricePaid:
   'YYYYYY': 4172.71
 ```
 If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this:
-```
+```yaml
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74" 
 ```
 
 If you would like to assign names to cruise reservation numbers to more easily correlate which cruise is being displayed populate the following section:
-```
+```yaml
 reservationFriendlyNames:
   '1234567': "Summer Cruise"
   '8912345': "Winter Cruise
 ```
 
 To override the system's default date format, set the dateDisplayFormat config value to your desired format:
-```
+```yaml
 dateDisplayFormat: "%m/%d/%Y"
 ```
 
 To override the currency from what the API returns (what you bought the item in), set the currencyOverride config value to your desired currencyOverride. This should not be needed and should now only be needed for testing.
-```
+```yaml
 currencyOverride: 'DKK'
 ```
 
 To only alert when a price drop meets a minimum savings threshold, set minimumSavingAlert. For items priced per night/per day, the threshold compares against the total savings per item across the cruise. Use case is prices change fluctuate and not worth it to you for cance/rebook. If not set or set to 0.00, alerts trigger on any price drop as before.
-```
+```yaml
 minimumSavingAlert: 2.00
 ```
 
