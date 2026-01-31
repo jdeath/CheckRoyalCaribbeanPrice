@@ -407,14 +407,14 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         sailDate = booking.get("sailDate")
         numberOfNights = booking.get("numberOfNights")
         shipCode = booking.get("shipCode")
-        guests = booking.get("passengers")
+        guests = booking.get("passengersInStateroom")
         packageCode = booking.get("packageCode")
         bookingCurrency = booking.get("bookingCurrency")
         bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
         stateroomType = booking.get("stateroomType")
         stateroomNumber = booking.get("stateroomNumber")
         
-        stateroomTypeName = "INTERIOR"
+        stateroomTypeName = "NONE"
         
         if stateroomType == "I":
             stateroomTypeName = "INTERIOR"
@@ -472,8 +472,11 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
-                
-            get_cruise_price(cruisePriceURL, paidPrice, apobj, True, 0)
+            
+            if stateroomType != "NONE":
+                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, 0)
+            else:
+                print(YELLOW + "         Not enough info to check price of reservation" + RESET)
         
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
@@ -623,17 +626,19 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     cabinClassString = ""
     if params.get("cabinClassType") is not None:
         cabinClassString = params.get("cabinClassType")[0]
-    if params.get("r0d") is not None:
+    elif params.get("r0d") is not None:
         cabinClassString = params.get("r0d")[0]
-        
-    preString = "         " + sailDateDisplay + " " + shipName + " " + cabinClassString + " " + params.get("r0f")[0]
+    
+    stateroomTypeName = params.get("r0d")[0]
+    stateroomSubtype = params.get("r0e")[0]
+    stateroomCategoryCode = params.get("r0f")[0]
+    
+    preString = "         " + sailDateDisplay + " " + shipName + " " + cabinClassString + " " + stateroomCategoryCode
     
     packageCode = params.get("packageCode")[0]
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
-    stateroomTypeName = params.get("r0d")[0]
-    stateroomSubtype = params.get("r0e")[0]
-    stateroomCategoryCode = params.get("r0f")[0]
+    
     
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
