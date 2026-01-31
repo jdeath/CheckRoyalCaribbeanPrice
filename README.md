@@ -9,7 +9,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
 - ✅ Can automatically check **cabin prices** for any cruise you booked (only USD, GBP and DKK currency supported)
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
-- ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, only USD and DKK currency supported)  
+- ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, only USD, GBP and DKK currency supported)  
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
