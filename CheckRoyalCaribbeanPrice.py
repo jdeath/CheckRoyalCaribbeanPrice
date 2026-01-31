@@ -233,7 +233,7 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
 
     print("Paid Price: " + str(paidPrice) + " Cart Price: " + str(price))
     
-def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,passengerName,room, orderCode, orderDate, owner, forWatch, cruiseLineName, salesUnit=None, numberOfNights=None):
+def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,passengerName,room, orderCode, orderDate, owner, forWatch, cruiseLineName, salesUnit=None, numberOfNights=None):
     
     headers = {
         'Access-Token': access_token,
@@ -260,7 +260,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     payload = response.json().get("payload")
     if payload is None:
         return
-    
+
     title = payload.get("title")    
     variant = ""
     try:
@@ -278,12 +278,16 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " (No Longer for Sale)" + RESET
             print(tempString)
         return
-        
-    currentPrice = newPricePayload.get("adultPromotionalPrice")
     
+    # This should pull correct infant, child, or adult price
+    currentPrice = newPricePayload.get(guestAgeString + "PromotionalPrice")
     if not currentPrice:
-        currentPrice = newPricePayload.get("adultShipboardPrice")
-    
+        currentPrice = newPricePayload.get(guestAgeString + "ShipboardPrice")
+    # Infant price is often None, this just sets to 0 to avoid error
+    # Should never happend since should not check prices that are 0 to begin with
+    if not currentPrice:
+        currentPrice = 0
+        
     if currentPrice < paidPrice:
         saving = round(paidPrice - currentPrice, 2)
         savingForAlert = saving
@@ -339,6 +343,8 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
         prefix = watchItem.get('prefix')
         watchPrice = float(watchItem.get('price', 0))
         enabled = watchItem.get('enabled', True)  # Default to True if not specified
+        guestAgeString = (watchItem.get('guestAgeString',"adult")).lower()
+        currency = watchItem.get('currency',"USD")
         
         # Skip disabled watchlist items
         if not enabled:
@@ -354,7 +360,7 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
         # Set placeholder values for order-specific fields since these aren't actual orders
         getNewBeveragePrice(
             access_token, accountId, session, reservationId, ship, startDate,
-            prefix, watchPrice, "USD", product, apobj, passengerId,
+            prefix, watchPrice, currency, product, apobj, passengerId,guestAgeString,
             watchDisplayName, room, "WATCH-LIST", "Watch List", True, True, cruiseLineName, None, None
         )
 
@@ -585,6 +591,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     passengerId = guest.get("id")
                     firstName = guest.get("firstName").capitalize()
                     reservationId = guest.get("reservationId")
+                    guestAgeString = guest.get("guestType").lower()
                     
                     # Skip if item checked already
                     newKey = passengerId + reservationId + prefix + product
@@ -603,7 +610,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     room = guest.get("stateroomNumber") 
                     #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,passengerId,firstName,room,orderCode,orderDate,owner)
                     
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
 def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     
