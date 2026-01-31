@@ -476,7 +476,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             if stateroomType != "NONE":
                 get_cruise_price(cruisePriceURL, paidPrice, apobj, True, 0)
             else:
-                print(YELLOW + "         Not enough info to check price of reservation" + RESET)
+                print(YELLOW + "         Cannot Check Cruise Price - Use Manual URL Method" + RESET)
         
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
