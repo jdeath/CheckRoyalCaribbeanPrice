@@ -208,6 +208,8 @@ watchList: # Optional, items to monitor for price drops across all your bookings
     product: "3005"        # Product ID
     price: 85.00           # Alert if current price drops below this amount
     enabled: true          # Set to false to temporarily disable this item
+    currency: "GBP"        # Optional currency code, defaults to "USD" if not set
+    guestAgeString: "child" # "infant", "child", "adult" are only options. Optional, defaults to "adult" if not set.  
   - name: "Premium WiFi 2 Device Package"
     prefix: "pt_internet"
     product: "33F1"
@@ -320,7 +322,6 @@ Thanks to contributors:
 - @RoyalCaribbeanBlog.com for featuring in an [article](https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers)
 # Issues
 1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix. PRs welcome
-1. Only checks adult prices (> 12 years old), if only have child prices in an order it may not work. I don't have kids, so I can not fix. PRs welcome
 1. Handles orders made by other people in your party or linked cruises (even if you are not sailing on it)
 1. It should give you the price of the item in the same currency you bought it in. Post an issue if not working correctly.
 1. May not handle all orders correctly. Purchases of multiple coffee cards and Evian water should now work.
