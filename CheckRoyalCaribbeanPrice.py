@@ -346,6 +346,12 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
         guestAgeString = (watchItem.get('guestAgeString',"adult")).lower()
         currency = watchItem.get('currency',"USD")
         
+        reservationList = watchItem.get('reservations',None)
+        
+        if reservationList:
+            if reservationId not in reservationList:
+                continue
+            
         # Skip disabled watchlist items
         if not enabled:
             continue
