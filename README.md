@@ -321,6 +321,8 @@ Thanks to contributors:
 - @ProxesOnBoxes (date display options, config improvements)
 - @jhedlund (Watchlist)
 - @RoyalCaribbeanBlog.com for featuring in an [article](https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers)
+- Frommers.com for featuring in an [article](https://www.frommers.com/tips/cruise/how-to-save-hundreds-on-royal-caribbeans-packages-and-excursions/)
+  
 # Issues
 1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix. PRs welcome
 1. Handles orders made by other people in your party or linked cruises (even if you are not sailing on it)
