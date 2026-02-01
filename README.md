@@ -108,7 +108,7 @@ accountInfo:
     password: "pa$$word" # Your Celebrity Password (ensure no % in password)
     cruiseLine: "celebrity" # Must indicate if celebrity
 displayCruisePrices: true # Optional, this will display current price for your booked cruises
-minimumSavingAlert: 1.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
+minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
 cruises: # Optional, this allows you to watch the price of a cruise you have not booked yet
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74"
@@ -210,7 +210,7 @@ watchList: # Optional, items to monitor for price drops across all your bookings
     enabled: true          # Set to false to temporarily disable this item
     currency: "GBP"        # Optional currency code, defaults to "USD" if not set
     guestAgeString: "child" # "infant", "child", "adult" are only options. Optional, defaults to "adult" if not set.
-    reservations: ['XXXXXXX', 'YYYYYYY'] # Optional. Check watchlist only for these reservations. If not present, defaults to check all reservations   
+    reservations: ['XXXXXXX', 'YYYYYYY'] # Optional. Check watchlist only for these reservation numbers. If not present, defaults to check all reservations   
   - name: "Premium WiFi 2 Device Package"
     prefix: "pt_internet"
     product: "33F1"
