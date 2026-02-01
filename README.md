@@ -209,7 +209,8 @@ watchList: # Optional, items to monitor for price drops across all your bookings
     price: 85.00           # Alert if current price drops below this amount
     enabled: true          # Set to false to temporarily disable this item
     currency: "GBP"        # Optional currency code, defaults to "USD" if not set
-    guestAgeString: "child" # "infant", "child", "adult" are only options. Optional, defaults to "adult" if not set.  
+    guestAgeString: "child" # "infant", "child", "adult" are only options. Optional, defaults to "adult" if not set.
+    reservations: ['XXXXXXX', 'YYYYYYY'] # Optional. Check watchlist only for these reservations. If not present, defaults to check all reservations   
   - name: "Premium WiFi 2 Device Package"
     prefix: "pt_internet"
     product: "33F1"
