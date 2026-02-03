@@ -299,6 +299,8 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             text = passengerName + ": Book! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
         else:
             text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+        if minimumSavingAlert is not None:
+            text += " (" + savingLabel + ")"
         
         promoDescription = payload.get("promoDescription")
         if promoDescription:
