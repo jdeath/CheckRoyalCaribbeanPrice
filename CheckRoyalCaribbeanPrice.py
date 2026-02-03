@@ -748,11 +748,27 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         print(tempString)
         return
     
+    # Find OBC and substract from price
+    obcFind = soup.find("p",attrs={"data-testid":"onboardcreditsbox-primary-label"})
+    obcValue = 0
+    if obcFind:
+        obcString = obcFind.find("span").get_text(strip=True)
+        obcValue = re.search(r'\d+(?:\.\d+)?', obcString).group()
+        if obcValue is None:
+            price = 0
+        else:
+            obcValue = float(obcValue)
+            price -= obcValue
+    
     if price < paidPrice: 
         saving = round(paidPrice - price, 2)
         # Notify if should rebook
         if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
-            textString = "Rebook! " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
+            textString = "Rebook! " + preString + " New price of "  + str(price)
+            if obcValue > 0:
+                textString += " including " +  str(obcValue) + " OBC"
+            textString += " is lower than " + str(paidPrice)
+            
             if minimumSavingAlert is not None and saving < minimumSavingAlert:
                 textString += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
                 print(YELLOW + textString + RESET)
@@ -761,13 +777,19 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
                 apobj.notify(body=textString, title='Cruise Price Alert')
         # Don't notify if rebooking not possible
         if  automaticURL and (daysBeforeCruise < finalPaymentDeadline):
-            textString = "Past Final Payment Date " + preString + " New price of "  + str(price) + " is lower than " + str(paidPrice)
+            textString = "Past Final Payment Date " + preString + " New price of "  + str(price)
+            if obcValue > 0:
+                textString += " subtracting " +  str(obcValue) + " OBC"
+            textString += " is lower than " + str(paidPrice)
             print(YELLOW + textString + RESET)
             # Do not notify as no need!
             #apobj.notify(body=textString, title='Cruise Price Alert')
         # Always notify if URL is manually provided, assuming you have not booked it yet
         if not automaticURL:
-            textString = "Consider Booking! " + preString + " New price of "  + str(price) + " is lower than watchlist price of " + str(paidPrice)
+            textString = "Consider Booking! " + preString + " New price of "  + str(price)
+            if obcValue > 0:
+                textString += " subtracting " +  str(obcValue) + " OBC"
+            textString +=  " is lower than watchlist price of " + str(paidPrice)
             if minimumSavingAlert is not None and saving < minimumSavingAlert:
                 textString += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
                 print(YELLOW + textString + RESET)
@@ -777,7 +799,10 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     else:
         tempString = GREEN + preString + ": You have best price of " + str(paidPrice) + RESET
         if price > paidPrice:
-            tempString += " (now " + str(price) + ")"
+            tempString += " (now " + str(price)
+        if obcValue > 0:
+            tempString += " subtracting " +  str(obcValue) + " OBC"
+        tempString += ")"   
         print(tempString)
 
 # Unused Functions
