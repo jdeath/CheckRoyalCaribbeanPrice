@@ -780,10 +780,10 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         obcString = obcFind.find("span").get_text(strip=True)
         obcValue = re.search(r'\d+(?:\.\d+)?', obcString).group()
         if obcValue is None:
-            price = 0
+            obcValue = 0
         else:
             obcValue = float(obcValue)
-            price -= obcValue
+            #price -= obcValue # not subtract because not in correct currency
     
     if price < paidPrice: 
         saving = round(paidPrice - price, 2)
@@ -791,7 +791,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
             textString = "Rebook! " + preString + " New price of "  + str(price)
             if obcValue > 0:
-                textString += " including " +  str(obcValue) + " OBC"
+                textString += " not including " +  str(obcString) + " OBC"
             textString += " is lower than " + str(paidPrice)
             
             if minimumSavingAlert is not None and saving < minimumSavingAlert:
@@ -804,7 +804,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         if  automaticURL and (daysBeforeCruise < finalPaymentDeadline):
             textString = "Past Final Payment Date " + preString + " New price of "  + str(price)
             if obcValue > 0:
-                textString += " subtracting " +  str(obcValue) + " OBC"
+                textString += " not including " +  str(obcString) + " OBC"
             textString += " is lower than " + str(paidPrice)
             print(YELLOW + textString + RESET)
             # Do not notify as no need!
@@ -813,7 +813,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         if not automaticURL:
             textString = "Consider Booking! " + preString + " New price of "  + str(price)
             if obcValue > 0:
-                textString += " subtracting " +  str(obcValue) + " OBC"
+                textString += " not including " +  str(obcString) + " OBC"
             textString +=  " is lower than watchlist price of " + str(paidPrice)
             if minimumSavingAlert is not None and saving < minimumSavingAlert:
                 textString += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
@@ -826,7 +826,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         if price > paidPrice:
             tempString += " (now " + str(price)
         if obcValue > 0:
-            tempString += " subtracting " +  str(obcValue) + " OBC"
+            tempString += " not including " +  str(obcString) + " OBC"
         tempString += ")"   
         print(tempString)
 
