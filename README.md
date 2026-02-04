@@ -205,7 +205,7 @@ watchList: # Optional, items to monitor for price drops across all your bookings
   - name: "Deluxe Beverage Package"
     prefix: "pt_beverage"  # Category prefix
     product: "3005"        # Product ID
-    price: 85.00           # Alert if current price drops below this amount
+    price: 85.00           # Alert if current price drops below this amount. Use per night w/o gratutity price
     enabled: true          # Set to false to temporarily disable this item
     currency: "GBP"        # Optional currency code, defaults to "USD" if not set
     guestAgeString: "child" # "infant", "child", "adult" are only options. Optional, defaults to "adult" if not set.
@@ -230,7 +230,7 @@ To find the `prefix` and `product` values for items you want to watch:
    `https://www.celebritycruises.com/account/cruise-planner/category/pt_internet/product/33F1?bookingId=&shipCode=&sailDate=`
 3. The `prefix` is the path following /category/ (`pt_internet` in this case)
 4. The `product` is the value following /product/ (`33F1` in this case)
-
+5. Use the advertised price in the cruise panner. Eg. Doo not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
 ### Example Output
 ```
 [WATCH] Deluxe Beverage Package - John (1234): Book! Deluxe Beverage Package Price is lower: 75.00 than 85.00
