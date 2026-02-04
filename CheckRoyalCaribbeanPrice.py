@@ -115,6 +115,38 @@ def main():
                     get_cruise_price(cruiseURL, paidPrice, apobj, False)
             
 
+def string_to_float(s: str) -> float:
+    s = s.strip()
+
+    if "," in s and "." in s:
+        # Both present → last one is decimal separator
+        if s.rfind(",") > s.rfind("."):
+            # European: 1.234,56
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            # American: 1,234.56
+            s = s.replace(",", "")
+    elif "," in s:
+        # Only comma present
+        parts = s.split(",")
+        if len(parts[-1]) == 3 and parts[-1].isdigit():
+            # 4,000 → thousands
+            s = s.replace(",", "")
+        else:
+            # 4,0 → decimal
+            s = s.replace(",", ".")
+    elif "." in s:
+        # Only dot present
+        parts = s.split(".")
+        if len(parts[-1]) == 3 and parts[-1].isdigit():
+            # 4.000 → thousands
+            s = s.replace(".", "")
+        # else: 4.0 or 4.00 → decimal → keep dot
+    # else: plain integer
+
+    return float(s)
+
+
 def aboveTwelveOnSailDate(birthDate, sailDate):
     dt1 = datetime.strptime(birthDate, "%Y%m%d")
     dt2 = datetime.strptime(sailDate, "%Y%m%d")
@@ -729,19 +761,12 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         return
     
     priceString = soupFind.text
-    if currencyCode == "DKK":
-        priceString = priceString.replace(".", "")
-        priceString = priceString.replace(",", ".")
-        m = re.search("(.*)" + "kr", priceString)
-    elif currencyCode == "GBP": 
-        priceString = priceString.replace(",", "")
-        m = re.search("\\£(.*)" + currencyCode, priceString)
+    # Extract Numbers from String. Should handle all currency
+    numbers = re.findall(r"[+-]?\d[\d.,]*", priceString)
+    if numbers:
+        price = string_to_float(numbers[0])
     else:
-        priceString = priceString.replace(",", "")
-        m = re.search("\\$(.*)" + currencyCode, priceString)
-    
-    priceOnlyString = m.group(1)
-    price = float(priceOnlyString)
+        price = None
     
     if paidPrice is None:
         tempString = GREEN + preString + ": Current Price " + str(price) + RESET
