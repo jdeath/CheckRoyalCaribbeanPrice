@@ -778,11 +778,11 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     obcValue = 0
     if obcFind:
         obcString = obcFind.find("span").get_text(strip=True)
-        obcValue = re.search(r'\d+(?:\.\d+)?', obcString).group()
+        obcValue = re.findall(r"[+-]?\d[\d.,]*", obcString)
         if obcValue is None:
             obcValue = 0
         else:
-            obcValue = float(obcValue)
+            obcValue = string_to_float(obcValue[0])
             #price -= obcValue # not subtract because not in correct currency
     
     if price < paidPrice: 
