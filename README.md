@@ -136,7 +136,7 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes but excluding any upgrades or gratuities. If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent.
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and substract it from the price. If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -184,11 +184,11 @@ minimumSavingAlert: 2.00
 1. Select a cruise and select your room type/room and complete until they ask for your personal information.
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
-1. Put the price you paid in the paidPrice field. Remove the `$` and any `,`
+1. Put the price you paid in the paidPrice field. Remove the `$` and any `,` . Subtract any OBC you recieved from Royal or your TA.
 1. Run the tool and see if it works
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser.
-1. If it is lower than you paid for and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they should (reports of pushback lately) reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it!
+1. If it is lower than you paid for and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they should (reports of pushback lately) reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it! The code will subtract any OBC from the total price of the new cruise.
 1. Update the pricePaid field to the new price. Remove the `$` ,`£` and any `,` (or `.` if non-USD currency for thousands designator)
 1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. 
 1. If you only want to check the cruise prices with URL you provide, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
