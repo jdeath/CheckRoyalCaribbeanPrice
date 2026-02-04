@@ -769,7 +769,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         price = None
     
     if paidPrice is None:
-        tempString = GREEN + preString + ": Current Price " + str(price) + RESET
+        tempString = GREEN + preString + ": Current Price " + str(price) + " " + currencyCode + RESET
         print(tempString)
         return
     
@@ -789,7 +789,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         saving = round(paidPrice - price, 2)
         # Notify if should rebook
         if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
-            textString = "Rebook! " + preString + " New price of "  + str(price)
+            textString = "Rebook! " + preString + " New price of "  + str(price) + " " + currencyCode
             if obcValue > 0:
                 textString += " not including " +  str(obcString) + " OBC"
             textString += " is lower than " + str(paidPrice)
@@ -802,7 +802,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
                 apobj.notify(body=textString, title='Cruise Price Alert')
         # Don't notify if rebooking not possible
         if  automaticURL and (daysBeforeCruise < finalPaymentDeadline):
-            textString = "Past Final Payment Date " + preString + " New price of "  + str(price)
+            textString = "Past Final Payment Date " + preString + " New price of "  + str(price) + " " + currencyCode
             if obcValue > 0:
                 textString += " not including " +  str(obcString) + " OBC"
             textString += " is lower than " + str(paidPrice)
@@ -811,7 +811,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
             #apobj.notify(body=textString, title='Cruise Price Alert')
         # Always notify if URL is manually provided, assuming you have not booked it yet
         if not automaticURL:
-            textString = "Consider Booking! " + preString + " New price of "  + str(price)
+            textString = "Consider Booking! " + preString + " New price of "  + str(price) + " " + currencyCode
             if obcValue > 0:
                 textString += " not including " +  str(obcString) + " OBC"
             textString +=  " is lower than watchlist price of " + str(paidPrice)
@@ -822,9 +822,9 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
                 print(RED + textString + RESET)
                 apobj.notify(body=textString, title='Cruise Price Alert')
     else:
-        tempString = GREEN + preString + ": You have best price of " + str(paidPrice) + RESET
+        tempString = GREEN + preString + ": You have best price of " + str(paidPrice) + " " + currencyCode + RESET
         if price > paidPrice:
-            tempString += " (now " + str(price)
+            tempString += " (now " + str(price) + " " + currencyCode
         if obcValue > 0:
             tempString += " not including " +  str(obcString) + " OBC"
         tempString += ")"   
