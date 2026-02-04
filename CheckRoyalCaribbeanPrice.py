@@ -303,11 +303,16 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     if "Bottles" in variant:
         title = title + " (" + variant + ")"
     
+    perDayPrice = salesUnit in [ 'PER_NIGHT', 'PER_DAY' ]
+    
     newPricePayload = payload.get("startingFromPrice")
     
     if newPricePayload is None:
         if not forWatch:
-            tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + " (No Longer for Sale)" + RESET
+            tempString = YELLOW + passengerName.ljust(10) + " (" + room + ") has best price " 
+            if perDayPrice:
+                tempString += "per night "
+            tempString += "for " + title +  " of: " + str(paidPrice) + " " + currency + " (No Longer for Sale)" + RESET
             print(tempString)
         return
     
@@ -319,18 +324,25 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     # Should never happend since should not check prices that are 0 to begin with
     if not currentPrice:
         currentPrice = 0
-        
+    
     if currentPrice < paidPrice:
         saving = round(paidPrice - currentPrice, 2)
         savingForAlert = saving
-        savingLabel = "Saving " + str(saving)
-        if salesUnit in [ 'PER_NIGHT', 'PER_DAY' ] and numberOfNights:
+        savingLabel = "Saving " + str(saving) + " " + currency
+        if perDayPrice and numberOfNights:
             savingForAlert = round(saving * numberOfNights, 2)
-            savingLabel = "Saving " + str(saving) + " per night (" + str(savingForAlert) + " total)"
+            savingLabel = "Saving " + str(saving) + " " + currency + " per night (" + str(savingForAlert) + " " + currency + " total)"
         if forWatch:
-            text = passengerName + ": Book! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+            text = passengerName + ": Book! " + title + " Price "
+            if perDayPrice:
+                text += "per night "
+            text += "is lower: " + str(currentPrice) + " " + currency + " than " + str(paidPrice) + " " + currency
         else:
-            text = passengerName + ": Rebook! " + title + " Price is lower: " + str(currentPrice) + " than " + str(paidPrice)
+            text = passengerName + ": Rebook! " + title + " Price " 
+            if perDayPrice:
+                text += "per night "
+                
+            text += "is lower: " + str(currentPrice) + " " + currency+ " than " + str(paidPrice) + " " + currency
         if minimumSavingAlert is not None:
             text += " (" + savingLabel + ")"
         
@@ -355,14 +367,19 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
         if forWatch:
-            tempString = GREEN + passengerName.ljust(10) + " (" + title +  ") price is higher than watch price: " + str(paidPrice) + RESET
+            tempString = GREEN + passengerName.ljust(10) + " (" + title +  ") price "
+            if perDayPrice:
+                tempString += "per night "
+            tempString += "is higher than watch price: " + str(paidPrice) + " " + currency + RESET
         else:
-            tempString = GREEN + passengerName.ljust(10) + " (" + room + ") has best price for " + title +  " of: " + str(paidPrice) + RESET
+            tempString = GREEN + passengerName.ljust(10) + " (" + room + ") has best price "
+            if perDayPrice:
+                tempString += "per night "
+            tempString += "for " + title +  " of: " + str(paidPrice) + " " + currency + RESET
         if currentPrice > paidPrice:
-            tempString += " (now " + str(currentPrice) + ")"
+            tempString += " (now " + str(currentPrice) + " " + currency + ")"
         print(tempString)
         
-    
 
 def processWatchListForBooking(access_token, accountId, session, reservationId, ship, startDate, passengerId, passengerName, room, watchListItems, apobj, cruiseLineName):
     """
