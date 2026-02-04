@@ -7,9 +7,9 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
-- ✅ Can automatically check **cabin prices** for any cruise you booked (only USD, GBP and DKK currency supported)
+- ✅ Can automatically check **cabin prices** for any cruise you booked
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
-- ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, only USD, GBP and DKK currency supported)  
+- ✅ Can also watchlist **cabin prices** with just a booking URL (no login required)  
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
@@ -136,7 +136,7 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Only USD and DKK currency supported (more can be added by request). You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and substract it from the price. If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and substract it from the price. If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -192,7 +192,6 @@ minimumSavingAlert: 2.00
 1. Update the pricePaid field to the new price. Remove the `$` ,`£` and any `,` (or `.` if non-USD currency for thousands designator)
 1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. 
 1. If you only want to check the cruise prices with URL you provide, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
-1. Only supports USD , GBP, and DKK currency. If have another currency, please make an issue and include the URL. The currency is encoded in the URL and price will be checked in that currency. 
 1. The latest version checks availabily only for the class of room you have (not a specific room number). This new way is better.
    
 ## Watch List for Beverage Packages/Excursions/etc (Optional)
