@@ -325,11 +325,7 @@ Thanks to contributors:
   
 # Issues
 1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix. PRs welcome
-1. Handles orders made by other people in your party or linked cruises (even if you are not sailing on it)
-1. It should give you the price of the item in the same currency you bought it in. Post an issue if not working correctly.
-1. May not handle all orders correctly. Purchases of multiple coffee cards and Evian water should now work.
-1. Prices of internet, beverage packages, and "The Key" are per day, this code divides by the length of your cruise. If you buy a partial package, this logic may not work correctly. If any per-day item is not calculated correctly, post an issue.
-1. OBC may display in USD even if cruise being checked in a different currency.
+1. OBC will display in USD even if cruise being checked in a different currency. Not fixable as this is how OBC is provided
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
 1. Double check you are cancelling the item for the correct cruise
 
