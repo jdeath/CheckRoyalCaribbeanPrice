@@ -536,7 +536,6 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         # Print Current Prices
         if displayCruisePrices:
-            #GetCruisePriceFromAPI(bookingCurrency, packageCode, sailDate,stateroomType, numberOfAdults, numberOfChildren)
         
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
        
@@ -741,7 +740,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     if params.get("groupId") is not None:
         groupID = params.get("groupId")[0]
         part = groupID[2:4]
-        
+    
+    packageCode = None
     if params.get("packageCode") is not None:
         packageCode = params.get("packageCode")[0]
         part = packageCode[2:4]
@@ -769,7 +769,13 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         # If you specified the URL, provide a notification to update the URL
         if not automaticURL:
             apobj.notify(body=textString, title='Cruise Room Not Available')
+        
+        # If cruise room not available, print other room prices
+        # Only do this for watchlist rooms
+        if packageCode and not automaticURL:
+            GetCruisePriceFromAPI(currencyCode, packageCode, sailDate, cabinClassString, numberOfAdults, numberOfChildren)
         return
+        
 
     if soupFind is None:
         textString = preString + " No Longer Available To Book"
@@ -1109,14 +1115,21 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdult
 
     resp = requests.post('https://www.royalcaribbean.com/cruises/graph', cookies=cookies, headers=headers, json=json_data)
 
-
-    sailings = resp.json()["data"]["cruiseSearch"]["results"]["cruises"][0]["sailings"]
+    
+    cruises = resp.json()["data"]["cruiseSearch"]["results"]["cruises"]
+    if cruises:
+        sailings = cruises[0]["sailings"]
+    else:
+        print("         Sailing is sold out")
+        return
+       
 
    
     for sailing in sailings:
-       
-        if sailing["sailDate"].replace("-", "") != sailDate:
+        
+        if sailing["sailDate"].replace("-", "") != sailDate and sailing["sailDate"] != sailDate:
             continue
+            
         prices = sailing["stateroomClassPricing"]
         for price in prices:
             cabinCode = price["stateroomClass"]["content"]["code"] 
@@ -1129,10 +1142,10 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdult
             cabinType = price["stateroomClass"]["name"]
             
             if price["price"] is None:
-                print("         " + cabinType + " Not for sale")
+                print("         " + cabinType + " sold out")
             else:    
-                cabinCostPerPerson = float(price["price"]["value"]) * (numAdults + numChildren)
-                print("         " + str(cabinCostPerPerson) + " : Current Cheapest " + cabinType + " Price " + "for " + str(numAdults + numChildren) + postString)
+                cabinCostPerPerson = float(price["price"]["value"]) * (int(numAdults) + int(numChildren))
+                print("         " + str(cabinCostPerPerson) + " " + currency + ": Cheapest " + cabinType + " Price " + "for " + str(int(numAdults) + int(numChildren)) + postString)
             
    
 
