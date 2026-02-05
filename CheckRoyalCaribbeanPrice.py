@@ -515,7 +515,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             birthDate = guest.get("birthdate")
             
             isAdult = aboveTwelveOnSailDate(birthDate, sailDate)
-            
+        
             if isAdult:
                 numberOfAdults = numberOfAdults + 1
             else:
@@ -532,7 +532,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             reservationDisplay += " (" + reservationFriendlyNames.get(str(reservationId)) + ")"
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary[shipCode] + " Room " + stateroomNumber + " (" + passengerNames + ")")
-        
+
+        # testing shows OBC is returned for each passenger, but really only for the stateroom
+        GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName,bookingCurrency)
         
         # Print Current Prices
         if displayCruisePrices:
@@ -556,6 +558,8 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
+        
+        
         
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
@@ -1146,7 +1150,36 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdult
             else:    
                 cabinCostPerPerson = float(price["price"]["value"]) * (int(numAdults) + int(numChildren))
                 print("         " + str(cabinCostPerPerson) + " " + currency + ": Cheapest " + cabinType + " Price " + "for " + str(int(numAdults) + int(numChildren)) + postString)
-            
+
+def GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName,currency):
+    
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'Account-Id': accountId,
+    }
+        
+    params = {
+    'passengerId': passengerId,
+    'sailingId': shipCode + sailDate,
+    'currencyIso': currency,
+    }
+
+    response = requests.get(
+        'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/obc/reservations/' + reservationId,
+        params=params,
+        headers=headers,
+    )
+
+    payload = response.json().get("payload")
+    if not payload:
+        return
+        
+    amount = payload.get("amount")
+    cur = payload.get("currencyIso")
+    
+    if amount and amount > 0:
+        print(f"         Onboard Credit of {amount} {cur}")
    
 
 if __name__ == "__main__":
