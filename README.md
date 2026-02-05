@@ -128,7 +128,7 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a loyality special, but will find any publically offered OBC and display it (but not subtract it). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a loyality special, but will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -136,7 +136,7 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and display it (but not subtract it). If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -188,11 +188,12 @@ minimumSavingAlert: 2.00
 1. Run the tool and see if it works
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser.
-1. If it is lower than you paid for and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they should (reports of pushback lately) reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it! The code will subtract any OBC from the total price of the new cruise.
+1. If it is lower than you paid for and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they should (reports of pushback lately) reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it! The code will print the OBC offered for the new cruise, but will not subtract it because OBC only given in USD
 1. Update the pricePaid field to the new price. Remove the `$` ,`£` and any `,` (or `.` if non-USD currency for thousands designator)
 1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. 
 1. If you only want to check the cruise prices with URL you provide, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
 1. The latest version checks availabily only for the class of room you have (not a specific room number). This new way is better.
+1. Should always find the current currency (except for OBC which is only in USD). If your currency is not supported, create an issue
    
 ## Watch List for Beverage Packages/Excursions/etc (Optional)
 The watch list feature allows you to monitor specific cruise add-ons for price drops across all your bookings. When enabled, the system will check each passenger individually for the specified items and alert you if prices drop below your target price.
