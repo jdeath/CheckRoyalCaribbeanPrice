@@ -288,7 +288,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         params=params,
         headers=headers,
     )
-    
+
     payload = response.json().get("payload")
     if payload is None:
         return
@@ -322,6 +322,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         currentPrice = newPricePayload.get(guestAgeString + "ShipboardPrice")
     # Infant price is often None, this just sets to 0 to avoid error
     # Should never happend since should not check prices that are 0 to begin with
+    
     if not currentPrice:
         currentPrice = 0
     
@@ -604,7 +605,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         params=params,
         headers=headers,
     )
- 
+    
     # Check for my orders and orders others booked for me
     for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
         orderCode = order.get("orderCode")
@@ -631,7 +632,9 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 order_title = orderDetail.get("productSummary").get("title")
                 
                 #product = orderDetail.get("productSummary").get("id")
-                product = orderDetail.get("productSummary").get("baseId")
+                #product = orderDetail.get("productSummary").get("baseId")
+                # API Change on 6 Feb 2026
+                product = orderDetail.get("productSummary").get("defaultVariantId")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
               
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
