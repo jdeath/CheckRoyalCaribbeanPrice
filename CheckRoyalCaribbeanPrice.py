@@ -437,7 +437,7 @@ def getLoyalty(access_token,accountId,session):
     cAndAPoints = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints")
     cAndASharedPoints = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints")
    
-    if cAndANumber is not None and cAndASharedPoints > 0:
+    if cAndASharedPoints is not None and cAndASharedPoints > 0:
         print("C&A: " + str(cAndANumber) + " " + cAndALevel + " - " + str(cAndASharedPoints) + " Shared Points (" + str(cAndAPoints) + " Individual Points)")  
     
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
