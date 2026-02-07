@@ -98,6 +98,10 @@ services:
 4. Run: `docker compose up -d`
 
 The Docker container will run the price checker on the schedule you have defined.
+
+## Install (Home Assistant Addon/App)
+See directions at: https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck
+
 ## Edit Config File
 Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`.
 ```yaml
