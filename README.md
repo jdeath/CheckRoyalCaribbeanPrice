@@ -323,6 +323,7 @@ Thanks to contributors:
 - @iareanthony (fixed "The Key")  
 - @jipis (internet pricing & passenger specials)  
 - @ProxesOnBoxes (date display options, config improvements)
+- @JDare (Docker support and documentation, github workflow)
 - @jhedlund (Watchlist)
 - @RoyalCaribbeanBlog.com for featuring in an [article](https://www.royalcaribbeanblog.com/2025/04/19/cruise-price-trackers)
 - Frommers.com for featuring in an [article](https://www.frommers.com/tips/cruise/how-to-save-hundreds-on-royal-caribbeans-packages-and-excursions/)
