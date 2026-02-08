@@ -358,7 +358,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 quantity = orderDetail.get("priceDetails").get("quantity")
                 order_title = orderDetail.get("productSummary").get("title")
                 
-                product = orderDetail.get("productSummary").get("baseId")
+                product = orderDetail.get("productSummary").get("defaultVariantId")
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
                 
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
