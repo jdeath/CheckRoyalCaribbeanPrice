@@ -561,7 +561,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 print(YELLOW + "\t\tCannot Check Cruise Price - Use Manual URL Method" + RESET)
         
         if booking.get("balanceDue") is True:
-            print(YELLOW + f"{reservationDisplay}: Remaining Cruise Payment Balance is {booking.get(balanceDueAmount)}" + RESET)
+            print(YELLOW + f"{reservationDisplay}: Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')}" + RESET)
 
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
