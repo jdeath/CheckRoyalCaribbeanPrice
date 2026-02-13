@@ -343,8 +343,7 @@ If you are looking for a specific ship or sail date, you may also specify them o
 
 Command-line options may be used in any combination.  They are:
 - -c, --currency: currency (default: USD)
-- -s, --ship: The ship to browse for
--- do not include 'of the Seas' after the ship name (Royal Caribbean) or 'Celebrity' before it (Celebrity)
+- -s, --ship: The ship to browse for; do not include 'of the Seas' after the ship name (Royal Caribbean) or 'Celebrity' before it (Celebrity)
 - -d, --saildate: Date of the sailing to browse for (date format is mm/dd/yy)
 
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
