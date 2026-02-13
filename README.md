@@ -337,4 +337,14 @@ Thanks to contributors:
 # Browse RoyalCaribbean Prices
 This is a new script that will browse any Royal Caribbean or Celebrity sailing and show current public prices for excursions/drink packages/etc. If you book the cruise, the price could be lower than shown due to C&A or casino specials. You simply run the script `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe`. It will prompt you to select the ship and sailing. It will provide a link to the Royal Caribbean website which has the product prices for that cruise (be sure to be logged out of the RC website or link will not work). Code will also print all the prices. This does not require a Royal Caribbean or Celebrity account and can be used by anyone. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/`. Defaults to USD currency. If you want a different currency, for example DKK, run `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
 
+If you are looking for a specific ship or sail date, you may also specify them on the command line as well.  Some examples are: 
+- `python BrowseRoyalCaribbeanPrice.py -s Wonder` or `BrowseRoyalCaribbeanPrice.exe -s Wonder`
+- `python BrowseRoyalCaribbeanPrice.py -d 05/10/27` or `BrowseRoyalCaribbeanPrice.exe -d 05/10/27`
+
+Command-line options may be used in any combination.  They are:
+- -c, --currency: currency (default: USD)
+- -s, --ship: The ship to browse for
+-- do not include 'of the Seas' after the ship name (Royal Caribbean) or 'Celebrity' before it (Celebrity)
+- -d, --saildate: Date of the sailing to browse for (date format is mm/dd/yy)
+
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
