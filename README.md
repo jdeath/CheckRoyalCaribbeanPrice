@@ -121,7 +121,7 @@ cruises: # Optional, this allows you to watch the price of a cruise you have not
 apprise_test: false # Optional
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user:password@gmail.com"
-  - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
+  - url: "ntfy://abcfeg3839439djd"
 ```
 
 If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
