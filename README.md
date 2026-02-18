@@ -1,7 +1,7 @@
 # CheckRoyalCaribbeanPrice
 Checks if you have the cheapest price for your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  
 - ✅ Automatically checks your purchased packages (no need to enter them manually)  
-- ✅ Alerts you if a lower price is available (email, WhatsApp, ntfy, Home Assistant, etc) 
+- ✅ Alerts you if a lower price is available (email, ntfy, Home Assistant, etc) 
 - ✅ Finds deals specific to each passenger (loyalty or casino status, age-based or room specials) where other "royal price trackers" only find publicly available (often higher) prices
 - ✅ Shows currently assigned cabin in Royal's backend system (*likely* the room you will get if purchased a GTY "We choose your room")
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!)
@@ -121,7 +121,7 @@ cruises: # Optional, this allows you to watch the price of a cruise you have not
 apprise_test: false # Optional
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user:password@gmail.com"
-  - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
+  - url: "ntfy://abcfeg3839439djd"
 ```
 
 If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:

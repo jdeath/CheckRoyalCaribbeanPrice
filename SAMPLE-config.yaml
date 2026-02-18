@@ -17,7 +17,7 @@ watchList: # Optional, items to monitor for price drops across all your bookings
     enabled: false         # if false, skip this item for watching. true to include
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user:password@gmail.com"
-  - url: "whatsapp://AccessToken@FromPhoneID/ToPhoneNo"
+  - url: "ntfy://abcfeg3839439djd"
 reservationFriendlyNames: # Optional, only used if you want to display a name next to the reservation id
   '1234567': "Summer Cruise"
   '8912345': "Winter Cruise"
