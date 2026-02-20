@@ -824,7 +824,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         saving = round(paidPrice - price, 2)
         # Notify if should rebook
         if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
-            textString = "Rebook! {preString} New price of {price} {currencyCode}"
+            textString = f"Rebook! {preString} New price of {price} {currencyCode}"
             if obcValue > 0:
                 textString += f" not including {obcString} OBC"
             textString += f" is lower than {paidPrice}"
@@ -850,10 +850,10 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         if not automaticURL:
             textString = f"Consider Booking! {preString} New price of {price} {currencyCode}"
             if obcValue > 0:
-                textString += " not including " +  str(obcString) + " OBC"
-            textString +=  " is lower than watchlist price of " + str(paidPrice)
+                textString += f" not including {obcString} OBC"
+            textString +=  f" is lower than watchlist price of {paidPrice}"
             if minimumSavingAlert is not None and saving < minimumSavingAlert:
-                textString += " (Saving " + str(saving) + " < minimumSavingAlert " + str(minimumSavingAlert) + "; no notification sent)"
+                textString += f" (Saving {saving} < minimumSavingAlert {minimumSavingAlert}; no notification sent)"
                 print(YELLOW + textString + RESET)
             else:
                 print(RED + textString + RESET)
