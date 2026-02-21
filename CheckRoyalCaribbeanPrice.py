@@ -85,6 +85,10 @@ def main():
         if 'displayCruisePrices' in data:
             displayCruisePrices = data['displayCruisePrices']
         
+        showPromos = False
+        if 'showPromos' in data:
+            showPromos = data['showPromos']
+        
         reservationPricePaid = {}
         if 'reservationPricePaid' in data:
             reservationPricePaid=data.get('reservationPricePaid', {})
@@ -108,7 +112,7 @@ def main():
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
@@ -458,7 +462,7 @@ def getLoyalty(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos):
 
     headers = {
         'Access-Token': access_token,
@@ -542,6 +546,10 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             
         # testing shows OBC is returned for each passenger, but really only for the stateroom
         GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName,bookingCurrency)
+        
+        # Show active promotions for this sailing
+        if showPromos:
+            getPromotions(access_token,accountId,session,shipCode,sailDate,bookingCurrency)
         
         # Print Current Prices
         if displayCruisePrices:
@@ -1016,6 +1024,66 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
     for booking in response.json().get("payload"):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
+
+
+# Get available promotions for a sailing
+def getPromotions(access_token, accountId, session, ship, startDate, currency):
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'vds-id': accountId,
+    }
+
+    categories = ['beverage', 'dining', 'internet', 'shorex', 'spa', 'key', 'onboardactivities', 'photoPackage']
+    seenPromoIds = set()
+
+    for category in categories:
+        params = {
+            'sailingId': ship + startDate,
+            'page': 'plp',
+            'categoryId': category,
+            'currencyIso': currency,
+        }
+
+        response = session.get(
+            'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/promotions/list',
+            params=params,
+            headers=headers,
+        )
+
+        if response.status_code != 200:
+            continue
+
+        payload = response.json().get("payload")
+        if not payload:
+            continue
+
+        for promo in payload:
+            promoId = promo.get("id")
+            if promoId in seenPromoIds:
+                continue
+            seenPromoIds.add(promoId)
+
+            promoStart = promo.get("startDate", "")[:10]
+            promoEnd = promo.get("endDate", "")[:10]
+
+            for template in promo.get("templates", []):
+                if template.get("type") != "SITEWIDE_BANNER":
+                    continue
+
+                saleName = template.get("heading1", "")
+                discount = template.get("heading3", "")
+                product = template.get("heading4", "")
+
+                promoLine = f"[PROMO] {discount} {product} - {saleName}"
+                promoLine += f" (Valid {promoStart} to {promoEnd})"
+
+                countdown = template.get("countdownClock")
+                if countdown and countdown.get("enabled"):
+                    countdownEnd = countdown.get("endDate", "")[:16].replace("T", " ")
+                    promoLine += f" - Ends {countdownEnd}"
+
+                print(YELLOW + promoLine + RESET)
 
 
 def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdults, numChildren):
