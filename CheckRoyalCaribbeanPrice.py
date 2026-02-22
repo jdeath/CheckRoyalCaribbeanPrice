@@ -1034,56 +1034,83 @@ def getPromotions(access_token, accountId, session, ship, startDate, currency):
         'vds-id': accountId,
     }
 
-    categories = ['beverage', 'dining', 'internet', 'shorex', 'spa', 'key', 'onboardactivities', 'photoPackage']
-    seenPromoIds = set()
+    base_url = 'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/promotions/list'
 
-    for category in categories:
-        params = {
-            'sailingId': ship + startDate,
-            'page': 'plp',
-            'categoryId': category,
-            'currencyIso': currency,
-        }
+    params_homepage = {
+        'sailingId': ship + startDate,
+        'page': 'homepage',
+        'currencyIso': currency,
+    }
+    response = session.get(base_url, params=params_homepage, headers=headers)
+    if response.status_code != 200:
+        return
 
-        response = session.get(
-            'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/promotions/list',
-            params=params,
-            headers=headers,
-        )
+    all_promos = response.json().get("payload") or []
 
-        if response.status_code != 200:
-            continue
-
-        payload = response.json().get("payload")
-        if not payload:
-            continue
-
-        for promo in payload:
-            promoId = promo.get("id")
-            if promoId in seenPromoIds:
-                continue
-            seenPromoIds.add(promoId)
-
-            promoStart = promo.get("startDate", "")[:10]
-            promoEnd = promo.get("endDate", "")[:10]
-
+    params_pdp = {
+        'sailingId': ship + startDate,
+        'page': 'pdp',
+        'currencyIso': currency,
+    }
+    response = session.get(base_url, params=params_pdp, headers=headers)
+    banner_promos = {}
+    if response.status_code == 200:
+        for promo in response.json().get("payload") or []:
             for template in promo.get("templates", []):
-                if template.get("type") != "SITEWIDE_BANNER":
-                    continue
+                if template.get("type") == "SITEWIDE_BANNER":
+                    banner_promos[promo.get("id")] = template
+                    break
 
-                saleName = template.get("heading1", "")
-                discount = template.get("heading3", "")
-                product = template.get("heading4", "")
+    seenIds = set()
+    for promo in all_promos:
+        promoId = promo.get("id")
+        if promoId in seenIds:
+            continue
+        seenIds.add(promoId)
 
-                promoLine = f"[PROMO] {discount} {product} - {saleName}"
-                promoLine += f" (Valid {promoStart} to {promoEnd})"
+        promoStart = promo.get("startDate", "")[:10]
+        promoEnd = promo.get("endDate", "")[:10]
 
-                countdown = template.get("countdownClock")
-                if countdown and countdown.get("enabled"):
-                    countdownEnd = countdown.get("endDate", "")[:16].replace("T", " ")
-                    promoLine += f" - Ends {countdownEnd}"
+        banner = banner_promos.get(promoId)
+        if banner:
+            saleName = banner.get("heading1", "")
+            discount = banner.get("heading3", "")
+            product = banner.get("heading4", "")
 
-                print(YELLOW + promoLine + RESET)
+            promoLine = f"[PROMO] {discount} {product} - {saleName}"
+            promoLine += f" (Valid {promoStart} to {promoEnd})"
+
+            countdown = banner.get("countdownClock")
+            if countdown and countdown.get("enabled"):
+                countdownEnd = countdown.get("endDate", "")[:16].replace("T", " ")
+                promoLine += f" - Ends {countdownEnd}"
+
+            print(YELLOW + promoLine + RESET)
+        else:
+            for template in promo.get("templates", []):
+                if template.get("type") == "HOME_HERO_LOCKUP":
+                    categoryCode = template.get("categoryCode", "")
+                    description = ""
+                    lockupMedia = template.get("lockupMedia")
+                    if lockupMedia and lockupMedia.get("source"):
+                        path = lockupMedia["source"].get("path", "")
+                        filename = path.split("/")[-1] if path else ""
+                        lockupMatch = re.search(r'lockup-(.+?)_[A-Z]{2}\.', filename)
+                        if lockupMatch:
+                            description = lockupMatch.group(1).replace("-", " ").upper()
+
+                    promoLine = f"[PROMO] {description or promoId}"
+                    if categoryCode:
+                        promoLine += f" ({categoryCode})"
+                    promoLine += f" (Valid {promoStart} to {promoEnd})"
+
+                    countdown = template.get("countdownClock")
+                    if countdown and countdown.get("enabled"):
+                        countdownEnd = countdown.get("endDate", "")[:16].replace("T", " ")
+                        promoLine += f" - Ends {countdownEnd}"
+
+                    print(YELLOW + promoLine + RESET)
+                    break
 
 
 def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdults, numChildren):
