@@ -6,6 +6,7 @@ cruises: # Optional, Only needed if you want to check cruise price
     paidPrice: "3833.74"
 displayCruisePrices: true
 minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
+notifyOnError: false # Optional, send Apprise alert if the script fails (default: false)
 reservationPricePaid:
   '1234567': 3989.48
   '7654321': 2368.38

@@ -113,6 +113,7 @@ accountInfo:
     cruiseLine: "celebrity" # Must indicate if celebrity
 displayCruisePrices: true # Optional, this will display current price for your booked cruises
 minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
+notifyOnError: false # Optional, send Apprise alert if the script fails (default: false)
 cruises: # Optional, this allows you to watch the price of a cruise you have not booked yet
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
     paidPrice: "3833.74"
@@ -251,6 +252,7 @@ To find the `prefix` and `product` values for items you want to watch:
    - Documentation to generate an app password for gmail is here: https://security.google.com/settings/security/apppasswords
 1. You can delete the whatsapp line, that is included so you know how to add other services. You can also add more lines for an additional gmail accounts.
 1. To test apprise, add a key in your config.yaml that says `apprise_test: true` . This will send a notification, then quit and not run the price check. This key goes above the `apprise:` keys not inside it (see `Edit Config File` section above). Once you know apprise is working, remove the line or set value to `false`
+1. To be alerted if the script fails to run, set `notifyOnError: true` in your `config.yaml`. This sends a short Apprise notification and the script exits with a non-zero code.
 
 ## Run
 1. `python CheckRoyalCaribbeanPrice.py` (recommended, any OS) or `CheckRoyalCaribbeanPrice.exe` (Windows only)
