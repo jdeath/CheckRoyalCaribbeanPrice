@@ -181,6 +181,11 @@ To only alert when a price drop meets a minimum savings threshold, set minimumSa
 minimumSavingAlert: 2.00
 ```
 
+To get an alert if the script fails to run (crash, bad config, network error, etc), set notifyOnError. This sends a short Apprise notification and exits with a non-zero code so schedulers can detect the failure. If not set or set to false, failures only show in the console/log.
+```yaml
+notifyOnError: true
+```
+
 
 ## Get Cruise URL for Watchlist Functionality (Optional - This is only for a cruise you have not booked!)
 1. If you want to check the cabin price of a cruise you have booked, see above. This section is just for cruises you have *not* booked yet.
