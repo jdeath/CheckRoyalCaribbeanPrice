@@ -694,7 +694,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 params=params,
                 headers=headers,
             )
-    
+                
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
                 # check for canceled status at item-level
                 
