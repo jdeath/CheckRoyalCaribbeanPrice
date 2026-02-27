@@ -85,6 +85,10 @@ def main():
         if 'displayCruisePrices' in data:
             displayCruisePrices = data['displayCruisePrices']
         
+        showPromos = False
+        if 'showPromos' in data:
+            showPromos = data['showPromos']
+        
         reservationPricePaid = {}
         if 'reservationPricePaid' in data:
             reservationPricePaid=data.get('reservationPricePaid', {})
@@ -108,7 +112,7 @@ def main():
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
@@ -475,7 +479,7 @@ def getLoyalty(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos):
 
     headers = {
         'Access-Token': access_token,
@@ -563,6 +567,10 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             
         # testing shows OBC is returned for each passenger, but really only for the stateroom
         GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName,bookingCurrency)
+        
+        # Show active promotions for this sailing
+        if showPromos:
+            getAllPromotions(access_token,accountId,session,shipCode,sailDate,bookingCurrency)
         
         # Print Current Prices
         if displayCruisePrices:
@@ -1080,6 +1088,66 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     for booking in response.json().get("payload"):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
 
+# Get all available promotions for a sailing
+def getAllPromotions(access_token, accountId, session, ship, startDate, currency):
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'vds-id': accountId,
+    }
+
+    base_url = 'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/promotions/list'
+    sailingId = ship + startDate
+
+    def fetchPromos(page):
+        resp = session.get(base_url, params={'sailingId': sailingId, 'page': page, 'currencyIso': currency}, headers=headers)
+        return resp.json().get("payload") or [] if resp.status_code == 200 else []
+
+    all_promos = fetchPromos('homepage')
+    if not all_promos:
+        return
+
+    banner_by_id = {}
+    for promo in fetchPromos('pdp'):
+        for template in promo.get("templates", []):
+            if template.get("type") == "SITEWIDE_BANNER":
+                banner_by_id[promo.get("id")] = template
+                break
+
+    seenIds = set()
+    for promo in all_promos:
+        promoId = promo.get("id")
+        if promoId in seenIds:
+            continue
+        seenIds.add(promoId)
+
+        promoStart = promo.get("startDate", "")[:10]
+        promoEnd = promo.get("endDate", "")[:10]
+        dateRange = f"(Valid {promoStart} to {promoEnd})"
+
+        banner = banner_by_id.get(promoId)
+        if banner:
+            promoLine = f"[PROMO] {banner.get('heading3', '')} {banner.get('heading4', '')} - {banner.get('heading1', '')} {dateRange}"
+        else:
+            template = next((t for t in promo.get("templates", []) if t.get("type") == "HOME_HERO_LOCKUP"), None)
+            if not template:
+                continue
+
+            description = ""
+            lockupMedia = template.get("lockupMedia")
+            if lockupMedia and lockupMedia.get("source"):
+                filename = lockupMedia["source"].get("path", "").split("/")[-1]
+                match = re.search(r'lockup-(.+?)_[A-Z]{2}\.', filename)
+                if match:
+                    description = match.group(1).replace("-", " ").upper()
+
+            categoryCode = template.get("categoryCode", "")
+            promoLine = f"[PROMO] {description or promoId}"
+            if categoryCode:
+                promoLine += f" ({categoryCode})"
+            promoLine += f" {dateRange}"
+
+        print(YELLOW + promoLine + RESET)
 
 def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdults, numChildren):
 
