@@ -649,6 +649,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         if order.get("orderTotals").get("total") > 0: 
             
             # Get Order Details
+<<<<<<< main
             try:
                 response = requests.get(
                     f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory/{orderCode}',
@@ -659,6 +660,14 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
                 exit(1)
             
+=======
+            response = requests.get(
+                f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory/{orderCode}',
+                params=params,
+                headers=headers,
+            )
+                
+>>>>>>> main
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
                 # check for canceled status at item-level
                 
