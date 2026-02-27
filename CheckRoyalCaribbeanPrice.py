@@ -694,6 +694,9 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 params=params,
                 headers=headers,
             )
+            
+            if response.json() is None or response.json().get("payload") is None:
+                continue
                 
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
                 # check for canceled status at item-level
