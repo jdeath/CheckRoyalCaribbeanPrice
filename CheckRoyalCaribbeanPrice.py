@@ -9,6 +9,8 @@ import base64
 import json
 import argparse
 import locale
+import sys
+import traceback
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
@@ -28,11 +30,31 @@ dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by con
 
 shipDictionary = {}
 
-def main():
+def get_config_path():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
     parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
     args = parser.parse_args()
-    config_path = args.config
+    return args.config
+
+def build_apprise_from_config(config_path):
+    apobj = Apprise()
+    notify_on_error = False
+    try:
+        with open(config_path, 'r') as file:
+            data = yaml.safe_load(file) or {}
+            notify_on_error = bool(data.get('notifyOnError', False))
+            if 'apprise' in data:
+                for apprise in data['apprise']:
+                    url = apprise['url']
+                    apobj.add(url)
+    except Exception:
+        # Config load errors will be handled by top-level error handler.
+        pass
+    return apobj, notify_on_error
+
+def main(config_path=None):
+    if config_path is None:
+        config_path = get_config_path()
 
     # Set Time with AM/PM or 24h based on locale    
     locale.setlocale(locale.LC_TIME,'')
@@ -1329,5 +1351,17 @@ def GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sai
    
 
 if __name__ == "__main__":
-    main()
+    config_path = get_config_path()
+    apobj, notify_on_error = build_apprise_from_config(config_path)
+    try:
+        main(config_path)
+    except Exception as exc:
+        timestamp = datetime.now().strftime(dateDisplayFormat + " %X")
+        error_summary = f"{type(exc).__name__}: {exc}"
+        print(f"ERROR: {error_summary}", file=sys.stderr)
+        traceback.print_exc()
+        if notify_on_error and len(apobj) > 0:
+            body = f"Script failed at {timestamp}\n{error_summary}"
+            apobj.notify(body=body, title='Cruise Price Script Error')
+        sys.exit(1)
  
