@@ -10,6 +10,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Can automatically check **cabin prices** for any cruise you booked
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
 - ✅ Can also watchlist **cabin prices** with just a booking URL (no login required)  
+- ✅ Shows active sitewide promotions (flash sales, percentage-off deals) for each sailing
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
@@ -184,6 +185,11 @@ minimumSavingAlert: 2.00
 To get an alert if the script fails to run (crash, bad config, network error, etc), set notifyOnError. This sends a short Apprise notification and exits with a non-zero code so schedulers can detect the failure. If not set or set to false, failures only show in the console/log.
 ```yaml
 notifyOnError: true
+```
+
+To display active sitewide promotions (flash sales, percentage-off deals) for each of your sailings, set showPromos to true. This queries the Royal Caribbean promotions API and shows any current deals with their discount, valid dates, and countdown timers.
+```yaml
+showPromos: true
 ```
 
 

@@ -113,7 +113,11 @@ def getShips():
         'sort': 'name',
     }
 
-    response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    try:
+        response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
 
     shipNames = []
     ships = response.json().get("payload").get("ships")
@@ -143,9 +147,13 @@ def getSailings(shipCode):
     }
 
 
-    response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
-    voyages = response.json().get("payload").get("voyages")
-    
+    try:
+        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    voyages = response.json().get("payload").get("voyages")    
     sailings = []
     for voyage in voyages:
         sailDate = voyage.get("sailDate")
@@ -176,11 +184,20 @@ def getProducts(shipCode, sailDate):
         'availableForSale': 'true',
     }
 
-    response = requests.get('https://api.rccl.com/en/royal/mobile/v3/prices', params=params, headers=headers)
+    try:
+        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/prices', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
     print(products = response.json().get("payload"))
         
-    response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
-  
+    try:
+        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
     products = response.json().get("payload").get("products")
    
     for product in products:
@@ -259,12 +276,16 @@ def getAllProducts(shipCode,sailDate,currency):
     for key in productMap:
         print(productMap[key])
 
-        response = requests.post(
-            f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog-unauth/v2/{shipCode}/categories/{key}/products',
-            params=params,
-            headers=headers,
-            json=json_data,
-        )
+        try:
+            response = requests.post(
+                f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog-unauth/v2/{shipCode}/categories/{key}/products',
+                params=params,
+                headers=headers,
+                json=json_data,
+            )
+        except Exception as e:
+            print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+            exit(1)
 
         if response.status_code != 200:
             print(f"Error getting voyage information (API https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog-unauth/v2/{shipCode}/categories/{key}/products returned error code {response.status_code}). Quitting.")
@@ -376,8 +397,12 @@ def getAllProductsGraph(shipCode,sailDate,currency):
             'query': 'query WebProductsByCategory($category: String!, $passengerId: String, $shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $reservationId: String, $pageSize: Long, $currentPage: Long, $sorting: Sorting, $filter: FilterInput, $currencyCode: String!, $includeFilterInfo: Boolean!, $includeIfABexperience: Boolean!) {\n  products(\n    category: $category\n    guestTypes: [ADULT]\n    passengerId: $passengerId\n    shipCode: $shipCode\n    sailDate: $sailDate\n    reservationId: $reservationId\n    pageSize: $pageSize\n    currentPage: $currentPage\n    sorting: $sorting\n    filter: $filter\n    currencyIso: $currencyCode\n  ) {\n    ... on CommerceProductResultSuccess {\n      __typename\n      commerceProducts {\n        activityLevel {\n          code\n          description\n          name\n          __typename\n        }\n        ageRanges {\n          guestType\n          maxValue\n          minValue\n          __typename\n        }\n        approvalStatus {\n          code\n          name\n          __typename\n        }\n        bookingEligibility {\n          allowed\n          reason\n          __typename\n        }\n        categories {\n          code\n          name\n          description\n          subCategories {\n            code\n            name\n            description\n            order\n            __typename\n          }\n          __typename\n        }\n        classifications {\n          code\n          name\n          __typename\n        }\n        dayPorts {\n          day\n          name\n          portCode\n          port\n          __typename\n        }\n        media {\n          source {\n            altText\n            path\n            __typename\n          }\n          type\n          primary\n          __typename\n        }\n        price {\n          currency\n          promotionalPrice\n          shipboardPrice\n          formattedPromotionalPrice\n          formattedBasePrice\n          formattedDailyPrice\n          formattedPromoDailyPrice\n          salesUnit {\n            code\n            name\n            label\n            __typename\n          }\n          __typename\n        }\n        isAtYourLeisure\n        restrictions {\n          maxValue\n          minValue\n          operator\n          restrictionDisplayText\n          unit\n          __typename\n        }\n        references {\n          source\n          target\n          type\n          __typename\n        }\n        stock {\n          stockLevel\n          stockLevelStatus\n          __typename\n        }\n        type {\n          id\n          name\n          __typename\n        }\n        variantOptions {\n          code\n          offer\n          options {\n            code\n            name\n            label\n            sequence\n            __typename\n          }\n          __typename\n        }\n        accessible\n        id\n        baseId\n        defaultVariantId\n        variantType\n        categoryIds\n        title\n        shortDescription\n        trending @include(if: $includeIfABexperience) {\n          code\n          name\n          __typename\n        }\n        popular @include(if: $includeIfABexperience) {\n          code\n          name\n          __typename\n        }\n        new @include(if: $includeIfABexperience) {\n          code\n          name\n          __typename\n        }\n        recommended\n        mostPopular\n        productInterests {\n          code\n          name\n          __typename\n        }\n        complimentary\n        promotion {\n          description\n          value\n          type\n          title\n          displayName\n          code\n          __typename\n        }\n        isALaCarte\n        diningType\n        productStatus\n        description\n        highlights\n        __typename\n      }\n      filterInfo @include(if: $includeFilterInfo) {\n        locations {\n          code\n          name\n          count\n          city\n          region\n          day\n          __typename\n        }\n        activityLevels {\n          code\n          name\n          __typename\n        }\n        durations {\n          code\n          name\n          __typename\n        }\n        interests {\n          code\n          name\n          __typename\n        }\n        subcategories {\n          code\n          name\n          order\n          count\n          __typename\n        }\n        __typename\n      }\n      pageInfo {\n        totalResults\n        totalPages\n        __typename\n      }\n    }\n    ... on CommerceProductExceptions {\n      exceptions {\n        ... on InvalidCategoryException {\n          exceptionType\n          message\n          code\n          title\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}',
         }
 
-        response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
-    
+        try:
+            response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
+        except Exception as e:
+            print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+            exit(1)
+
         payload = response.json().get("data")
         if payload is None:
             continue

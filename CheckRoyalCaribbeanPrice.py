@@ -107,6 +107,10 @@ def main(config_path=None):
         if 'displayCruisePrices' in data:
             displayCruisePrices = data['displayCruisePrices']
         
+        showPromos = False
+        if 'showPromos' in data:
+            showPromos = data['showPromos']
+        
         reservationPricePaid = {}
         if 'reservationPricePaid' in data:
             reservationPricePaid=data.get('reservationPricePaid', {})
@@ -130,7 +134,7 @@ def main(config_path=None):
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
                 getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
@@ -197,7 +201,11 @@ def login(username,password,session,cruiseLineName):
     
     data = f'grant_type=password&username={username}&password={password}&scope=openid+profile+email+vdsid'
     
-    response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
+    try:
+        response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
     
     if response.status_code != 200:
         print(f"{cruiseLineName} website might be down, username/password incorrect, or have unsupported % symbol in password. Quitting.")
@@ -267,12 +275,16 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
         'offeringId': product,
     }
 
-    response = requests.post(
-        'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/price',
-        params=params,
-        headers=headers,
-        json=json_data,
-    )
+    try:
+        response = requests.post(
+            'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/price',
+            params=params,
+            headers=headers,
+            json=json_data,
+        )
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
     
     payload = response.json().get("payload")
     if payload is None:
@@ -306,11 +318,15 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         'passengerId': passengerId,
     }
     
-    response = session.get(
-        f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/{ship}/categories/{prefix}/products/{product}',
-        params=params,
-        headers=headers,
-    )
+    try:
+        response = session.get(
+            f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/{ship}/categories/{prefix}/products/{product}',
+            params=params,
+            headers=headers,
+        )
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
 
     payload = response.json().get("payload")
     if payload is None:
@@ -452,7 +468,12 @@ def getLoyalty(access_token,accountId,session):
         'AppKey': appKey,
         'account-id': accountId,
     }
-    response = session.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', headers=headers)
+
+    try:
+        response = session.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
 
     loyalty = response.json().get("payload").get("loyaltyInformation")
     cAndANumber = loyalty.get("crownAndAnchorId")
@@ -480,7 +501,7 @@ def getLoyalty(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos):
 
     headers = {
         'Access-Token': access_token,
@@ -498,11 +519,15 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         'includeCheckin': 'false',
     }
 
-    response = requests.get(
-        f'https://aws-prd.api.rccl.com/v1/profileBookings/enriched/{accountId}',
-        params=params,
-        headers=headers,
-    )
+    try:
+        response = requests.get(
+            f'https://aws-prd.api.rccl.com/v1/profileBookings/enriched/{accountId}',
+            params=params,
+            headers=headers,
+        )
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
 
     for booking in response.json().get("payload").get("profileBookings"):
         reservationId = booking.get("bookingId")
@@ -565,6 +590,10 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         # testing shows OBC is returned for each passenger, but really only for the stateroom
         GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName,bookingCurrency)
         
+        # Show active promotions for this sailing
+        if showPromos:
+            getAllPromotions(access_token,accountId,session,shipCode,sailDate,bookingCurrency)
+        
         # Print Current Prices
         if displayCruisePrices:
         
@@ -623,11 +652,15 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         'includeMedia': 'false',
     }
     
-    response = requests.get(
-        f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory',
-        params=params,
-        headers=headers,
-    )
+    try:
+        response = requests.get(
+            f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory',
+            params=params,
+            headers=headers,
+        )
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
  
     if response.status_code != 200:
         print(f"Error getting voyage information (returned error code {response.status_code}). Try again later.\nQuitting.")
@@ -646,14 +679,25 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         if order.get("orderTotals").get("total") > 0: 
             
             # Get Order Details
+<<<<<<< main
+            try:
+                response = requests.get(
+                    f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory/{orderCode}',
+                    params=params,
+                    headers=headers,
+                )
+            except Exception as e:
+                print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+                exit(1)
+            
+=======
             response = requests.get(
                 f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory/{orderCode}',
                 params=params,
                 headers=headers,
             )
-            if response.json() is None or response.json().get("payload") is None:
-                continue
                 
+>>>>>>> main
             for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
                 # check for canceled status at item-level
                 
@@ -763,7 +807,11 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
         else: # This is for a non GTY Room
             url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
     
-    response = requests.get(url,headers=headers)
+    try:
+        response = requests.get(url,headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
         
     soup = BeautifulSoup(response.text, "html.parser")
     soupFind = soup.find("span",attrs={"data-testid":"pricing-total"})
@@ -909,7 +957,11 @@ def getShips():
         'sort': 'name',
     }
 
-    response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    try:
+        response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
 
     shipCodes = []
     ships = response.json().get("payload").get("ships")
@@ -936,11 +988,15 @@ def getShipDictionary():
         'sort': 'name',
     }
 
-    response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    try:
+        response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
     ships = response.json().get("payload").get("ships")
-    
-    shipCodes = {}
-    
+
+    shipCodes = {}    
     for ship in ships:
         shipCode = ship.get("shipCode")
         name = ship.get("name")
@@ -962,9 +1018,13 @@ def getSailDates(shipCode):
     }
 
 
-    response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
-    voyages = response.json().get("payload").get("voyages")
-    
+    try:
+        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    voyages = response.json().get("payload").get("voyages")    
     sailDates = []
     for voyage in voyages:
         sailDate = voyage.get("sailDate")
@@ -993,7 +1053,11 @@ def getProducts(shipCode, sailDate):
         'availableForSale': 'all',
     }
 
-    response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
+    try:
+        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
 
     products = response.json().get("payload").get("products")
     for product in products:
@@ -1037,10 +1101,75 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
         # 'TE': 'trailers',
     }
     
-    response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
+    try:
+        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
     for booking in response.json().get("payload"):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
 
+# Get all available promotions for a sailing
+def getAllPromotions(access_token, accountId, session, ship, startDate, currency):
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'vds-id': accountId,
+    }
+
+    base_url = 'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/promotions/list'
+    sailingId = ship + startDate
+
+    def fetchPromos(page):
+        resp = session.get(base_url, params={'sailingId': sailingId, 'page': page, 'currencyIso': currency}, headers=headers)
+        return resp.json().get("payload") or [] if resp.status_code == 200 else []
+
+    all_promos = fetchPromos('homepage')
+    if not all_promos:
+        return
+
+    banner_by_id = {}
+    for promo in fetchPromos('pdp'):
+        for template in promo.get("templates", []):
+            if template.get("type") == "SITEWIDE_BANNER":
+                banner_by_id[promo.get("id")] = template
+                break
+
+    seenIds = set()
+    for promo in all_promos:
+        promoId = promo.get("id")
+        if promoId in seenIds:
+            continue
+        seenIds.add(promoId)
+
+        promoStart = promo.get("startDate", "")[:10]
+        promoEnd = promo.get("endDate", "")[:10]
+        dateRange = f"(Valid {promoStart} to {promoEnd})"
+
+        banner = banner_by_id.get(promoId)
+        if banner:
+            promoLine = f"[PROMO] {banner.get('heading3', '')} {banner.get('heading4', '')} - {banner.get('heading1', '')} {dateRange}"
+        else:
+            template = next((t for t in promo.get("templates", []) if t.get("type") == "HOME_HERO_LOCKUP"), None)
+            if not template:
+                continue
+
+            description = ""
+            lockupMedia = template.get("lockupMedia")
+            if lockupMedia and lockupMedia.get("source"):
+                filename = lockupMedia["source"].get("path", "").split("/")[-1]
+                match = re.search(r'lockup-(.+?)_[A-Z]{2}\.', filename)
+                if match:
+                    description = match.group(1).replace("-", " ").upper()
+
+            categoryCode = template.get("categoryCode", "")
+            promoLine = f"[PROMO] {description or promoId}"
+            if categoryCode:
+                promoLine += f" ({categoryCode})"
+            promoLine += f" {dateRange}"
+
+        print(YELLOW + promoLine + RESET)
 
 def GetCruisePriceFromAPI(currency, packageCode, sailDate, bookingType, numAdults, numChildren):
 
@@ -1200,11 +1329,15 @@ def GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sai
     'currencyIso': currency,
     }
 
-    response = requests.get(
-        f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/obc/reservations/{reservationId}',
-        params=params,
-        headers=headers,
-    )
+    try:
+        response = requests.get(
+            f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/obc/reservations/{reservationId}',
+            params=params,
+            headers=headers,
+        )
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
 
     payload = response.json().get("payload")
     if not payload:
