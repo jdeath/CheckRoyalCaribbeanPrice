@@ -132,7 +132,7 @@ If you only want to check cruise addons (drink packages, excursions, etc) and do
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
-    cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
+    cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
 To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a loyality special, but will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
