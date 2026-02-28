@@ -1,3 +1,4 @@
-accountInfo: # Optional, Only needed if you want to check your own cruise addons
-  - username: "user@gmail.com" # Your Royal Caribbean User Name
-    password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
+accountInfo: 
+  - username: "user@gmail.com"
+    password: "pa$$word"
+    cruiseLine: "royal"
