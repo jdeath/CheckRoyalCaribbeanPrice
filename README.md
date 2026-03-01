@@ -248,7 +248,7 @@ To find the `prefix` and `product` values for items you want to watch:
    `https://www.celebritycruises.com/account/cruise-planner/category/pt_internet/product/33F1?bookingId=&shipCode=&sailDate=`
 3. The `prefix` is the path following /category/ (`pt_internet` in this case)
 4. The `product` is the value following /product/ (`33F1` in this case)
-5. Use the advertised price in the cruise panner. Eg. Doo not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
+5. Use the advertised price in the cruise panner. Eg. Do not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
 ### Example Output
 ```
 [WATCH] Deluxe Beverage Package - John (1234): Book! Deluxe Beverage Package Price is lower: 75.00 than 85.00
@@ -304,7 +304,9 @@ If any of the prices are lower, it will send a notification if you set up appris
 1. Home Assistant: Use directions in my [repo](https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck)
 1. Docker: See directions in docker section above
 1. Windows: Use windows task schedular
-    1. Create a basic task. Select a daily trigger, suggest a little before you wake up
+    1. Type "task schedular" in Windows search bar to bring up program (icon is a clock with 12-3 o'clock shadded)
+    1. Create a basic task (Action Menu->Create Basic Task)
+    1. Select a daily trigger, suggest a little before you wake up
     1. Action, select "Start a Program"
     1. In "Program/script" Select the CheckRoyalCaribbeanPrice.exe file you download from here. Make sure the config.yaml is in same directory as .exe (if running python script, should be able to put python.exe the full path of this the script location)
     1. In "Start in (optional)" enter the directory of the .exe/.yaml (you can copy the "Program/script" field, paste it, and remove the CheckRoyalCaribbeanPrice.exe)
