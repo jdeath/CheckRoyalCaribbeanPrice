@@ -111,7 +111,7 @@ accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password 
   - username: "user@gmail.com" # Your Celebrity User Name
-    password: "pa$$word" # Your Celebrity Password (ensure no % in password)
+    password: "pa$$word" # Your Celebrity Password
     cruiseLine: "celebrity" # Must indicate if celebrity
 displayCruisePrices: true # Optional, this will display current price for your booked cruises
 minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
