@@ -109,7 +109,7 @@ Create your `config.yaml` file with the below information. Feel free to copy the
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
-    password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
+    password: "pa$$word" # Your Royal Caribbean Password 
   - username: "user@gmail.com" # Your Celebrity User Name
     password: "pa$$word" # Your Celebrity Password (ensure no % in password)
     cruiseLine: "celebrity" # Must indicate if celebrity
@@ -131,7 +131,7 @@ If you only want to check cruise addons (drink packages, excursions, etc) and do
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
-    password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
+    password: "pa$$word" # Your Royal Caribbean Password
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
@@ -139,7 +139,7 @@ To display current cabin prices for your **booked** cruise(s), set displayCruise
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
-    password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
+    password: "pa$$word" # Your Royal Caribbean Password
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 ```
@@ -147,7 +147,7 @@ If you want to compare cabin prices for your **booked** cruise(s), include the f
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
-    password: "pa$$word" # Your Royal Caribbean Password (ensure no % in password)
+    password: "pa$$word" # Your Royal Caribbean Password 
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 reservationPricePaid:
@@ -347,7 +347,7 @@ Thanks to contributors:
 - Frommers.com for featuring in an [article](https://www.frommers.com/tips/cruise/how-to-save-hundreds-on-royal-caribbeans-packages-and-excursions/)
   
 # Issues
-1. Will not work if your password has an % in it. Change your password (replace % with ! for instance). Working on a fix. PRs welcome
+1. ~~Will not work if your password has an % in it. Change your password (replace % with ! for instance).~~ Fixed in > 3.0.1
 1. OBC will display in USD even if cruise being checked in a different currency. Not fixable as this is how OBC is provided
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
 1. Double check you are cancelling the item for the correct cruise
