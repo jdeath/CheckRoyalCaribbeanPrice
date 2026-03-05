@@ -27,7 +27,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise bs4`
 
-## Install (Windows 10/11 Only)
+## Install (Windows 10/11 Only) - Python Not Required!
 1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
     -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
     -   Only if you want to build a binary yourself, you can run `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
