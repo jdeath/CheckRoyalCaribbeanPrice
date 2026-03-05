@@ -3,7 +3,7 @@ import yaml
 from apprise import Apprise
 from datetime import datetime
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 import re
 import base64
 import json
@@ -199,7 +199,17 @@ def login(username,password,session,cruiseLineName):
     }
     
     
-    data = f'grant_type=password&username={username}&password={password}&scope=openid+profile+email+vdsid'
+    # Issue 13: Use urlencode to handle passwords with '%' (replaces with %25)
+    login_parms = {
+        'grant_type': 'password',
+        'username': username,
+        'password': password,
+        'scope': 'openid profile email vdsid'
+    }
+    data = urlencode(login_parms)
+    # Uncomment this line for debug print of the data string to send for login
+#    print(f'Using login URL string {data}')
+
     
     try:
         response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
