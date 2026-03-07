@@ -4,14 +4,12 @@ import argparse
 
 dateDisplayFormat = "%x"
 
-##########
-# Get Ships
-
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='USD', help='currency (default: USD)')
     parser.add_argument('-s', '--ship', type=str, help='Ship')
     parser.add_argument('-d', '--saildate', type=str, help='Sail Date (mm/dd/yy format)')
+    parser.add_argument('-o', '--sortorder', choices=['price', 'alpha', 'default'], default="default", help='Set sort order')
     args = parser.parse_args()
     
     currency = args.currency
@@ -90,8 +88,8 @@ def main():
             print("")
             print("These are public prices, sale prices for you could be less")
             print("")
-            getAllProducts(shipcode,sailing['date'],currency)
-            getAllProductsGraph(shipcode,sailing['date'],currency)
+            getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
+            getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder)
     else:
         print("Invalid ship selection")
 
@@ -218,7 +216,7 @@ def getProducts(shipCode, sailDate):
         print(f"{productTitle}  {adultPriceString}")
 
 #############################
-def getAllProducts(shipCode,sailDate,currency):
+def getAllProducts(shipCode,sailDate,currency, sortorder):
     productMap = {}
     productMap["beverage"] = "Beverage Packages"
     productMap["shorex"] = "Shore Excursions"
@@ -299,14 +297,22 @@ def getAllProducts(shipCode,sailDate,currency):
         if products is None:
             continue
      
-        for product in products:
+        # Sort products based on sort order argument
+        if sortorder == 'alpha':
+            sorted_products = sorted(products, key=lambda product: product['title'])
+        elif sortorder == 'price':
+            sorted_products = sorted(products, key=lambda product: product['lowestAdultPrice'])
+        else:
+            sorted_products = products
+
+        for product in sorted_products:
             title = product.get("title")
             price = product.get("lowestAdultPrice")
             if price == 0:
                 continue
                            
-            printString = f"\t{title}:  {price} {currency}"
-            
+            printString = f"\t{title}:  {price:.2f} {currency}"
+             
             if product.get("salesUnit") in [ 'PER_DAY' ]:
                 printString =  printString + " per day" 
             
@@ -321,7 +327,7 @@ def getAllProducts(shipCode,sailDate,currency):
             
             print(printString)
 
-def getAllProductsGraph(shipCode,sailDate,currency):
+def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
     productMap = {}
     #productMap["beverage"] = "Beverage Packages"
     #productMap["shorex"] = "Shore Excursions"
@@ -411,9 +417,17 @@ def getAllProductsGraph(shipCode,sailDate,currency):
         if products is None:
             continue
      
-        for product in products:
+        # Sort products based on sort order argument
+        if sortorder == 'alpha':
+            sorted_products = sorted(products, key=lambda product: product['title'])
+        elif sortorder == 'price':
+            sorted_products = sorted(products, key=lambda product: float(product['price'][0].get("formattedBasePrice").lstrip("$").replace(',','')))
+        else:
+            sorted_products = products
+
+        for product in sorted_products:
             title = product.get("title")
-            price = product.get("price")[0].get("formattedBasePrice")
+            price = product.get("price")[0].get("formattedBasePrice").lstrip("$")
             if price == 0:
                 continue
 
@@ -432,6 +446,6 @@ def getAllProductsGraph(shipCode,sailDate,currency):
             #    printString = printString + f" - {promoName}"
             
             print(printString)
-            
+             
 if __name__ == "__main__":
     main()
