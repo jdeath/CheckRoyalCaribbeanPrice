@@ -133,14 +133,15 @@ def main(config_path=None):
                 print(f"\nChecking {friendlyCruiseLine} for user {username}")
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
-                getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos)
+                loyaltyNumber = getLoyalty(access_token,accountId,session)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,loyaltyNumber)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
                     cruiseURL = cruises['cruiseURL'] 
                     paidPrice = float(cruises['paidPrice'])
-                    get_cruise_price(cruiseURL, paidPrice, apobj, False, None)
+                    loyaltyNumber = cruises.get("loyaltyNumber",None)
+                    get_cruise_price(cruiseURL, paidPrice, apobj, False, None,loyaltyNumber)
             
 
 def string_to_float(s: str) -> float:
@@ -477,6 +478,7 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
 
 def getLoyalty(access_token,accountId,session):
 
+    loyaltyNumber = None
     headers = {
         'Access-Token': access_token,
         'AppKey': appKey,
@@ -496,7 +498,8 @@ def getLoyalty(access_token,accountId,session):
     cAndASharedPoints = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints")
    
     if cAndANumber is not None and cAndASharedPoints is not None and cAndASharedPoints > 0:
-        print(f"\tC&A: {cAndANumber} {cAndALevel} - {cAndASharedPoints} Shared Points ({cAndAPoints} Individual Points)")  
+        print(f"\tC&A: {cAndANumber} {cAndALevel} - {cAndASharedPoints} Shared Points ({cAndAPoints} Individual Points)")
+        loyaltyNumber = cAndANumber
     
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
@@ -509,13 +512,17 @@ def getLoyalty(access_token,accountId,session):
         captainsClubLoyaltyIndividualPoints = loyalty.get("captainsClubLoyaltyIndividualPoints")
         captainsClubLoyaltyRelationshipPoints = loyalty.get("captainsClubLoyaltyRelationshipPoints")
         print(f"\tCaptain's Club Number: {captainsClubId} {captainsClubLoyaltyTier} TIER ({captainsClubLoyaltyRelationshipPoints} Shared Points, {captainsClubLoyaltyIndividualPoints} Individual Points)")
+        loyaltyNumber = captainsClubId
+        print("Using Captains Club Id To Check Cruise Prices")
 
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
     if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos):
+    return loyaltyNumber
+    
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,loyaltyNumber):
 
     headers = {
         'Access-Token': access_token,
@@ -555,7 +562,6 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
         stateroomType = booking.get("stateroomType")
         stateroomNumber = booking.get("stateroomNumber")
-        
         stateroomTypeName = "NONE"
         
         if stateroomType == "I":
@@ -628,7 +634,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
             
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate)
+                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber)
             else:
                 print(YELLOW + "\t\tCannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -766,8 +772,8 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
-def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate):
-    
+def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber):
+
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'en-US,en;q=0.9',
@@ -813,8 +819,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate):
     packageCode = params.get("packageCode")[0]
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
-    
-    
+        
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
     
@@ -826,6 +831,9 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate):
             url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
     
     try:
+        if loyaltyNumber is not None:
+            url += f"&r0l={loyaltyNumber}"
+            
         response = requests.get(url,headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
