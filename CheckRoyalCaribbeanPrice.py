@@ -201,7 +201,7 @@ def getFinalPaymentDate(numberOfNights, sailDate):
     elif numberOfNights < 15:
         finalPaymentDeadline = 90
     else:
-        finalPaymentDeadline = 12
+        finalPaymentDeadline = 120
     
     return dateOfSailing - timedelta(days=finalPaymentDeadline)
    
