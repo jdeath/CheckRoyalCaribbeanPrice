@@ -158,7 +158,8 @@ If you only want to check cruise prices you have **not** booked yet and do not w
 ```yaml
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
-    paidPrice: "3833.74" 
+    paidPrice: "3833.74"
+    loyaltyNumber: "1234567" # Optional, will use your C&A / CaptainsClub number to check prices
 ```
 
 If you would like to assign names to cruise reservation numbers to more easily correlate which cruise is being displayed populate the following section:
@@ -207,6 +208,7 @@ showPromos: true
 1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser.
 1. If it is lower than you paid for and before final payment date call your Travel Agent or Royal Caribbean (if you booked direct) and they should (reports of pushback lately) reduce the price. Be careful, you will lose the onboard credit you got in your first booking, if the new booking does not still offer it! The code will print the OBC offered for the new cruise, but will not subtract it because OBC only given in USD
 1. Update the pricePaid field to the new price. Remove the `$` ,`£` and any `,` (or `.` if non-USD currency for thousands designator)
+1. Optional: Add your loyalty number to the loyaltyNumber field. (Not sure if it actually helps)
 1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. The code will print the cheapest interior, outside view, balcony or suite available. These are probably GTY for each class and not the exact type of room you wanted. This is all the public cruise price API returns.
 1. If you only want to check the cruise prices with URL you provide, you do not need to have your `accountInfo` and/or `apprise` in your config file, as they are not necessary.
 1. The latest version checks availabily only for the class of room you have (not a specific room number). This new way is better.
