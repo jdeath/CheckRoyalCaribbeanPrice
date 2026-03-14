@@ -1,7 +1,7 @@
 import requests
 import yaml
 from apprise import Apprise
-from datetime import datetime
+from datetime import datetime,date, timedelta
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs, quote
 import re
@@ -140,7 +140,7 @@ def main(config_path=None):
             for cruises in data['cruises']:
                     cruiseURL = cruises['cruiseURL'] 
                     paidPrice = float(cruises['paidPrice'])
-                    get_cruise_price(cruiseURL, paidPrice, apobj, False)
+                    get_cruise_price(cruiseURL, paidPrice, apobj, False, None)
             
 
 def string_to_float(s: str) -> float:
@@ -190,7 +190,21 @@ def days_between(d1, d2):
     dt1 = datetime.strptime(d1, "%Y%m%d")
     dt2 = datetime.strptime(d2, "%Y%m%d")
     return (dt2 - dt1).days
+
+def getFinalPaymentDate(numberOfNights, sailDate):
     
+    dateOfSailing = date(int(sailDate[0:4]), int(sailDate[4:6]), int(sailDate[6:8]))
+
+    # From Royal Caribbean FAQ
+    if numberOfNights < 5:
+        finalPaymentDeadline = 75
+    elif numberOfNights < 15:
+        finalPaymentDeadline = 90
+    else:
+        finalPaymentDeadline = 12
+    
+    return dateOfSailing - timedelta(days=finalPaymentDeadline)
+   
 def login(username,password,session,cruiseLineName):
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -584,8 +598,12 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         print(f"\n{reservationDisplay}: {sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
 
+        finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
+        finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
+        
         if booking.get("balanceDue") is True:
-            print(YELLOW + f"{reservationDisplay}: Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')}" + RESET)
+            print(YELLOW + f"{reservationDisplay}: Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')} due {finalPaymentDateDisplay}" + RESET)
+            
             
         # testing shows OBC is returned for each passenger, but really only for the stateroom
         GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName,bookingCurrency)
@@ -610,7 +628,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
             
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, 0)
+                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate)
             else:
                 print(YELLOW + "\t\tCannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -748,7 +766,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
-def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
+def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate):
     
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -820,33 +838,29 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     # These are the three types of webpages that occur if your room is available
     roomIsFound = re.search("GuestInfoPanel_heading|RoomLocationPanel_title|AddOnsPanel_heading", response.text) 
 
-    # Extract Number of Nights from URL
-    if params.get("groupId") is not None:
-        groupID = params.get("groupId")[0]
-        part = groupID[2:4]
+    # If final payment date is none, get info from URL
+    if finalPaymentDate is None:
+        # Extract Number of Nights from URL
+        if params.get("groupId") is not None:
+            groupID = params.get("groupId")[0]
+            part = groupID[2:4]
     
-    packageCode = None
-    if params.get("packageCode") is not None:
-        packageCode = params.get("packageCode")[0]
-        part = packageCode[2:4]
-    
-    numbers_only = "".join(c for c in part if c.isdigit())
-    numberOfNights = int(numbers_only)
+        packageCode = None
+        if params.get("packageCode") is not None:
+            packageCode = params.get("packageCode")[0]
+            part = packageCode[2:4]
         
-    daysBeforeCruise = days_between(datetime.today().isoformat().replace('-', '')[0:8],sailDate.replace('-', ''))
-    finalPaymentDeadline = 0
-    
-    if numberOfNights < 5:
-        finalPaymentDeadline = 75
-    elif numberOfNights < 15:
-        finalPaymentDeadline = 90
-    else:
-        finalPaymentDeadline = 120
+        numbers_only = "".join(c for c in part if c.isdigit())
+        numberOfNights = int(numbers_only)
+        finalPaymentDate = getFinalPaymentDate(numberOfNights,sailDate.replace('-', ''))
+        
+    finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
+    pastFinalPaymentDate = date.today() > finalPaymentDate
     
     if not roomIsFound:
         textString = f"{preString} No Longer Available To Book"
-        if automaticURL and (daysBeforeCruise < finalPaymentDeadline):
-            textString += " and Past Final Payment Date"
+        if automaticURL and pastFinalPaymentDate:
+            textString += " and Past Final Payment Date of " + finalPaymentDateDisplay
             
         print(YELLOW + textString + RESET)
         
@@ -895,7 +909,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
     if price < paidPrice: 
         saving = round(paidPrice - price, 2)
         # Notify if should rebook
-        if automaticURL and (daysBeforeCruise >= finalPaymentDeadline):
+        if automaticURL and not pastFinalPaymentDate:
             textString = f"Rebook! {preString} New price of {price} {currencyCode}"
             if obcValue > 0:
                 textString += f" not including {obcString} OBC"
@@ -909,8 +923,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,iteration = 0):
                 apobj.notify(body=textString, title='Cruise Price Alert')
 
         # Don't notify if rebooking not possible
-        if  automaticURL and (daysBeforeCruise < finalPaymentDeadline):
-            textString = f"Past Final Payment Date {preString} New price of {price} {currencyCode}"
+        if  automaticURL and pastFinalPaymentDate:
+            textString = f"Past Final Payment Date of {finalPaymentDateDisplay} : {preString} New price of {price} {currencyCode}"
             if obcValue > 0:
                 textString += f" not including {obcString} OBC"
             textString += f" is lower than {paidPrice}"
