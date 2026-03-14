@@ -572,6 +572,8 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             stateroomTypeName = "BALCONY"
         if stateroomType == "D":
             stateroomTypeName = "DELUXE"
+        if stateroomType == "C":
+            stateroomTypeName = "CONCIERGE"    
             
         passengerNames = ""
         numberOfPassengers = 0
@@ -622,7 +624,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         if displayCruisePrices:
         
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
-       
+            
             if stateroomNumber == "GTY": #GTY Room needs a different URL
                 cruisePriceURL = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
             else:
