@@ -119,6 +119,12 @@ def main(config_path=None):
             for accountInfo in data['accountInfo']:
                 username = accountInfo['username']
                 password = accountInfo['password']
+                state = accountInfo.get("state",None)
+                senior = 'y' if accountInfo.get("senior",False) else 'n' 
+                military = 'y' if accountInfo.get("military",False) else 'n'
+                police = 'y' if accountInfo.get("police",False) else 'n'
+                discountFlags = [username, state, senior, military, police]
+                
                 if 'cruiseLine' in accountInfo:
                    if accountInfo['cruiseLine'].lower().startswith("c"):
                     cruiseLineName = "celebritycruises"
@@ -133,15 +139,14 @@ def main(config_path=None):
                 print(f"\nChecking {friendlyCruiseLine} for user {username}")
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
-                loyaltyNumber = getLoyalty(access_token,accountId,session)
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,loyaltyNumber)
+                getLoyalty(access_token,accountId,session)
+                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
     
         if 'cruises' in data:
             for cruises in data['cruises']:
                     cruiseURL = cruises['cruiseURL'] 
                     paidPrice = float(cruises['paidPrice'])
-                    loyaltyNumber = cruises.get("loyaltyNumber",None)
-                    get_cruise_price(cruiseURL, paidPrice, apobj, False, None,loyaltyNumber)
+                    get_cruise_price(cruiseURL, paidPrice, apobj, False, None,username)
             
 
 def string_to_float(s: str) -> float:
@@ -525,7 +530,7 @@ def getLoyalty(access_token,accountId,session):
 
     return loyaltyNumber
     
-def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,loyaltyNumber):
+def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags):
 
     headers = {
         'Access-Token': access_token,
@@ -644,13 +649,15 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         # Print Current Prices
         if displayCruisePrices:
-        
+            
+            [username, state, senior, military, police] = discountFlags
+    
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
             
             if stateroomNumber == "GTY": #GTY Room needs a different URL
-                cruisePriceURL = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
+                cruisePriceURL = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r={police}&r0s=n&r0q={military}&r0t={senior}&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
             else:
-                cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+                cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r={police}&r0s=n&r0q={military}&r0t={senior}&r0D=y"
                 
             paidPrice = None
             #print(cruisePriceURL)
@@ -658,7 +665,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
             
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber,whitespace)
+                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, username, state, whitespace)
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -796,7 +803,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
-def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber,whitespace=""):
+def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,username=None,state=None,whitespace=""):
 
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -843,21 +850,60 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
     packageCode = params.get("packageCode")[0]
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
+    
+    usedDiscounts = ""
+    # Add in Discount codes
+    
+    cAndANumber = None
+    if not automaticURL:
+        cAndANumber = params.get("r0l",[None])[0]
+        username = params.get("r0H",[None])[0]
+        state = params.get("r0k",[None])[0]
+    
+    senior = params.get("r0t",["n"])[0]
+    military = params.get("r0q",["n"])[0]
+    police1 = params.get("r0r",["n"])[0]
+    police2 = params.get("r0s",["n"])[0]
+    if police1 == "y" or police2 == "y":
+        police = "y"
+    else:
+        police = "n"
         
+    if cAndANumber is not None or username is not None:
+       usedDiscounts += "Loyalty, "
+    if state is not None:
+       usedDiscounts += "Residency, " 
+    if senior == "y":
+       usedDiscounts += "Senior, " 
+    if police == "y":
+       usedDiscounts += "Police, " 
+    if military == "y":
+       usedDiscounts += "Military, " 
+    if usedDiscounts != "":
+       preString = preString + " (" + usedDiscounts[:-2] + " Discount)"
+    
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
     
     # Remake the URL in a format that works to check the class of room. Should avoid issues
     if not automaticURL:
         if params.get("r0j") is None: # This is for a GTY Room, as r0j is the room number normally
-            url = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
+            url = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r={police}&r0s={police}&r0q={military}&r0t={senior}&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
         else: # This is for a non GTY Room
-            url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0D=y"
+            url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r={police}&r0s={police}&r0q={military}&r0t={senior}&r0D=y"
     
+    # Do this for all URLS
+    if username is not None:
+        data_bytes = username.encode('utf-8')
+        encoded_bytes = base64.urlsafe_b64encode(data_bytes)
+        encoded_string = encoded_bytes.decode('utf-8')
+        url += f"&r0H={encoded_string}"
+    if cAndANumber is not None:
+         += f"&r01={cAndANumber}"
+    if state is not None:
+        url += f"&r0k={state}"
+        
     try:
-        if loyaltyNumber is not None:
-            url += f"&r0l={loyaltyNumber}"
-            
         response = requests.get(url,headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
