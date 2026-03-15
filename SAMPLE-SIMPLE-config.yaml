@@ -1,3 +1,4 @@
+# change "royal" to "celebrity" if needed
 accountInfo: 
   - username: "user@gmail.com"
     password: "pa$$word"
