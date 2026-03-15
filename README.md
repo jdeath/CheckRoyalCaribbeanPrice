@@ -32,9 +32,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
     -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
     -   Only if you want to build a binary yourself, you can run `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
 2. Make the config.yaml file as described below in the Edit Config File section
-   -   Note: Code can download below simple config file for you and name it correctly
-   -   Note: if you make a text file in windows with New->Text file , it may look like it is named `config.yaml`, but it is actually named `config.yaml.txt` . In the windows file browser, go to View->Show and make sure "File Name Extensions" is checked. Then remove the .txt from the end of the file so it is actually named `config.yaml`.
-   -   You can also download this barebones [config file](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/SAMPLE-SIMPLE-config.yaml) , rename it `config.yaml` , edit your username and password.
+   -   Note: If no config file is found, code can download a simple config file and name it correctly. Edit this file
 
 ## Install (iOS / iPhone - May work for Android too)
 This will run a stripped down version to work on the free Python iPhone app. As stripped down, it only supports excursion/drink packages etc. It does not support cruise fare price checks. It does not support apprise notifications, so you will have to watch the log to see any price drops. You need to edit the python file directly (directions below) because it does not use the config.yaml file. But allows you to check prices on the go. Works on the ship even *without* the internet package!
