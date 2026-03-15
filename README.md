@@ -7,10 +7,10 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!) and estimated final payment date
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
-- ✅ Can automatically check **cabin prices** for any cruise you booked, using loyalty discounts
+- ✅ Can automatically check **cabin prices** for any cruise you booked, using loyalty/senior/resident discounts
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
-- ✅ Can also watchlist **cabin prices** with just a booking URL (no login required)  
-- ✅ Shows active sitewide promotions (flash sales, percentage-off deals) for each sailing
+- ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, supports discounts)  
+- ✅ Can display active sitewide promotions (flash sales, percentage-off deals) for each sailing
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, no setup required
