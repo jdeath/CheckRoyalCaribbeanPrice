@@ -7,7 +7,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Shows the payment balance Royal's backend system thinks they are owed (does not include TA's take!) and estimated final payment date
 - ✅ Supports multiple Royal and Celebrity accounts or linked cruises
 - ✅ Handles all currencies (checks each item based on the currency used to purchase it)
-- ✅ Can automatically check **cabin prices** for any cruise you booked
+- ✅ Can automatically check **cabin prices** for any cruise you booked, using loyalty discounts
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
 - ✅ Can also watchlist **cabin prices** with just a booking URL (no login required)  
 - ✅ Shows active sitewide promotions (flash sales, percentage-off deals) for each sailing
@@ -141,7 +141,7 @@ accountInfo:
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  The script will not tell you if there is a loyality special, but will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality discounts automatically and senior/fire/police discounts if set in your configuration. It will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
