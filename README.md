@@ -109,11 +109,15 @@ Create your `config.yaml` file with the below information. Feel free to copy the
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
-    password: "pa$$word" # Your Royal Caribbean Password 
+    password: "pa$$word" # Your Royal Caribbean Password
+    state: "CA" # Optional, use your state/province for cabin prices. 
+    senior: false # Optional, use senior discount for cabin prices. 
+    military: false # Optional, use military discount for cabin prices. 
+    police: false # Optional, use police discount for cabin prices.    
   - username: "user@gmail.com" # Your Celebrity User Name
     password: "pa$$word" # Your Celebrity Password
     cruiseLine: "celebrity" # Must indicate if celebrity
-displayCruisePrices: true # Optional, this will display current price for your booked cruises
+displayCruisePrices: true # Optional, this will display current price for your booked cruises. Use above discount codes.
 minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
 notifyOnError: false # Optional, send Apprise alert if the script fails (default: false)
 cruises: # Optional, this allows you to watch the price of a cruise you have not booked yet
@@ -201,7 +205,8 @@ showPromos: true
 1. If you want to check the cabin price of a cruise you have booked, see above. This section is just for cruises you have *not* booked yet.
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you want, with the same number of adults and kids
-1. Select a cruise and select your room type/room and complete until they ask for your personal information.
+1. Select a cruise and select your room type/room. Be sure to enter your C&A number/email and any senior/military/police discounts in the "Apply Promo Code and Exclusive Rates" link to the left
+1. Complete until they ask for your personal/guest information
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
 1. Put the price you paid in the paidPrice field. Remove the `$` and any `,` . Subtract any OBC you recieved from Royal or your TA.
