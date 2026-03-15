@@ -123,7 +123,6 @@ def main(config_path=None):
                 senior = 'y' if accountInfo.get("senior",False) else 'n' 
                 military = 'y' if accountInfo.get("military",False) else 'n'
                 police = 'y' if accountInfo.get("police",False) else 'n'
-                discountFlags = [username, state, senior, military, police]
                 
                 if 'cruiseLine' in accountInfo:
                    if accountInfo['cruiseLine'].lower().startswith("c"):
@@ -139,7 +138,12 @@ def main(config_path=None):
                 print(f"\nChecking {friendlyCruiseLine} for user {username}")
                 session = requests.session()
                 access_token,accountId,session = login(username,password,session,cruiseLineName)
-                getLoyalty(access_token,accountId,session)
+                #getLoyalty(access_token,accountId,session)
+                stateFromProfile = getProfile(access_token,accountId,session)
+                if state is None:
+                    state = stateFromProfile
+                    
+                discountFlags = [username, state, senior, military, police]
                 getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
     
         if 'cruises' in data:
@@ -180,8 +184,7 @@ def string_to_float(s: str) -> float:
 
     return float(s)
 
-
-def aboveTwelveOnSailDate(birthDate, sailDate):
+def aboveAgeOnSailDate(birthDate, sailDate,ageThreshold):
     dt1 = datetime.strptime(birthDate, "%Y%m%d")
     dt2 = datetime.strptime(sailDate, "%Y%m%d")
     
@@ -190,7 +193,7 @@ def aboveTwelveOnSailDate(birthDate, sailDate):
     if (dt2.month, dt2.day) < (dt1.month, dt1.day):
         age -= 1
     
-    return age >= 12
+    return age >= ageThreshold
 
 def days_between(d1, d2):
     dt1 = datetime.strptime(d1, "%Y%m%d")
@@ -529,7 +532,61 @@ def getLoyalty(access_token,accountId,session):
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
     return loyaltyNumber
+
+def getProfile(access_token,accountId,session):
+
+    loyaltyNumber = None
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'account-id': accountId,
+    }
+
+    try:
+        response = session.get(f"https://aws-prd.api.rccl.com/en/royal/web/v3/guestAccounts/{accountId}", headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    state = None
+    payload = response.json().get("payload")
+    contactInfo = payload.get("contactInformation",None)
+    if contactInfo is not None:
+        address = contactInfo.get("address",None)
+        if contactInfo is not None:
+            state = address.get("state",None)    
     
+    loyalty = payload.get("loyaltyInformation")
+    cAndANumber = loyalty.get("crownAndAnchorId")
+    cAndALevel = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
+    cAndAPoints = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints")
+    cAndASharedPoints = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints")
+   
+    if cAndANumber is not None and cAndASharedPoints is not None and cAndASharedPoints > 0:
+        print(f"\tC&A: {cAndANumber} {cAndALevel} - {cAndASharedPoints} Shared Points ({cAndAPoints} Individual Points)")
+        loyaltyNumber = cAndANumber
+    
+    clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
+    if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
+        clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
+        print(f"\tCasino Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Points")
+
+    captainsClubId = loyalty.get("captainsClubId")
+    if captainsClubId is not None:
+        captainsClubLoyaltyTier = loyalty.get("captainsClubLoyaltyTier")
+        captainsClubLoyaltyIndividualPoints = loyalty.get("captainsClubLoyaltyIndividualPoints")
+        captainsClubLoyaltyRelationshipPoints = loyalty.get("captainsClubLoyaltyRelationshipPoints")
+        print(f"\tCaptain's Club Number: {captainsClubId} {captainsClubLoyaltyTier} TIER ({captainsClubLoyaltyRelationshipPoints} Shared Points, {captainsClubLoyaltyIndividualPoints} Individual Points)")
+        loyaltyNumber = captainsClubId
+        print("Using Captains Club Id To Check Cruise Prices")
+
+    celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
+    if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
+        clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
+        print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
+
+    return state
+
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags):
 
     headers = {
@@ -587,7 +644,10 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         numberOfPassengers = 0
         numberOfChildren = 0
         numberOfAdults = 0
+        haveASenior = False
+        
         checkinString = ""
+        
         for guest in guests:
             stateroomCategoryCode = guest.get("stateroomCategoryCode")
             stateroomSubtype = booking.get("stateroomSubtype")
@@ -602,8 +662,12 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
             
-            isAdult = aboveTwelveOnSailDate(birthDate, sailDate)
+            isAdult = aboveAgeOnSailDate(birthDate, sailDate, 12)
         
+            # Find any seniors to check for cruise prices
+            if not haveASenior:
+                haveASenior = aboveAgeOnSailDate(birthDate, sailDate, 55)
+     
             if isAdult:
                 numberOfAdults = numberOfAdults + 1
             else:
@@ -650,9 +714,12 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         # Print Current Prices
         if displayCruisePrices:
-            
-            [username, state, senior, military, police] = discountFlags
     
+            [username, state, senior, military, police] = discountFlags
+            # Override if booking says will have a senior
+            if senior == "n" and haveASenior:
+                senior = "y"
+                
             urlSailDate = f"{sailDate[0:4]}-{sailDate[4:6]}-{sailDate[6:8]}"
             
             if stateroomNumber == "GTY": #GTY Room needs a different URL
