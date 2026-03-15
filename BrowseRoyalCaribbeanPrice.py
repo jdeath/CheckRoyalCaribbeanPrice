@@ -88,7 +88,8 @@ def main():
             print("")
             print("These are public prices, sale prices for you could be less")
             print("")
-            getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
+            #This API appears depreciated
+            #getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
             getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder)
     else:
         print("Invalid ship selection")
@@ -329,17 +330,17 @@ def getAllProducts(shipCode,sailDate,currency, sortorder):
 
 def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
     productMap = {}
-    #productMap["beverage"] = "Beverage Packages"
-    #productMap["shorex"] = "Shore Excursions"
-    #productMap["dining"] = "Dining Packages"
-    #productMap["internet"] = "Internet Packages"
-    #productMap["key"] = "VIP Packages"
-    #productMap["spa"] = "Spa and Wellness"
-    #productMap["onboardactivities"] = "Onboard Activities"
-    #productMap["photoPackage"] = "Photo"
-    #productMap["arcade"] = "Arcade"
-    #productMap["gifts"] = "Gifts and Gear"
-    #productMap["fitness"] = "Fitness"
+    productMap["beverage"] = "Beverage Packages"
+    productMap["shorex"] = "Shore Excursions"
+    productMap["dining"] = "Dining Packages"
+    productMap["internet"] = "Internet Packages"
+    productMap["key"] = "VIP Packages"
+    productMap["spa"] = "Spa and Wellness"
+    productMap["onboardactivities"] = "Onboard Activities"
+    productMap["photoPackage"] = "Photo"
+    productMap["arcade"] = "Arcade"
+    productMap["gifts"] = "Gifts and Gear"
+    productMap["fitness"] = "Fitness"
     
     # Graph Call needed to get all Pre/Post items
     # Use other API call for all others
@@ -421,13 +422,25 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
         if sortorder == 'alpha':
             sorted_products = sorted(products, key=lambda product: product['title'])
         elif sortorder == 'price':
-            sorted_products = sorted(products, key=lambda product: float(product['price'][0].get("formattedBasePrice").lstrip("$").replace(',','')))
+            sorted_products = sorted(products, key=lambda product: float(product['price'][0].get("formattedPromoPrice").lstrip("$").replace(',','')))
         else:
             sorted_products = products
 
         for product in sorted_products:
             title = product.get("title")
-            price = product.get("price")[0].get("formattedBasePrice").lstrip("$")
+            if product.get("price") == []:
+                continue
+                
+            priceStruct = product.get("price")[0]
+            
+            price = priceStruct.get("formattedPromoPrice")
+            if price is None:
+                price = priceStruct.get("formattedBasePrice")
+            
+            if price is None:
+                continue
+                
+            price = price.lstrip("$")
             if price == 0:
                 continue
 
