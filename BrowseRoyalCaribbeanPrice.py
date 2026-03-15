@@ -434,7 +434,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 
             priceStruct = product.get("price")[0]
             
-            price = priceStruct.get("formattedPromoPrice")
+            price = priceStruct.get("formattedPromotionalPrice")
             if price is None:
                 price = priceStruct.get("formattedBasePrice")
             
