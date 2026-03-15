@@ -110,7 +110,7 @@ Create your `config.yaml` file with the below information. Feel free to copy the
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
-    state: "CA" # Optional, use your state/province for cabin prices. 
+    state: "CA" # Optional, use your state/province for cabin prices. Setting this often gives lower prices 
     senior: false # Optional, use senior discount for cabin prices. 
     military: false # Optional, use military discount for cabin prices. 
     police: false # Optional, use police discount for cabin prices.    
@@ -141,7 +141,7 @@ accountInfo:
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality discounts automatically and senior/fire/police discounts if set in your configuration. It will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality discounts automatically and senior/fire/police discounts if set in your configuration. Be sure to set the state field with your 2 letter state/provice code. It makes a difference and not pulled it automatically from your account (yet)! It will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
