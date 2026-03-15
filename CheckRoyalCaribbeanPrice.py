@@ -626,18 +626,19 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         # Use friendly name if available
         if str(reservationId) in reservationFriendlyNames:
             reservationDisplay += f" ({reservationFriendlyNames.get(str(reservationId))})"
-        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
-        print(f"\n{reservationDisplay}: {sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
+        print(f"\n{reservationDisplay}")
         
-        whitespace = " " * (len(reservationDisplay) + 2)
+        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
+        print(f"{sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
+        
         if checkinString != "":
-            print(whitespace + checkinString)
+            print(checkinString)
         
         finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
         finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
         
         if booking.get("balanceDue") is True:
-            print(YELLOW + f"{whitespace}Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')} due {finalPaymentDateDisplay}" + RESET)
+            print(YELLOW + f"Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')} due {finalPaymentDateDisplay}" + RESET)
             
             
         # testing shows OBC is returned for each passenger, but really only for the stateroom
@@ -665,7 +666,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
             
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, username, state, whitespace)
+                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, username, state)
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -803,7 +804,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
-def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,username=None,state=None,whitespace=""):
+def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,username=None,state=None):
 
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -845,7 +846,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,userna
     stateroomSubtype = params.get("r0e")[0]
     stateroomCategoryCode = params.get("r0f")[0]
     
-    preString = f"{whitespace}{sailDateDisplay} {shipName} {cabinClassString} {stateroomCategoryCode}"
+    preString = f"{sailDateDisplay} {shipName} {cabinClassString} {stateroomCategoryCode}"
     
     packageCode = params.get("packageCode")[0]
     numberOfAdults = params.get("r0a")[0]
@@ -899,7 +900,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,userna
         encoded_string = encoded_bytes.decode('utf-8')
         url += f"&r0H={encoded_string}"
     if cAndANumber is not None:
-         += f"&r01={cAndANumber}"
+        url += f"&r01={cAndANumber}"
     if state is not None:
         url += f"&r0k={state}"
         
