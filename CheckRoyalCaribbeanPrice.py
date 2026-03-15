@@ -62,96 +62,106 @@ def main(config_path=None):
     print(" ")
     
     apobj = Apprise()
-        
-    with open(config_path, 'r') as file:
-        data = yaml.safe_load(file)
-        if 'dateDisplayFormat' in data:
-            global dateDisplayFormat
-            dateDisplayFormat = data['dateDisplayFormat']
-        
-        print("Report generated " + timestamp.strftime(dateDisplayFormat + " %X"))
-        
-        if 'apprise' in data:
-            for apprise in data['apprise']:
-                url = apprise['url']
-                apobj.add(url)
-
-        if 'apprise_test' in data and data['apprise_test']:
-            apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
-            print("Apprise Notification Sent...quitting")
-            quit()
-
-        reservationFriendlyNames = {}
-        if 'reservationFriendlyNames' in data:
-            reservationFriendlyNames=data.get('reservationFriendlyNames', {})
-
-        if 'currencyOverride' in data:
-            global currencyOverride
-            currencyOverride = data['currencyOverride']
-            print(YELLOW + f"Overriding Current Price Currency to {currencyOverride}" + RESET)
-        
-        if 'minimumSavingAlert' in data:
-            global minimumSavingAlert
-            minimumSavingAlert = float(data['minimumSavingAlert'])
-            print(YELLOW + f"Only alerting for savings >= {minimumSavingAlert}" + RESET)
-
-        global shipDictionary
-        shipDictionary = getShipDictionary()
-        
-        # Load watch list configuration
-        watchListItems = []
-        if 'watchList' in data:
-            watchListItems = data['watchList']
-        
-        displayCruisePrices = False
-        if 'displayCruisePrices' in data:
-            displayCruisePrices = data['displayCruisePrices']
-        
-        showPromos = False
-        if 'showPromos' in data:
-            showPromos = data['showPromos']
-        
-        reservationPricePaid = {}
-        if 'reservationPricePaid' in data:
-            reservationPricePaid=data.get('reservationPricePaid', {})
-        
-        if 'accountInfo' in data:
-            for accountInfo in data['accountInfo']:
-                username = accountInfo['username']
-                password = accountInfo['password']
-                state = accountInfo.get("state",None)
-                senior = 'y' if accountInfo.get("senior",False) else 'n' 
-                military = 'y' if accountInfo.get("military",False) else 'n'
-                police = 'y' if accountInfo.get("police",False) else 'n'
-                
-                if 'cruiseLine' in accountInfo:
-                   if accountInfo['cruiseLine'].lower().startswith("c"):
-                    cruiseLineName = "celebritycruises"
-                    friendlyCruiseLine = "Celebrity Cruises"
-                   else:
-                    cruiseLineName =  "royalcaribbean"
-                    friendlyCruiseLine = "Royal Caribbean"
-                else:
-                   cruiseLineName =  "royalcaribbean"
-                   friendlyCruiseLine = "Royal Caribbean"
-
-                print(f"\nChecking {friendlyCruiseLine} for user {username}")
-                session = requests.session()
-                access_token,accountId,session = login(username,password,session,cruiseLineName)
-                #getLoyalty(access_token,accountId,session)
-                stateFromProfile = getProfile(access_token,accountId,session)
-                if state is None:
-                    state = stateFromProfile
-                    
-                discountFlags = [username, state, senior, military, police]
-                getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
-    
-        if 'cruises' in data:
-            for cruises in data['cruises']:
-                    cruiseURL = cruises['cruiseURL'] 
-                    paidPrice = float(cruises['paidPrice'])
-                    get_cruise_price(cruiseURL, paidPrice, apobj, False, None,username)
+    try:    
+        with open(config_path, 'r') as file:
+            data = yaml.safe_load(file)
+            if 'dateDisplayFormat' in data:
+                global dateDisplayFormat
+                dateDisplayFormat = data['dateDisplayFormat']
             
+            print("Report generated " + timestamp.strftime(dateDisplayFormat + " %X"))
+            
+            if 'apprise' in data:
+                for apprise in data['apprise']:
+                    url = apprise['url']
+                    apobj.add(url)
+
+            if 'apprise_test' in data and data['apprise_test']:
+                apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
+                print("Apprise Notification Sent...quitting")
+                quit()
+
+            reservationFriendlyNames = {}
+            if 'reservationFriendlyNames' in data:
+                reservationFriendlyNames=data.get('reservationFriendlyNames', {})
+
+            if 'currencyOverride' in data:
+                global currencyOverride
+                currencyOverride = data['currencyOverride']
+                print(YELLOW + f"Overriding Current Price Currency to {currencyOverride}" + RESET)
+            
+            if 'minimumSavingAlert' in data:
+                global minimumSavingAlert
+                minimumSavingAlert = float(data['minimumSavingAlert'])
+                print(YELLOW + f"Only alerting for savings >= {minimumSavingAlert}" + RESET)
+
+            global shipDictionary
+            shipDictionary = getShipDictionary()
+            
+            # Load watch list configuration
+            watchListItems = []
+            if 'watchList' in data:
+                watchListItems = data['watchList']
+            
+            displayCruisePrices = False
+            if 'displayCruisePrices' in data:
+                displayCruisePrices = data['displayCruisePrices']
+            
+            showPromos = False
+            if 'showPromos' in data:
+                showPromos = data['showPromos']
+            
+            reservationPricePaid = {}
+            if 'reservationPricePaid' in data:
+                reservationPricePaid=data.get('reservationPricePaid', {})
+            
+            if 'accountInfo' in data:
+                for accountInfo in data['accountInfo']:
+                    username = accountInfo['username']
+                    password = accountInfo['password']
+                    state = accountInfo.get("state",None)
+                    senior = 'y' if accountInfo.get("senior",False) else 'n' 
+                    military = 'y' if accountInfo.get("military",False) else 'n'
+                    police = 'y' if accountInfo.get("police",False) else 'n'
+                    
+                    if 'cruiseLine' in accountInfo:
+                       if accountInfo['cruiseLine'].lower().startswith("c"):
+                        cruiseLineName = "celebritycruises"
+                        friendlyCruiseLine = "Celebrity Cruises"
+                       else:
+                        cruiseLineName =  "royalcaribbean"
+                        friendlyCruiseLine = "Royal Caribbean"
+                    else:
+                       cruiseLineName =  "royalcaribbean"
+                       friendlyCruiseLine = "Royal Caribbean"
+
+                    print(f"\nChecking {friendlyCruiseLine} for user {username}")
+                    session = requests.session()
+                    access_token,accountId,session = login(username,password,session,cruiseLineName)
+                    #getLoyalty(access_token,accountId,session)
+                    stateFromProfile = getProfile(access_token,accountId,session)
+                    if state is None:
+                        state = stateFromProfile
+                        
+                    discountFlags = [username, state, senior, military, police]
+                    getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
+        
+            if 'cruises' in data:
+                for cruises in data['cruises']:
+                        cruiseURL = cruises['cruiseURL'] 
+                        paidPrice = float(cruises['paidPrice'])
+                        get_cruise_price(cruiseURL, paidPrice, apobj, False, None,username)
+    except FileNotFoundError:
+        print("No Configuration File Found")
+        print("Would You like me to make a barebones file for you?")
+        user_input = input("Enter y if want me to make the file: ")
+        if user_input == "y":
+            url = 'https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/SAMPLE-SIMPLE-config.yaml'
+            response = requests.get(url)
+            response.raise_for_status() 
+            with open("config.yaml", "wb") as f:
+                f.write(response.content)
+            print("File in current directory. Edit Username/password then run tool again")
 
 def string_to_float(s: str) -> float:
     s = s.strip()
