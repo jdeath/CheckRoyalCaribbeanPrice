@@ -32,6 +32,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
     -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
     -   Only if you want to build a binary yourself, you can run `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
 2. Make the config.yaml file as described below in the Edit Config File section
+   -   Note: Code can download below simple config file for you and name it correctly
    -   Note: if you make a text file in windows with New->Text file , it may look like it is named `config.yaml`, but it is actually named `config.yaml.txt` . In the windows file browser, go to View->Show and make sure "File Name Extensions" is checked. Then remove the .txt from the end of the file so it is actually named `config.yaml`.
    -   You can also download this barebones [config file](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/SAMPLE-SIMPLE-config.yaml) , rename it `config.yaml` , edit your username and password.
 
@@ -105,6 +106,8 @@ The Docker container will run the price checker on the schedule you have defined
 See directions at: https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck
 
 ## Edit Config File
+If a config file is not found, code will prompt if you want it to automatically download a simple config file.
+
 Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`.
 ```yaml
 accountInfo:
