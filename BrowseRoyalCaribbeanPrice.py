@@ -82,7 +82,7 @@ def main():
         if user_input < numSailings and user_input >= 0:
             sailing = sailings[user_input]
             print("")
-            print(f"Browsing for {ship['name']} sailing on {sailing['displayDate']} ({sailing['description']})")
+            print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
             print("")
             print("Direct Link To Royal Caribbean Website: ")
             
@@ -438,6 +438,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
 
         for product in sorted_products:
             title = product.get("title")
+            
             if product.get("price") == []:
                 continue
                 
@@ -448,12 +449,14 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 price = priceStruct.get("formattedBasePrice")
             
             if price is None:
+                price = priceStruct.get("shipboardPrice")
+                
+            if price is None:
                 continue
-            
+                
             # Remove any currency codes/$/Pound Sign and spaces
-            price = re.sub(r'[^\d.]', '', price)
-#            price = re.sub(r'[a-zA-Z]', '', price)
-#            price = price.replace(" ", "")
+            price = re.sub(r'[^0-9\.]', '', price)
+            price = price.replace(" ", "")
             if price == 0:
                 continue
 
@@ -470,8 +473,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             #if promoDescription is not None:
             #    promoName = promoDescription.get("displayName")
             #    printString = printString + f" - {promoName}"
-            
             print(printString)
-             
+        
 if __name__ == "__main__":
     main()
