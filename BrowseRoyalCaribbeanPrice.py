@@ -1,6 +1,7 @@
 import requests
 from datetime import datetime
 import argparse
+import re
 
 dateDisplayFormat = "%x"
 
@@ -439,8 +440,10 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             
             if price is None:
                 continue
-                
-            price = price.lstrip("$")
+            
+            # Remove any currency codes/$/Pound Sign and spaces
+            price = re.sub(r'[a-zA-Z]', '', price)
+            price = price.replace(" ", "")
             if price == 0:
                 continue
 
