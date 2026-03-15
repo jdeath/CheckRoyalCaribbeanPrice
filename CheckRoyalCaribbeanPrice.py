@@ -1,7 +1,7 @@
 import requests
 import yaml
 from apprise import Apprise
-from datetime import datetime,date, timedelta
+from datetime import datetime,date, timedelta, timezone
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs, quote
 import re
@@ -389,7 +389,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             savingForAlert = round(saving * numberOfNights, 2)
             savingLabel = f"Saving {saving} {currency} per night ({savingForAlert} {currency} total)"
         if forWatch:
-            text = f"\t{passengerName}: Book! {title} Price "
+            text = f"{passengerName}: Book! {title} Price "
             if perDayPrice:
                 text += "per night "
             text += f"is lower: {currentPrice} {currency} than {paidPrice} {currency}"
@@ -397,7 +397,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             text = f"{passengerName}: Rebook! {title} Price " 
             if perDayPrice:
                 text += "per night "
-                
+            
             text += f"is lower: {currentPrice} {currency} than {paidPrice} {currency}"
         if minimumSavingAlert is not None:
             text += f" ({savingLabel})"
@@ -408,9 +408,9 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             text += f'\n\t\tPromotion:{promotionTitle}'
 
         if forWatch:
-            text += f'\n\t\tBook at https://www.{cruiseLineName}.com/account/cruise-planner/category/{prefix}/product/{product}?bookingId={reservationId}&shipCode={ship}&sailDate={startDate}'
+            text += f'\n\tBook at https://www.{cruiseLineName}.com/account/cruise-planner/category/{prefix}/product/{product}?bookingId={reservationId}&shipCode={ship}&sailDate={startDate}'
         else:
-            text += f'\n\t\tCancel Order {orderDate} {orderCode} at https://www.{cruiseLineName}.com/account/cruise-planner/order-history?bookingId={reservationId}&shipCode={ship}&sailDate={startDate}'
+            text += f'\n\tCancel Order {orderDate} {orderCode} at https://www.{cruiseLineName}.com/account/cruise-planner/order-history?bookingId={reservationId}&shipCode={ship}&sailDate={startDate}'
         
         if not owner:
             text += "\tThis was booked by another in your party. They will have to cancel/rebook for you!"
@@ -423,7 +423,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
         if forWatch:
-            tempString = GREEN + f"\t{passengerName.ljust(10)} ({title}) price "
+            tempString = GREEN + f"{passengerName.ljust(10)} {title} price "
             if perDayPrice:
                 tempString += "per night "
             tempString += f"is higher than watch price: {paidPrice} {currency}" + RESET
@@ -467,7 +467,10 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
             continue
             
         # Format: [WATCH] Item Name - Passenger (Room): Message
-        watchDisplayName = f"[WATCH] {name} - {passengerName} ({room})"
+        #watchDisplayName = f"[WATCH] {name} - {passengerName} ({room})"
+        
+        # The real name is displayed, so no need to display user provided name
+        watchDisplayName = f"[WATCH] {passengerName} ({room})"
         
         # Set placeholder values for order-specific fields since these aren't actual orders
         getNewBeveragePrice(
@@ -579,10 +582,17 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         numberOfPassengers = 0
         numberOfChildren = 0
         numberOfAdults = 0
+        checkinString = ""
         for guest in guests:
             stateroomCategoryCode = guest.get("stateroomCategoryCode")
             stateroomSubtype = booking.get("stateroomSubtype")
             
+            if stateroomCategoryCode is None and stateroomSubtype is None:
+                stateroomCategoryCode = "XC"
+                stateroomSubtype = "XC"
+                if displayCruisePrices:
+                    print(YELLOW + "Data is missing from API. Cruise Price Check May Not Work - Use Manual Method" + RESET)
+                
             numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
@@ -596,6 +606,14 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 
             passengerNames += f"{firstName}, "
         
+            if guest.get("onlineCheckinStatus") == "COMPLETED":
+                boarding_hour = guest.get("arrivalTime")[9:11]
+                boarding_min = guest.get("arrivalTime")[11:13]
+                if checkinString == "":
+                    checkinString = f"{firstName} Boarding Time {boarding_hour}:{boarding_min}"
+                else:
+                    checkinString += f", {firstName} Boarding Time {boarding_hour}:{boarding_min}"
+                
         passengerNames = passengerNames.rstrip()
         passengerNames = passengerNames[:-1]
 
@@ -605,12 +623,16 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             reservationDisplay += f" ({reservationFriendlyNames.get(str(reservationId))})"
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         print(f"\n{reservationDisplay}: {sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
-
+        
+        whitespace = " " * (len(reservationDisplay) + 2)
+        if checkinString != "":
+            print(whitespace + checkinString)
+        
         finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
         finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
         
         if booking.get("balanceDue") is True:
-            print(YELLOW + f"{reservationDisplay}: Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')} due {finalPaymentDateDisplay}" + RESET)
+            print(YELLOW + f"{whitespace}Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')} due {finalPaymentDateDisplay}" + RESET)
             
             
         # testing shows OBC is returned for each passenger, but really only for the stateroom
@@ -636,9 +658,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
             
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber)
+                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber,whitespace)
             else:
-                print(YELLOW + "\t\tCannot Check Cruise Price - Use Manual URL Method" + RESET)
+                print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
         getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
@@ -774,7 +796,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
-def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber):
+def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber,whitespace=""):
 
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -816,7 +838,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
     stateroomSubtype = params.get("r0e")[0]
     stateroomCategoryCode = params.get("r0f")[0]
     
-    preString = f"\t{sailDateDisplay} {shipName} {cabinClassString} {stateroomCategoryCode}"
+    preString = f"{whitespace}{sailDateDisplay} {shipName} {cabinClassString} {stateroomCategoryCode}"
     
     packageCode = params.get("packageCode")[0]
     numberOfAdults = params.get("r0a")[0]
@@ -868,9 +890,9 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
     pastFinalPaymentDate = date.today() > finalPaymentDate
     
     if not roomIsFound:
-        textString = f"{preString} No Longer Available To Book"
+        textString = f"{preString} Not For Sale"
         if automaticURL and pastFinalPaymentDate:
-            textString += " and Past Final Payment Date of " + finalPaymentDateDisplay
+            textString += ". Past Final Payment Date of " + finalPaymentDateDisplay
             
         print(YELLOW + textString + RESET)
         
@@ -884,9 +906,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
             GetCruisePriceFromAPI(currencyCode, packageCode, sailDate, cabinClassString, numberOfAdults, numberOfChildren)
         return
         
-
     if soupFind is None:
-        textString = preString + " No Longer Available To Book"
+        textString = preString + " Not Available"
         print(YELLOW + textString + RESET)
         apobj.notify(body=textString, title='Cruise Room Not Available')
         return
