@@ -141,12 +141,16 @@ accountInfo:
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality discounts and residency (USA only I think) automatically and senior/fire/police discounts if set in your configuration. Residency makes a difference, be sure to set manually if your profile does not have this info! It will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality, residency (USA only I think) and senior discounts automatically from your account/booking. It will add fire/police & military discounts if set in your configuration. Residency makes a difference, be sure to set manually if your profile does not have this info! If people in the cabin are from different states than you, suggest making a manual cruise watch for the people in other states than in your account. It will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
+    state: "CA" # Optional. Will pull from your account if not present. Override to use different state/province for cabin prices. 
+    senior: false # Optional. Will pull from booking if not present. Override to force for cabin prices. 
+    military: false # Optional, use military discount for cabin prices. Must be set to true to if military, not available in account
+    police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not available in account
 displayCruisePrices: true
 ```
 If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
@@ -205,7 +209,7 @@ showPromos: true
 1. If you want to check the cabin price of a cruise you have booked, see above. This section is just for cruises you have *not* booked yet.
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you want, with the same number of adults and kids
-1. Select a cruise and select your room type/room. Be sure to enter your C&A number/email and any senior/military/police discounts in the "Apply Promo Code and Exclusive Rates" link to the left
+1. Select a cruise and select your room type/room. Be sure to enter your C&A number/email and any senior/military/police discounts in the "Apply Promo Code and Exclusive Rates" link to the left.
 1. Complete until they ask for your personal/guest information
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
@@ -304,7 +308,8 @@ John   (1234) has best price for Deluxe Beverage Package of: 62.99 (now 72.99)
 Mary   (1234) has best price for Deluxe Beverage Package of: 62.99 (now 72.99)
 Mary   (1234) has best price for VOOM SURF + STREAM Internet Package of: 16.99 (now 18.99)
 
-2025-12-27 Vision of the Seas OUTSIDE 4N: You have best Price of 3612.12 
+8/28/2026 Ovation of the Seas BALCONY XB: You have best price of 1000.0 USD (now 1714.08 USD)
+8/28/2026 Ovation of the Seas BALCONY XB (Loyalty, Residency Discount): You have best price of 1000.0 USD (now 1613.08 USD) #Impact of discounts 
 ```
 If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel. Notice on the 2nd reservation, the official room is GTY but the excursions show the currently assigned room in the Royal backend system. This room is likely what you will get!
 
