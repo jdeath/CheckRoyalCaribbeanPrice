@@ -33,7 +33,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
     -   Only if you want to build a binary yourself, you can run `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
 2. Click `CheckRoyalCaribbeanPrice.exe`
    -   Note: If no config file is found, code can download a simple config file for you and name it correctly.
-3. Edit downloaded config.yaml with your user/password.
+3. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
 4. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
 5. After confirmed working, add more options into `config.yaml` if you like
 6. To keep output on screen, go to folder you downloaded `CheckRoyalCaribbeanPrice.exe`, type `cmd` in the file browser. Type `CheckRoyalCaribbeanPrice.exe` in the dos prompt
