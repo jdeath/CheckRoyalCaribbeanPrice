@@ -85,7 +85,9 @@ def main():
             print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
             print("")
             print("Direct Link To Royal Caribbean Website: ")
-            print(f"https://www.royalcaribbean.com/account/cruise-planner/category/beverage?bookingId=000000&shipCode={shipcode}&sailDate={sailing['date']}")
+            
+            #This link is no longer working for a bogus bookingID
+            print(f"https://www.royalcaribbean.com/account/cruise-planner/?bookingId=000000&shipCode={shipcode}&sailDate={sailing['date']}")
             print("")
             print("These are public prices, sale prices for you could be less")
             print("")
@@ -285,7 +287,7 @@ def getAllProducts(shipCode,sailDate,currency, sortorder):
             )
         except Exception as e:
             print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-            exit(1)
+            quit()
 
         if response.status_code != 200:
             print(f"Error getting voyage information (API https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog-unauth/v2/{shipCode}/categories/{key}/products returned error code {response.status_code}). Quitting.")
@@ -409,7 +411,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
         except Exception as e:
             print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-            exit(1)
+            quit()
 
         payload = response.json().get("data")
         if payload is None:
@@ -423,7 +425,14 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
         if sortorder == 'alpha':
             sorted_products = sorted(products, key=lambda product: product['title'])
         elif sortorder == 'price':
-            sorted_products = sorted(products, key=lambda product: float(product['price'][0].get("formattedPromoPrice").lstrip("$").replace(',','')))
+            # The lambda performs the following ('p' is standing in for 'products' in the function)
+            # 1. Set p['price'][0] to 'x' for simplicity using a walrus operator
+            # 2. Pick 'formattedPromotionalPrice' if it exists, else 'formattedBasePrice' (0 if neither exist)
+            # 3. Use re.sub to keep only numbers and decimals
+            # 4. Convert to float
+            sorted_products = sorted(products, key=lambda p: float(re.sub(r'[^\d.]', '',
+                (x := p['price'][0])['formattedPromotionalPrice'] or x['formattedBasePrice'] or "0"
+            )))
         else:
             sorted_products = products
 
