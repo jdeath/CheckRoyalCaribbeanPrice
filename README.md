@@ -115,7 +115,7 @@ Create your `config.yaml` file with the below information. Feel free to copy the
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
-    state: "CA" # Optional. Will pull from your account if not set. Override to use different state/province for cabin prices. 
+    state: "CA" # Optional. Will pull from your account if not set. Override to use different state/province for cabin prices. USA/CAN country only
     senior: false # Optional. Will pull from booking if not set. Override to force for cabin prices. 
     military: false # Optional, use military discount for cabin prices. Must be set to true to if military, not in account
     police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not in account
@@ -146,7 +146,7 @@ accountInfo:
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality, residency (USA only I think) and senior discounts automatically from your account/booking. It will add fire/police & military discounts if set in your configuration. Residency makes a difference, be sure to set manually if your profile does not have this info! If people in the cabin are from different states than you, suggest making a manual cruise watch for the people in other states than in your account. It will find any publically offered OBC and display it (but not subtract it because it only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality, residency (USA/CAN only) and senior discounts automatically from your account/booking. It will add fire/police & military discounts if set in your configuration. Residency makes a difference, be sure to set manually if your profile does not have this info! If people in the cabin are from different states than you, suggest making a manual cruise watch for the people in other states than in your account. It will find any publically offered OBC and display it (but not subtract it because it is only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -341,7 +341,7 @@ If you have their username/password, you can add it to the list of accounts in t
 
 **Do you have a GTY Room and want to know the room you will likely get?** If a room is not officially assigned yet, the code displays GTY (meaning guarantee) for your room number. However, any excursion purchased will show the passenger's name and the room number currently associated with that excursion. Guess what? That room number is likely the room you will be officially assigned. Confirmed by the author, please post an issue if you can confirm this as well.
 
-**Are you browsing the website for the best prices?** Always add the item to your cart and then go to the next page where you enter your credit card. Often the price will be lower in the screen where you enter your credit card then in your cart. If on the fense, do the extra step and you may be suprised!
+**Are you browsing the website for the best prices?** Always add the item to your cart and then go to the next page where you enter your credit card. Often the price will be lower in the screen where you enter your credit card then in your cart. If on the fence, do the extra step and you may be suprised!
 
 ## Related Tools
 
