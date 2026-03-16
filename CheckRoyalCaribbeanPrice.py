@@ -242,7 +242,7 @@ def login(username,password,session,cruiseLineName):
     
     if response.status_code != 200:
         print(f"{cruiseLineName} website might be down, username/password incorrect, or have unsupported symbol in password. Quitting.")
-        exit(1)
+        quit()
           
     access_token = response.json().get("access_token")
     
@@ -841,8 +841,15 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 
                 #product = orderDetail.get("productSummary").get("id")
                 #product = orderDetail.get("productSummary").get("baseId")
-                # API Change on 6 Feb 2026
-                product = orderDetail.get("productSummary").get("defaultVariantId")
+                #product = orderDetail.get("productSummary").get("defaultVariantId")
+                # API Change on 6 Feb 2026 - Properly handle variants
+                # I do the except just as a precaution
+                
+                try:
+                    product = orderDetail.get("productSummary").get("baseOptions")[0].get("selected").get("code")
+                except:
+                    product = orderDetail.get("productSummary").get("defaultVariantId")
+                    
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
               
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
