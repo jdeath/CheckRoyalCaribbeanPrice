@@ -22,11 +22,6 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 
 If the code saved you money or correctly predicted your cabin number, star the repo and/or post your success on [r/RoyalCaribbean](https://www.reddit.com/r/royalcaribbean/) !
 
-## Install (Recommended, any Operating System, and you can edit code to your liking)
-1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
-1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
-1. `pip install requests Apprise bs4`
-
 ## Install (Windows 10/11 Only) - Python Not Required!
 1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
     -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
@@ -37,6 +32,11 @@ If the code saved you money or correctly predicted your cabin number, star the r
 4. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
 5. After confirmed working, add more options into `config.yaml` if you like
 6. To keep output on screen, go to folder you downloaded `CheckRoyalCaribbeanPrice.exe`, type `cmd` in the file browser. Type `CheckRoyalCaribbeanPrice.exe` in the dos prompt
+
+## Install (Recommended, any Operating System and you can edit code to your liking)
+1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
+1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
+1. `pip install requests Apprise bs4`
      
 ## Install (iOS / iPhone - May work for Android too)
 This will run a stripped down version to work on the free Python iPhone app. As stripped down, it only supports excursion/drink packages etc. It does not support cruise fare price checks. It does not support apprise notifications, so you will have to watch the log to see any price drops. You need to edit the python file directly (directions below) because it does not use the config.yaml file. But allows you to check prices on the go. Works on the ship even *without* the internet package!
