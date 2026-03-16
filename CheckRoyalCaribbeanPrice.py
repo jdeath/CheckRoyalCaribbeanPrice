@@ -563,8 +563,10 @@ def getProfile(access_token,accountId,session):
     contactInfo = payload.get("contactInformation",None)
     if contactInfo is not None:
         address = contactInfo.get("address",None)
-        if contactInfo is not None:
-            state = address.get("state",None)    
+        if address is not None:
+            residencyCountryCode = address.get("residencyCountryCode",None)
+            if residencyCountryCode == "USA" or residencyCountryCode == "CAN":
+                state = address.get("state",None)    
     
     loyalty = payload.get("loyaltyInformation")
     cAndANumber = loyalty.get("crownAndAnchorId")
