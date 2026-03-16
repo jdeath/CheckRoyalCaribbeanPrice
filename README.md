@@ -25,13 +25,13 @@ If the code saved you money or correctly predicted your cabin number, star the r
 ## Install (Windows 10/11 Only) - Python Not Required!
 1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
     -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
-    -   Optional: If you want to build the .exe yourself (because you do not trust files from the internet), you can run `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py`
-2. Click `CheckRoyalCaribbeanPrice.exe`
+1. Move downloaded file to a folder and click `CheckRoyalCaribbeanPrice.exe`
    -   Note: If no config file is found, code can download a simple config file for you and name it correctly.
-3. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
-4. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
-5. After confirmed working, add more options into `config.yaml` if you like
-6. To keep output on screen, go to folder you downloaded `CheckRoyalCaribbeanPrice.exe`, type `cmd` in the file browser. Type `CheckRoyalCaribbeanPrice.exe` in the dos prompt
+1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
+1. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
+1. After confirmed working, add more options into `config.yaml` if you like
+1. To keep output on screen, go to folder you put `CheckRoyalCaribbeanPrice.exe`, type `cmd` in the location field. A dos prompt window should open up. Type `CheckRoyalCaribbeanPrice.exe` in the dos prompt
+1. Optional: For advanced users, you can compile the .exe yourself (because you do not trust files from the internet) with: `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` 
 
 ## Install (Recommended, any Operating System and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
