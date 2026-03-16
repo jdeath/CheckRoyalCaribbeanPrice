@@ -23,10 +23,10 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 If the code saved you money or correctly predicted your cabin number, star the repo and/or post your success on [r/RoyalCaribbean](https://www.reddit.com/r/royalcaribbean/) !
 
 ## Install (Windows 10/11 Only) - Python Not Required!
-1. Download `CheckRoyalCaribbeanPrice.exe` from release assets `https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases`
-    -   Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
-1. Move downloaded file to a folder and click `CheckRoyalCaribbeanPrice.exe`
-   -   Note: If no config file is found, code can download a simple config file for you and name it correctly.
+1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice.exe) .  Link points to the latest release
+   - Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
+1. Move downloaded file to a folder and click `CheckRoyalCaribbeanPrice.exe` file on your computer
+   - Note: If no config file is found, code ask to download a simple config file for you and name it correctly.
 1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
 1. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
 1. After confirmed working, add more options into `config.yaml` if you like
@@ -373,6 +373,8 @@ Thanks to contributors:
 
 # Browse RoyalCaribbean Prices
 This is a new script that will browse any Royal Caribbean or Celebrity sailing and show current public prices for excursions/drink packages/etc. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean website which has the product prices for that cruise (be sure to be logged out of the RC website or link will not work). Code will also print all the prices. This does not require a Royal Caribbean or Celebrity account and can be used by anyone. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/`. 
+
+Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice.exe) 
 
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe`. 
