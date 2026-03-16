@@ -242,7 +242,7 @@ def login(username,password,session,cruiseLineName):
     
     if response.status_code != 200:
         print(f"{cruiseLineName} website might be down, username/password incorrect, or have unsupported symbol in password. Quitting.")
-        quit()
+        exit(1)
           
     access_token = response.json().get("access_token")
     
