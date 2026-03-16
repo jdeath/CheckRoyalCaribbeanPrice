@@ -96,7 +96,7 @@ def main():
             print("")
             print("These are public prices, sale prices for you could be less")
             print("")
-            #This API appears depreciated
+            #This API appears deprecated
             #getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
             getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder)
     else:
@@ -225,6 +225,7 @@ def getProducts(shipCode, sailDate):
         print(f"{productTitle}  {adultPriceString}")
 
 #############################
+# THIS API APPEARS DEPRECATED
 def getAllProducts(shipCode,sailDate,currency, sortorder):
     productMap = {}
     productMap["beverage"] = "Beverage Packages"
@@ -442,7 +443,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             sorted_products = products
 
         for product in sorted_products:
-            title = product.get("title")
+            title = product.get("title").replace('â€”','-')
             
             if product.get("price") == []:
                 continue
