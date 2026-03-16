@@ -79,7 +79,7 @@ def main(config_path=None):
             if 'apprise_test' in data and data['apprise_test']:
                 apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
                 print("Apprise Notification Sent...quitting")
-                quit()
+                exit(1)
 
             reservationFriendlyNames = {}
             if 'reservationFriendlyNames' in data:
