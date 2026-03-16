@@ -114,7 +114,7 @@ See directions at: https://github.com/jdeath/homeassistant-addons/tree/main/roya
 ## Edit Config File
 If a config file is not found, code will prompt if you want it to automatically download a simple config file.
 
-Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`.
+Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`. The spacing/alignment is important. (eg. The `-` under accountInfo must be 3 spaces over under the 2nd c in account).  
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
