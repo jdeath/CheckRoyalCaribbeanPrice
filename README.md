@@ -31,6 +31,8 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
 1. After confirmed working, add more options into `config.yaml` if you like
 1. To keep output on screen, go to folder you put `CheckRoyalCaribbeanPrice.exe`, type `cmd` in the location field. A dos prompt window should open up. Type `CheckRoyalCaribbeanPrice.exe` in the dos prompt
+   
+![](https://github.com/jdeath/CheckRoyalCaribbeanPrice/blob/main/images/Screenshot%202026-03-16%20071344.png)  |  ![](https://github.com/jdeath/CheckRoyalCaribbeanPrice/blob/main/images/Screenshot%202026-03-16%20071642.png)
 1. Optional: For advanced users, you can compile the .exe yourself (because you do not trust files from the internet) with: `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` 
 
 ## Install (Recommended, any Operating System and you can edit code to your liking)
