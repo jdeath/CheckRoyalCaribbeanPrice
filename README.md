@@ -22,7 +22,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 
 If the code saved you money or correctly predicted your cabin number, star the repo and/or post your success on [r/RoyalCaribbean](https://www.reddit.com/r/royalcaribbean/) !
 
-## Install (Windows 10/11 Only) - Python Not Required!
+## Install (Windows 10/11 Option) - Python Not Required!
 1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice.exe) .  Link points to the latest release
    - Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
 1. Move downloaded file to a folder and click `CheckRoyalCaribbeanPrice.exe` file on your computer
@@ -37,7 +37,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 
 7. Optional: For advanced users, you can compile the .exe yourself (because you do not trust files from the internet) with: `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` 
 
-## Install (Recommended, any Operating System and you can edit code to your liking)
+## Install (Recommended Option, any Operating System Windows/Linux/Mac, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise bs4`
@@ -60,6 +60,9 @@ This will run a stripped down version to work on the free Python iPhone app. As 
    -    Select the PhonePriceCheck.py file you downloaded
    -    To run: tap the arrow icon at top right of screen (between a bug icon and a `...` icon)
 6. Look for any price drops in the output
+
+## Install (Home Assistant Addon/App Option)
+See directions at: https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck
 
 ## Install (Docker Option - thanks @JDare)
 
@@ -107,9 +110,6 @@ services:
 4. Run: `docker compose up -d`
 
 The Docker container will run the price checker on the schedule you have defined.
-
-## Install (Home Assistant Addon/App)
-See directions at: https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck
 
 ## Edit Config File
 If a config file is not found, code will prompt if you want it to automatically download a simple config file.
