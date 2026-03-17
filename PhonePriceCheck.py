@@ -360,7 +360,13 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 quantity = orderDetail.get("priceDetails").get("quantity")
                 order_title = orderDetail.get("productSummary").get("title")
                 
-                product = orderDetail.get("productSummary").get("defaultVariantId")
+                # API Change on 6 Feb 2026 - Properly handle variants
+                # I do the except just as a precaution
+                try:
+                    product = orderDetail.get("productSummary").get("baseOptions")[0].get("selected").get("code")
+                except:
+                    product = orderDetail.get("productSummary").get("defaultVariantId")
+                    
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
                 
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
