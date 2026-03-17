@@ -79,7 +79,7 @@ def main(config_path=None):
             if 'apprise_test' in data and data['apprise_test']:
                 apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
                 print("Apprise Notification Sent...quitting")
-                quit()
+                exit(1)
 
             reservationFriendlyNames = {}
             if 'reservationFriendlyNames' in data:
@@ -841,8 +841,15 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 
                 #product = orderDetail.get("productSummary").get("id")
                 #product = orderDetail.get("productSummary").get("baseId")
-                # API Change on 6 Feb 2026
-                product = orderDetail.get("productSummary").get("defaultVariantId")
+                #product = orderDetail.get("productSummary").get("defaultVariantId")
+                # API Change on 6 Feb 2026 - Properly handle variants
+                # I do the except just as a precaution
+                
+                try:
+                    product = orderDetail.get("productSummary").get("baseOptions")[0].get("selected").get("code")
+                except:
+                    product = orderDetail.get("productSummary").get("defaultVariantId")
+                    
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
               
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")

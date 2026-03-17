@@ -1,6 +1,6 @@
 import requests
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 import re
 import base64
 import json
@@ -57,8 +57,8 @@ def login(username,password,session,cruiseLineName):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
     }
     
-    
-    data = 'grant_type=password&username=' + username +  '&password=' + password + '&scope=openid+profile+email+vdsid'
+    urlSafePassword  = quote(password, safe='')
+    data = 'grant_type=password&username=' + username +  '&password=' + urlSafePassword + '&scope=openid+profile+email+vdsid'
     
     response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     
@@ -360,7 +360,13 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 quantity = orderDetail.get("priceDetails").get("quantity")
                 order_title = orderDetail.get("productSummary").get("title")
                 
-                product = orderDetail.get("productSummary").get("defaultVariantId")
+                # API Change on 6 Feb 2026 - Properly handle variants
+                # I do the except just as a precaution
+                try:
+                    product = orderDetail.get("productSummary").get("baseOptions")[0].get("selected").get("code")
+                except:
+                    product = orderDetail.get("productSummary").get("defaultVariantId")
+                    
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
                 
                 salesUnit = orderDetail.get("productSummary").get("salesUnit")
