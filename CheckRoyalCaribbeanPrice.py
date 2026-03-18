@@ -801,7 +801,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
  
     if response.status_code != 200:
         print(f"Error getting voyage information (returned error code {response.status_code}). Try again later.\nQuitting.")
-        quit()
+        exit(1)
 
     # Check for my orders and orders others booked for me
     for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
