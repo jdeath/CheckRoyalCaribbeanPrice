@@ -86,7 +86,8 @@ def main():
             print("")
             print("Direct Link To Royal Caribbean Website: ")
             
-            if "of the Seas" in shipname:
+            isRoyal = "of the Seas" in shipname
+            if isRoyal:
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
             else:
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
@@ -98,7 +99,7 @@ def main():
             print("")
             #This API appears depreciated
             #getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
-            getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder)
+            getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder,isRoyal)
     else:
         print("Invalid ship selection")
 
@@ -336,23 +337,39 @@ def getAllProducts(shipCode,sailDate,currency, sortorder):
             
             print(printString)
 
-def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
+def getAllProductsGraph(shipCode,sailDate,currency, sortorder,isRoyal):
     productMap = {}
-    productMap["beverage"] = "Beverage Packages"
-    productMap["shorex"] = "Shore Excursions"
-    productMap["dining"] = "Dining Packages"
-    productMap["internet"] = "Internet Packages"
-    productMap["key"] = "VIP Packages"
-    productMap["spa"] = "Spa and Wellness"
-    productMap["onboardactivities"] = "Onboard Activities"
-    productMap["photoPackage"] = "Photo"
-    productMap["arcade"] = "Arcade"
-    productMap["gifts"] = "Gifts and Gear"
-    productMap["fitness"] = "Fitness"
-    
-    # Graph Call needed to get all Pre/Post items
-    # Use other API call for all others
-    productMap["preandpost"] = "Pre and Post Cruise"
+    if isRoyal:
+        productMap["beverage"] = "Beverage Packages"
+        productMap["shorex"] = "Shore Excursions"
+        productMap["dining"] = "Dining Packages"
+        productMap["internet"] = "Internet Packages"
+        productMap["key"] = "VIP Packages"
+        productMap["roomdelivery"] = "Room Delivery"
+        productMap["spa"] = "Spa and Wellness"
+        productMap["onboardactivities"] = "Onboard Activities"
+        productMap["celebrations"] = "Celebrations"
+        productMap["photoPackage"] = "Photo"
+        productMap["arcade"] = "Arcade"
+        productMap["gifts"] = "Gifts and Gear"
+        productMap["fitness"] = "Fitness"
+        productMap["shows"] = "Shows"
+        productMap["preandpost"] = "Pre and Post Cruise"
+    else:
+        productMap["drinks"] = "Drinks"
+        productMap["shorex"] = "Shore Excursions"
+        productMap["food"] = "Food"
+        productMap["packages"] = "Packages"
+        productMap["shipexcursions"] = "Ship Excursions"
+        productMap["roomdelivery"] = "Room Delivery"
+        productMap["spa"] = "Spa and Wellness"
+        productMap["wifi"] = "WiFi"
+        productMap["exclusiveexperiences"] = "Exclusive Experiences"
+        productMap["giftsandextras"] = "Gifts and Extras"
+        productMap["specialoccasions"] = "Special Occasions"
+        productMap["photoPackage"] = "Photo"
+        productMap["programming"] = "Programming"
+        productMap["preandpost"] = "Pre and Post Cruise"
     
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0',
