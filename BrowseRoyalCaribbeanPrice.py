@@ -493,20 +493,23 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 
             if price is None:
                 continue
-                
+            
+            
             # Remove any currency codes/$/Pound Sign and spaces
             price = re.sub(r'[^0-9\.]', '', price)
             price = price.replace(" ", "")
             if price == 0:
                 continue
 
+            unit = priceStruct.get("salesUnit").get("name")
+            
             printString = f"\t{title} {price} {currency}"
             
-            if product.get("salesUnit") in [ 'PER_DAY' ]:
-                printString =  printString + " per day" 
+            if unit == "Per Night":
+                printString =  printString + " per night" 
             
-            if product.get("salesUnit") in [ 'PER_NIGHT' ]:
-                printString =  printString + " per night"
+            if unit == "Per Day":
+                printString =  printString + " per day"
              
             # Promo % off is basically a scam, do not print it 
             #promoDescription = product.get("promoDescription")    
