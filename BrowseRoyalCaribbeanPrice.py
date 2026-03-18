@@ -86,7 +86,8 @@ def main():
             print("")
             print("Direct Link To Royal Caribbean Website: ")
             
-            if "of the Seas" in shipname:
+            isRoyal = "of the Seas" in shipname
+            if isRoyal:
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
             else:
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
@@ -337,23 +338,57 @@ def getAllProducts(shipCode,sailDate,currency, sortorder):
             
             print(printString)
 
-def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
+def getWebCatagories(ship,saildate):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'gqlRouter': 'products',
+        'appkey': 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD',
+        'Operating-System': 'Firefox 148.0',
+        'Operating-System-Version': '148.0',
+        'X-APOLLO-OPERATION-NAME': 'WebCategories',
+        'X-APOLLO-OPERATION-TYPE': 'query',
+        'channel': 'web',
+        'X-Request-Id': '69ba051a4aeed730105836a7',
+        'Req-App-Id': 'Royal.Web.PlanMyCruise',
+        'Req-App-Vers': '1.84.1',
+        'Account-Id': 'deadface-babe-4000-feed-facade123456',
+        'Content-Type': 'application/json',
+        'Origin': 'https://www.royalcaribbean.com',
+        'DNT': '1',
+        'Sec-GPC': '1',
+        'Connection': 'keep-alive',
+        'Referer': 'https://www.royalcaribbean.com/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+        # Requests doesn't support trailers
+        # 'TE': 'trailers',
+    }
+
+    json_data = {
+        'operationName': 'WebCategories',
+        'variables': {
+            'sailDate': saildate,
+            'shipCode': ship,
+        },
+        'query': 'query WebCategories($shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $regionCode: String) {\n  categories(\n    shipCode: $shipCode\n    sailDate: $sailDate\n    regionCode: $regionCode\n    filter: {limitCategoriesWithProducts: true, includeNonRevenueCategories: false, limitCategoriesWithVenues: false}\n  ) {\n    ... on CategoryResultSuccess {\n      __typename\n      categories {\n        description\n        id\n        media {\n          source {\n            altText\n            path\n            __typename\n          }\n          primary\n          type\n          __typename\n        }\n        name\n        order\n        __typename\n      }\n    }\n    ... on CategoryExceptions {\n      exceptions {\n        ... on CategoryNotFound {\n          exceptionType\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}',
+    }
+
+    response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
+    catagories = response.json().get("data").get("categories").get("categories")
+
     productMap = {}
-    productMap["beverage"] = "Beverage Packages"
-    productMap["shorex"] = "Shore Excursions"
-    productMap["dining"] = "Dining Packages"
-    productMap["internet"] = "Internet Packages"
-    productMap["key"] = "VIP Packages"
-    productMap["spa"] = "Spa and Wellness"
-    productMap["onboardactivities"] = "Onboard Activities"
-    productMap["photoPackage"] = "Photo"
-    productMap["arcade"] = "Arcade"
-    productMap["gifts"] = "Gifts and Gear"
-    productMap["fitness"] = "Fitness"
+    for catagory in catagories:
+        productMap[catagory.get("id")] = catagory.get("name")
     
-    # Graph Call needed to get all Pre/Post items
-    # Use other API call for all others
-    productMap["preandpost"] = "Pre and Post Cruise"
+    return productMap
+    
+def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
+    
+    productMap = getWebCatagories(shipCode,sailDate)
     
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0',
@@ -460,20 +495,23 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 
             if price is None:
                 continue
-                
+            
+            
             # Remove any currency codes/$/Pound Sign and spaces
             price = re.sub(r'[^0-9\.]', '', price)
             price = price.replace(" ", "")
             if price == 0:
                 continue
 
+            unit = priceStruct.get("salesUnit").get("name")
+            
             printString = f"\t{title} {price} {currency}"
             
-            if product.get("salesUnit") in [ 'PER_DAY' ]:
-                printString =  printString + " per day" 
+            if unit == "Per Night":
+                printString =  printString + " per night" 
             
-            if product.get("salesUnit") in [ 'PER_NIGHT' ]:
-                printString =  printString + " per night"
+            if unit == "Per Day":
+                printString =  printString + " per day"
              
             # Promo % off is basically a scam, do not print it 
             #promoDescription = product.get("promoDescription")    

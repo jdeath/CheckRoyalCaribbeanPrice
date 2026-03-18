@@ -79,7 +79,7 @@ def main(config_path=None):
             if 'apprise_test' in data and data['apprise_test']:
                 apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
                 print("Apprise Notification Sent...quitting")
-                exit(1)
+                quit()
 
             reservationFriendlyNames = {}
             if 'reservationFriendlyNames' in data:
@@ -242,7 +242,7 @@ def login(username,password,session,cruiseLineName):
     
     if response.status_code != 200:
         print(f"{cruiseLineName} website might be down, username/password incorrect, or have unsupported symbol in password. Quitting.")
-        quit()
+        exit(1)
           
     access_token = response.json().get("access_token")
     
@@ -394,7 +394,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         currentPrice = newPricePayload.get(guestAgeString + "ShipboardPrice")
 
     # Infant price is often None, this just sets to 0 to avoid error
-    # Should never happend since should not check prices that are 0 to begin with
+    # Should never happen since should not check prices that are 0 to begin with
     
     if not currentPrice:
         currentPrice = 0
@@ -664,6 +664,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             stateroomCategoryCode = guest.get("stateroomCategoryCode")
             stateroomSubtype = booking.get("stateroomSubtype")
             
+            # Work around for Celebrity Concierge GTY which does not return this info
             if stateroomCategoryCode is None and stateroomSubtype is None:
                 stateroomCategoryCode = "XC"
                 stateroomSubtype = "XC"
@@ -674,19 +675,20 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
             
-            isAdult = aboveAgeOnSailDate(birthDate, sailDate, 12)
-        
             # Find any seniors to check for cruise prices
             if not haveASenior:
                 haveASenior = aboveAgeOnSailDate(birthDate, sailDate, 55)
-     
+            
+            isAdult = aboveAgeOnSailDate(birthDate, sailDate, 12)
             if isAdult:
                 numberOfAdults = numberOfAdults + 1
             else:
                 numberOfChildren = numberOfChildren + 1
                 
             passengerNames += f"{firstName}, "
-        
+            
+            # API says Checkin Time is in UTC, but I think in local time
+            # Todo, send reminder to checkin if not done and past date
             if guest.get("onlineCheckinStatus") == "COMPLETED":
                 boarding_hour = guest.get("arrivalTime")[9:11]
                 boarding_min = guest.get("arrivalTime")[11:13]
@@ -799,7 +801,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
  
     if response.status_code != 200:
         print(f"Error getting voyage information (returned error code {response.status_code}). Try again later.\nQuitting.")
-        quit()
+        exit(1)
 
     # Check for my orders and orders others booked for me
     for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
@@ -844,7 +846,6 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 #product = orderDetail.get("productSummary").get("defaultVariantId")
                 # API Change on 6 Feb 2026 - Properly handle variants
                 # I do the except just as a precaution
-                
                 try:
                     product = orderDetail.get("productSummary").get("baseOptions")[0].get("selected").get("code")
                 except:
@@ -866,7 +867,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     if paidPrice == 0:
                         continue
                         
-                    passengerId = guest.get("id")
+                    guestPassengerId = guest.get("id")
                     firstName = guest.get("firstName").capitalize()
                     reservationId = guest.get("reservationId")
                     guestAgeString = guest.get("guestType").lower()
@@ -886,9 +887,9 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                         
                     currency = guest.get("priceDetails").get("currency")
                     room = guest.get("stateroomNumber") 
-                    #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,passengerId,firstName,room,orderCode,orderDate,owner)
+                    #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,guestPassengerId,firstName,room,orderCode,orderDate,owner)
                     
-                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, passengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
+                    getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, guestPassengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
 def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,username=None,state=None):
 
