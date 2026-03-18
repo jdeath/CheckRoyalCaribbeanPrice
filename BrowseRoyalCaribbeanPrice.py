@@ -342,6 +342,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder,isRoyal):
     if isRoyal:
         productMap["beverage"] = "Beverage Packages"
         productMap["shorex"] = "Shore Excursions"
+        productMap["royalbeachclub"] = "Royal Beach Club"
         productMap["dining"] = "Dining Packages"
         productMap["internet"] = "Internet Packages"
         productMap["key"] = "VIP Packages"
@@ -353,11 +354,11 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder,isRoyal):
         productMap["arcade"] = "Arcade"
         productMap["gifts"] = "Gifts and Gear"
         productMap["fitness"] = "Fitness"
-        productMap["shows"] = "Shows"
+        productMap["show"] = "Shows"
         productMap["preandpost"] = "Pre and Post Cruise"
     else:
-        productMap["drinks"] = "Drinks"
         productMap["shorex"] = "Shore Excursions"
+        productMap["drinks"] = "Drinks"
         productMap["food"] = "Food"
         productMap["packages"] = "Packages"
         productMap["shipexcursions"] = "Ship Excursions"
