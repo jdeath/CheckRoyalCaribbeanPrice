@@ -443,7 +443,8 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             sorted_products = products
 
         for product in sorted_products:
-            title = product.get("title").replace('â€”','-')
+            # Replace unicode em dash and en dash with UTF-8 dash for readability
+            title = product.get("title").replace(u'—', '-').replace(u'–', '-')
             
             if product.get("price") == []:
                 continue
