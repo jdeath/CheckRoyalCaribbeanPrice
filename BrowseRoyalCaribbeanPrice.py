@@ -84,12 +84,13 @@ def main():
             print("")
             print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
             print("")
-            print("Direct Link To Royal Caribbean Website: ")
             
             isRoyal = "of the Seas" in shipname
             if isRoyal:
+                print("Direct Link To Royal Caribbean Website: ")
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
             else:
+                print("Direct Link To Celebrity Website: ")
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
                 
             #This link is no longer working for a bogus bookingID
