@@ -373,7 +373,7 @@ def getWebCatagories(ship,saildate):
             'sailDate': saildate,
             'shipCode': ship,
         },
-        'query': 'query WebCategories($shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $regionCode: String) {\n  categories(\n    shipCode: $shipCode\n    sailDate: $sailDate\n    regionCode: $regionCode\n    filter: {limitCategoriesWithProducts: true, includeNonRevenueCategories: false, limitCategoriesWithVenues: false}\n  ) {\n    ... on CategoryResultSuccess {\n      __typename\n      categories {\n        description\n        id\n        media {\n          source {\n            altText\n            path\n            __typename\n          }\n          primary\n          type\n          __typename\n        }\n        name\n        order\n        __typename\n      }\n    }\n    ... on CategoryExceptions {\n      exceptions {\n        ... on CategoryNotFound {\n          exceptionType\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}',
+        'query': 'query WebCategories($shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $regionCode: String) { categories(shipCode: $shipCode, sailDate: $sailDate, regionCode: $regionCode, filter: {limitCategoriesWithProducts: true}) { ... on CategoryResultSuccess { categories { id name } } } }',
     }
 
     response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
