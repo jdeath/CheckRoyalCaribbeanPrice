@@ -519,11 +519,6 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             if unit == "Per Day":
                 printString =  printString + " per day"
              
-            # Promo % off is basically a scam, do not print it 
-            #promoDescription = product.get("promoDescription")    
-            #if promoDescription is not None:
-            #    promoName = promoDescription.get("displayName")
-            #    printString = printString + f" - {promoName}"
             print(printString)
         
 if __name__ == "__main__":
