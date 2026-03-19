@@ -758,7 +758,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             # Process watchlist for each individual passenger instead of per booking
             for guest in guests:
                 firstName = guest.get("firstName").capitalize()
-                guestPassengerId = guest.get("id")
+                guestPassengerId = guest.get("passengerId")
                 # Use the guest's specific room number if available, otherwise fall back to booking room
                 guestRoom = guest.get("stateroomNumber") or booking.get("stateroomNumber")
                 
