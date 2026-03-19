@@ -780,7 +780,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         currency = currencyOverride
     else:
         currency = "USD"
-          
+    
     params = {
         'passengerId': passengerId,
         'reservationId': reservationId,
@@ -873,7 +873,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     guestAgeString = guest.get("guestType").lower()
                     
                     # Skip if item checked already
-                    newKey = passengerId + reservationId + prefix + product
+                    newKey = guestPassengerId + reservationId + prefix + product
                     if newKey in foundItems:
                         continue
                     foundItems.append(newKey)
@@ -888,7 +888,6 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     currency = guest.get("priceDetails").get("currency")
                     room = guest.get("stateroomNumber") 
                     #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,guestPassengerId,firstName,room,orderCode,orderDate,owner)
-                    
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, guestPassengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
 def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,username=None,state=None):
