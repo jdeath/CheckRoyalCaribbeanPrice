@@ -84,21 +84,22 @@ def main():
             print("")
             print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
             print("")
-            print("Direct Link To Royal Caribbean Website: ")
             
             isRoyal = "of the Seas" in shipname
             if isRoyal:
+                print("Direct Link To Royal Caribbean Website: ")
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
             else:
+                print("Direct Link To Celebrity Website: ")
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
                 
-            #This link is no longer working for a bogus bookingID
             print(f"{linkRoot}?bookingId=000000&shipCode={shipcode}&sailDate={sailing['date']}")
             print("")
-            print("These are public prices, sale prices for you could be less")
+            print("These are public prices, sale prices for you could be less once booked")
             print("")
             #This API appears depreciated
             #getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
+            #New Graph API is working
             getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder)
     else:
         print("Invalid ship selection")
