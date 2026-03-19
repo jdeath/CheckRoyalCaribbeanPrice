@@ -84,22 +84,21 @@ def main():
             print("")
             print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
             print("")
+            print("Direct Link To Royal Caribbean Website: ")
             
             isRoyal = "of the Seas" in shipname
             if isRoyal:
-                print("Direct Link To Royal Caribbean Website: ")
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
             else:
-                print("Direct Link To Celebrity Website: ")
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
                 
+            #This link is no longer working for a bogus bookingID
             print(f"{linkRoot}?bookingId=000000&shipCode={shipcode}&sailDate={sailing['date']}")
             print("")
-            print("These are public prices, sale prices for you could be less once booked")
+            print("These are public prices, sale prices for you could be less")
             print("")
             #This API appears depreciated
             #getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
-            #New Graph API is working
             getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder)
     else:
         print("Invalid ship selection")
@@ -419,8 +418,13 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
     # 'TE': 'trailers',
     }
 
-    
-    
+    if sortorder == "price":
+        sortKey = "PRICE"
+    elif sortorder == "alpha":
+        sortKey = "TITLE"
+    else:
+        sortKey = "RANK"
+        
     for key in productMap:
         print(productMap[key])
 
@@ -435,7 +439,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 'pageSize': 12,
                 'currentPage': 0,
                 'sorting': {
-                    'sortKey': 'RANK',
+                    'sortKey': sortKey,
                     'sortKeyOrder': 'ASCENDING',
                 },
                 'filter': {
@@ -462,22 +466,23 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
         if products is None:
             continue
      
+        # Not needed as API supports sorting!
         # Sort products based on sort order argument
-        if sortorder == 'alpha':
-            sorted_products = sorted(products, key=lambda product: product['title'])
-        elif sortorder == 'price':
-            # The lambda performs the following ('p' is standing in for 'products' in the function)
-            # 1. Set p['price'][0] to 'x' for simplicity using a walrus operator
-            # 2. Pick 'formattedPromotionalPrice' if it exists, else 'formattedBasePrice' (0 if neither exist)
-            # 3. Use re.sub to keep only numbers and decimals
-            # 4. Convert to float
-            sorted_products = sorted(products, key=lambda p: float(re.sub(r'[^\d.]', '',
-                (x := p['price'][0])['formattedPromotionalPrice'] or x['formattedBasePrice'] or "0"
-            )))
-        else:
-            sorted_products = products
+        # if sortorder == 'alpha':
+            # sorted_products = sorted(products, key=lambda product: product['title'])
+        # elif sortorder == 'price':
+            # # The lambda performs the following ('p' is standing in for 'products' in the function)
+            # # 1. Set p['price'][0] to 'x' for simplicity using a walrus operator
+            # # 2. Pick 'formattedPromotionalPrice' if it exists, else 'formattedBasePrice' (0 if neither exist)
+            # # 3. Use re.sub to keep only numbers and decimals
+            # # 4. Convert to float
+            # sorted_products = sorted(products, key=lambda p: float(re.sub(r'[^\d.]', '',
+                # (x := p['price'][0])['formattedPromotionalPrice'] or x['formattedBasePrice'] or "0"
+            # )))
+        # else:
+            # sorted_products = products
 
-        for product in sorted_products:
+        for product in products:
             title = product.get("title")
             
             if product.get("price") == []:
