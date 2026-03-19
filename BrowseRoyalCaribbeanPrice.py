@@ -374,7 +374,7 @@ def getWebCatagories(ship,saildate):
             'sailDate': saildate,
             'shipCode': ship,
         },
-        'query': 'query WebCategories($shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $regionCode: String) {\n  categories(\n    shipCode: $shipCode\n    sailDate: $sailDate\n    regionCode: $regionCode\n    filter: {limitCategoriesWithProducts: true, includeNonRevenueCategories: false, limitCategoriesWithVenues: false}\n  ) {\n    ... on CategoryResultSuccess {\n      __typename\n      categories {\n        description\n        id\n        media {\n          source {\n            altText\n            path\n            __typename\n          }\n          primary\n          type\n          __typename\n        }\n        name\n        order\n        __typename\n      }\n    }\n    ... on CategoryExceptions {\n      exceptions {\n        ... on CategoryNotFound {\n          exceptionType\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}',
+        'query': 'query WebCategories($shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $regionCode: String) { categories(shipCode: $shipCode, sailDate: $sailDate, regionCode: $regionCode, filter: {limitCategoriesWithProducts: true}) { ... on CategoryResultSuccess { categories { id name } } } }',
     }
 
     response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
@@ -419,8 +419,13 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
     # 'TE': 'trailers',
     }
 
-    
-    
+    if sortorder == "price":
+        sortKey = "PRICE"
+    elif sortorder == "alpha":
+        sortKey = "TITLE"
+    else:
+        sortKey = "RANK"
+        
     for key in productMap:
         print(productMap[key])
 
@@ -435,7 +440,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 'pageSize': 12,
                 'currentPage': 0,
                 'sorting': {
-                    'sortKey': 'RANK',
+                    'sortKey': sortKey,
                     'sortKeyOrder': 'ASCENDING',
                 },
                 'filter': {
@@ -445,40 +450,42 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 'includeFilterInfo': False,
                 'includeIfABexperience': False,
             },
-            'query': 'query WebProductsByCategory($category: String!, $passengerId: String, $shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $reservationId: String, $pageSize: Long, $currentPage: Long, $sorting: Sorting, $filter: FilterInput, $currencyCode: String!, $includeFilterInfo: Boolean!, $includeIfABexperience: Boolean!) {\n  products(\n    category: $category\n    guestTypes: [ADULT]\n    passengerId: $passengerId\n    shipCode: $shipCode\n    sailDate: $sailDate\n    reservationId: $reservationId\n    pageSize: $pageSize\n    currentPage: $currentPage\n    sorting: $sorting\n    filter: $filter\n    currencyIso: $currencyCode\n  ) {\n    ... on CommerceProductResultSuccess {\n      __typename\n      commerceProducts {\n        activityLevel {\n          code\n          description\n          name\n          __typename\n        }\n        ageRanges {\n          guestType\n          maxValue\n          minValue\n          __typename\n        }\n        approvalStatus {\n          code\n          name\n          __typename\n        }\n        bookingEligibility {\n          allowed\n          reason\n          __typename\n        }\n        categories {\n          code\n          name\n          description\n          subCategories {\n            code\n            name\n            description\n            order\n            __typename\n          }\n          __typename\n        }\n        classifications {\n          code\n          name\n          __typename\n        }\n        dayPorts {\n          day\n          name\n          portCode\n          port\n          __typename\n        }\n        media {\n          source {\n            altText\n            path\n            __typename\n          }\n          type\n          primary\n          __typename\n        }\n        price {\n          currency\n          promotionalPrice\n          shipboardPrice\n          formattedPromotionalPrice\n          formattedBasePrice\n          formattedDailyPrice\n          formattedPromoDailyPrice\n          salesUnit {\n            code\n            name\n            label\n            __typename\n          }\n          __typename\n        }\n        isAtYourLeisure\n        restrictions {\n          maxValue\n          minValue\n          operator\n          restrictionDisplayText\n          unit\n          __typename\n        }\n        references {\n          source\n          target\n          type\n          __typename\n        }\n        stock {\n          stockLevel\n          stockLevelStatus\n          __typename\n        }\n        type {\n          id\n          name\n          __typename\n        }\n        variantOptions {\n          code\n          offer\n          options {\n            code\n            name\n            label\n            sequence\n            __typename\n          }\n          __typename\n        }\n        accessible\n        id\n        baseId\n        defaultVariantId\n        variantType\n        categoryIds\n        title\n        shortDescription\n        trending @include(if: $includeIfABexperience) {\n          code\n          name\n          __typename\n        }\n        popular @include(if: $includeIfABexperience) {\n          code\n          name\n          __typename\n        }\n        new @include(if: $includeIfABexperience) {\n          code\n          name\n          __typename\n        }\n        recommended\n        mostPopular\n        productInterests {\n          code\n          name\n          __typename\n        }\n        complimentary\n        promotion {\n          description\n          value\n          type\n          title\n          displayName\n          code\n          __typename\n        }\n        isALaCarte\n        diningType\n        productStatus\n        description\n        highlights\n        __typename\n      }\n      filterInfo @include(if: $includeFilterInfo) {\n        locations {\n          code\n          name\n          count\n          city\n          region\n          day\n          __typename\n        }\n        activityLevels {\n          code\n          name\n          __typename\n        }\n        durations {\n          code\n          name\n          __typename\n        }\n        interests {\n          code\n          name\n          __typename\n        }\n        subcategories {\n          code\n          name\n          order\n          count\n          __typename\n        }\n        __typename\n      }\n      pageInfo {\n        totalResults\n        totalPages\n        __typename\n      }\n    }\n    ... on CommerceProductExceptions {\n      exceptions {\n        ... on InvalidCategoryException {\n          exceptionType\n          message\n          code\n          title\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}',
+            'query': "query WebProductsByCategory($category: String!, $shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $currencyCode: String!) { products(category: $category, guestTypes: [ADULT], shipCode: $shipCode, sailDate: $sailDate, currencyIso: $currencyCode) { ... on CommerceProductResultSuccess { commerceProducts { id title price { currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice salesUnit{ name }} } } } }",
         }
-
+      
         try:
             response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
         except Exception as e:
             print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
             quit()
 
+        
         payload = response.json().get("data")
         if payload is None:
             continue
         
         products = payload.get("products").get("commerceProducts")
+        
         if products is None:
             continue
      
+        # Not needed as API supports sorting!
         # Sort products based on sort order argument
-        if sortorder == 'alpha':
-            sorted_products = sorted(products, key=lambda product: product['title'])
-        elif sortorder == 'price':
-            # The lambda performs the following ('p' is standing in for 'products' in the function)
-            # 1. Set p['price'][0] to 'x' for simplicity using a walrus operator
-            # 2. Pick 'formattedPromotionalPrice' if it exists, else 'formattedBasePrice' (0 if neither exist)
-            # 3. Use re.sub to keep only numbers and decimals
-            # 4. Convert to float
-            sorted_products = sorted(products, key=lambda p: float(re.sub(r'[^\d.]', '',
-                (x := p['price'][0])['formattedPromotionalPrice'] or x['formattedBasePrice'] or "0"
-            )))
-        else:
-            sorted_products = products
+        # if sortorder == 'alpha':
+            # sorted_products = sorted(products, key=lambda product: product['title'])
+        # elif sortorder == 'price':
+            # # The lambda performs the following ('p' is standing in for 'products' in the function)
+            # # 1. Set p['price'][0] to 'x' for simplicity using a walrus operator
+            # # 2. Pick 'formattedPromotionalPrice' if it exists, else 'formattedBasePrice' (0 if neither exist)
+            # # 3. Use re.sub to keep only numbers and decimals
+            # # 4. Convert to float
+            # sorted_products = sorted(products, key=lambda p: float(re.sub(r'[^\d.]', '',
+                # (x := p['price'][0])['formattedPromotionalPrice'] or x['formattedBasePrice'] or "0"
+            # )))
+        # else:
+            # sorted_products = products
 
-        for product in sorted_products:
-            # Replace unicode em dash and en dash with UTF-8 dash for readability
+        for product in products:
             title = product.get("title").replace(u'—', '-').replace(u'–', '-')
             
             if product.get("price") == []:
@@ -513,11 +520,6 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             if unit == "Per Day":
                 printString =  printString + " per day"
              
-            # Promo % off is basically a scam, do not print it 
-            #promoDescription = product.get("promoDescription")    
-            #if promoDescription is not None:
-            #    promoName = promoDescription.get("displayName")
-            #    printString = printString + f" - {promoName}"
             print(printString)
         
 if __name__ == "__main__":
