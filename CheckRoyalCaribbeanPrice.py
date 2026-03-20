@@ -363,6 +363,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
 
     payload = response.json().get("payload")
     if payload is None:
+        print(f"{prefix} not available for passenger")
         return
 
     title = payload.get("title")    
@@ -385,7 +386,10 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             if perDayPrice:
                 tempString += "per night "
             tempString += f"for {title} of: {paidPrice} {currency} (No Longer for Sale)" + RESET
-            print(tempString)
+        else:
+            tempString = YELLOW + f"\t{passengerName.ljust(10)} not available or already booked" + RESET
+            
+        print(tempString)
         return
     
     # This should pull correct infant, child, or adult price
