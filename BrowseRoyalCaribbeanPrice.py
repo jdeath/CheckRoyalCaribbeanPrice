@@ -84,12 +84,13 @@ def main():
             print("")
             print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
             print("")
-            print("Direct Link To Royal Caribbean Website: ")
             
             isRoyal = "of the Seas" in shipname
             if isRoyal:
+                print("Direct Link To Royal Caribbean Website: ")
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
             else:
+                print("Direct Link To Celebrity Website: ")
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
                 
             #This link is no longer working for a bogus bookingID
@@ -450,7 +451,8 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 'includeFilterInfo': False,
                 'includeIfABexperience': False,
             },
-            'query': "query WebProductsByCategory($category: String!, $shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $currencyCode: String!) { products(category: $category, guestTypes: [ADULT], shipCode: $shipCode, sailDate: $sailDate, currencyIso: $currencyCode) { ... on CommerceProductResultSuccess { commerceProducts { id title price { currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice salesUnit{ name }} } } } }",
+            'query': 'query WebProductsByCategory($category:String!,$passengerId:String,$shipCode:ShipCodeScalar!,$sailDate:LocalDateScalar!,$reservationId:String,$pageSize:Long,$currentPage:Long,$sorting:Sorting,$filter:FilterInput,$currencyCode:String!){products(category:$category,guestTypes:[ADULT],passengerId:$passengerId,shipCode:$shipCode,sailDate:$sailDate,reservationId:$reservationId,pageSize:$pageSize,currentPage:$currentPage,sorting:$sorting,filter:$filter,currencyIso:$currencyCode){... on CommerceProductResultSuccess{commerceProducts{id title price{currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice formattedDailyPrice formattedPromoDailyPrice salesUnit{code name label}}}}}}',
+        
         }
       
         try:
@@ -521,6 +523,6 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
                 printString =  printString + " per day"
              
             print(printString)
-        
+            
 if __name__ == "__main__":
     main()

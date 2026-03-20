@@ -139,18 +139,19 @@ def main(config_path=None):
                     session = requests.session()
                     access_token,accountId,session = login(username,password,session,cruiseLineName)
                     #getLoyalty(access_token,accountId,session)
-                    stateFromProfile = getProfile(access_token,accountId,session)
+                    stateFromProfile, loyaltyNumber = getProfile(access_token,accountId,session)
                     if state is None:
                         state = stateFromProfile
                         
-                    discountFlags = [username, state, senior, military, police]
+                    discountFlags = [loyaltyNumber, state, senior, military, police]
                     getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
         
             if 'cruises' in data:
                 for cruises in data['cruises']:
                         cruiseURL = cruises['cruiseURL'] 
                         paidPrice = float(cruises['paidPrice'])
-                        get_cruise_price(cruiseURL, paidPrice, apobj, False, None,username)
+                        get_cruise_price(cruiseURL, paidPrice, apobj, False, None,None)
+                        
     except FileNotFoundError:
         print("No Configuration File Found")
         print("Would You like me to make a barebones file for you?")
@@ -363,6 +364,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
 
     payload = response.json().get("payload")
     if payload is None:
+        print(f"{prefix} not available for passenger")
         return
 
     title = payload.get("title")    
@@ -385,7 +387,10 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             if perDayPrice:
                 tempString += "per night "
             tempString += f"for {title} of: {paidPrice} {currency} (No Longer for Sale)" + RESET
-            print(tempString)
+        else:
+            tempString = YELLOW + f"\t{passengerName.ljust(10)} not available or already booked" + RESET
+            
+        print(tempString)
         return
     
     # This should pull correct infant, child, or adult price
@@ -597,7 +602,7 @@ def getProfile(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-    return state
+    return state, loyaltyNumber
 
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags):
 
@@ -729,7 +734,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         # Print Current Prices
         if displayCruisePrices:
     
-            [username, state, senior, military, police] = discountFlags
+            [loyaltyNumber, state, senior, military, police] = discountFlags
             # Override if booking says will have a senior
             if senior == "n" and haveASenior:
                 senior = "y"
@@ -747,7 +752,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 paidPrice = float(reservationPricePaid.get(str(reservationId)))
             
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, username, state)
+                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber, state)
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -758,7 +763,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             # Process watchlist for each individual passenger instead of per booking
             for guest in guests:
                 firstName = guest.get("firstName").capitalize()
-                guestPassengerId = guest.get("id")
+                guestPassengerId = guest.get("passengerId")
                 # Use the guest's specific room number if available, otherwise fall back to booking room
                 guestRoom = guest.get("stateroomNumber") or booking.get("stateroomNumber")
                 
@@ -780,7 +785,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         currency = currencyOverride
     else:
         currency = "USD"
-          
+    
     params = {
         'passengerId': passengerId,
         'reservationId': reservationId,
@@ -873,7 +878,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     guestAgeString = guest.get("guestType").lower()
                     
                     # Skip if item checked already
-                    newKey = passengerId + reservationId + prefix + product
+                    newKey = guestPassengerId + reservationId + prefix + product
                     if newKey in foundItems:
                         continue
                     foundItems.append(newKey)
@@ -888,10 +893,9 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     currency = guest.get("priceDetails").get("currency")
                     room = guest.get("stateroomNumber") 
                     #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,guestPassengerId,firstName,room,orderCode,orderDate,owner)
-                    
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, guestPassengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
-def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,username=None,state=None):
+def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
 
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -942,9 +946,8 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,userna
     usedDiscounts = ""
     # Add in Discount codes
     
-    cAndANumber = None
     if not automaticURL:
-        cAndANumber = params.get("r0l",[None])[0]
+        loyaltyNumber = params.get("r0l",[None])[0]
         username = params.get("r0H",[None])[0]
         state = params.get("r0k",[None])[0]
     
@@ -957,7 +960,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,userna
     else:
         police = "n"
         
-    if cAndANumber is not None or username is not None:
+    if loyaltyNumber is not None:
        usedDiscounts += "Loyalty, "
     if state is not None:
        usedDiscounts += "Residency, " 
@@ -980,23 +983,23 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,userna
         else: # This is for a non GTY Room
             url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r={police}&r0s={police}&r0q={military}&r0t={senior}&r0D=y"
     
-    # Do this for all URLS
-    if username is not None:
-        data_bytes = username.encode('utf-8')
-        encoded_bytes = base64.urlsafe_b64encode(data_bytes)
-        encoded_string = encoded_bytes.decode('utf-8')
-        url += f"&r0H={encoded_string}"
-    if cAndANumber is not None:
-        url += f"&r01={cAndANumber}"
+    # Username does not work
+    #if username is not None:
+    #    data_bytes = username.encode('utf-8')
+    #    encoded_bytes = base64.urlsafe_b64encode(data_bytes)
+    #    encoded_string = encoded_bytes.decode('utf-8')
+    #    url += f"&r0H={encoded_string}"
+    if loyaltyNumber is not None:
+        url += f"&r0l={loyaltyNumber}"
     if state is not None:
         url += f"&r0k={state}"
-        
     try:
         response = requests.get(url,headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
         exit(1)
-        
+    
+    
     soup = BeautifulSoup(response.text, "html.parser")
     soupFind = soup.find("span",attrs={"data-testid":"pricing-total"})
     
