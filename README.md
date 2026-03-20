@@ -268,7 +268,7 @@ To find the `prefix` and `product` values for items you want to watch:
 3. The `prefix` is the path following /category/ (`pt_internet` in this case)
 4. The `product` is the value following /product/ (`33F1` in this case)
 5. Use the advertised price in the cruise panner. Eg. Do not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
-6. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes
+6. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes. Due to API limiations, `-w` function only prints default code (eg. 1 Wifi device not 2, 12 evian bottles not 24)
 ### Example Output
 ```
 [WATCH] Deluxe Beverage Package - John (1234): Book! Deluxe Beverage Package Price is lower: 75.00 than 85.00
@@ -398,4 +398,5 @@ Command-line options may be used in any combination.  They are:
 - -o, --sortorder: Sort each category alphabetically, by price (lowest to highest), or the default order from the server (default)
 - -w, --watchlistcodes: Display the codes for each product to put in `CheckRoyalCaribbeanPrice.py` product watchlist function (default no display)
 
+Note: Due to API limiations, `-w` function only prints default code (eg. 1 Wifi device not 2, 12 evian bottles not 24)
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
