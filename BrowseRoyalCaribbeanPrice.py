@@ -11,6 +11,7 @@ def main():
     parser.add_argument('-s', '--ship', type=str, help='Ship')
     parser.add_argument('-d', '--saildate', type=str, help='Sail Date (mm/dd/yy format)')
     parser.add_argument('-o', '--sortorder', choices=['price', 'alpha', 'default'], default="default", help='Set sort order')
+    parser.add_argument('-w', '--watchlistcodes', action='store_true', help='Show Codes For Watchlist')
     args = parser.parse_args()
     
     currency = args.currency
@@ -100,7 +101,7 @@ def main():
             print("")
             #This API appears depreciated
             #getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
-            getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder)
+            getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder,args.watchlistcodes)
     else:
         print("Invalid ship selection")
 
@@ -386,7 +387,7 @@ def getWebCatagories(ship,saildate):
     
     return productMap
     
-def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
+def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCodes):
     
     productMap = getWebCatagories(shipCode,sailDate)
     
@@ -488,7 +489,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
 
         for product in products:
             title = product.get("title")
-            
+            currentId = product.get("id")
             if product.get("price") == []:
                 continue
                 
@@ -520,7 +521,10 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder):
             
             if unit == "Per Day":
                 printString =  printString + " per day"
-             
+            
+            if showWatchlistCodes == True:
+                printString += f" (prefix: {key} , product: {currentId})"
+                
             print(printString)
             
 if __name__ == "__main__":
