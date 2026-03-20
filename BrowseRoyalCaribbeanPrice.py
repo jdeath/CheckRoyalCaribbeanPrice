@@ -451,7 +451,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCode
                 'includeFilterInfo': False,
                 'includeIfABexperience': False,
             },
-            'query': 'query WebProductsByCategory($category:String!,$passengerId:String,$shipCode:ShipCodeScalar!,$sailDate:LocalDateScalar!,$reservationId:String,$pageSize:Long,$currentPage:Long,$sorting:Sorting,$filter:FilterInput,$currencyCode:String!){products(category:$category,guestTypes:[ADULT],passengerId:$passengerId,shipCode:$shipCode,sailDate:$sailDate,reservationId:$reservationId,pageSize:$pageSize,currentPage:$currentPage,sorting:$sorting,filter:$filter,currencyIso:$currencyCode){... on CommerceProductResultSuccess{commerceProducts{id title price{currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice formattedDailyPrice formattedPromoDailyPrice salesUnit{code name label}}}}}}',
+            'query': 'query WebProductsByCategory($category:String!,$passengerId:String,$shipCode:ShipCodeScalar!,$sailDate:LocalDateScalar!,$reservationId:String,$pageSize:Long,$currentPage:Long,$sorting:Sorting,$filter:FilterInput,$currencyCode:String!){products(category:$category,guestTypes:[ADULT],passengerId:$passengerId,shipCode:$shipCode,sailDate:$sailDate,reservationId:$reservationId,pageSize:$pageSize,currentPage:$currentPage,sorting:$sorting,filter:$filter,currencyIso:$currencyCode){... on CommerceProductResultSuccess{commerceProducts{id title variantOptions{code name} price{currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice formattedDailyPrice formattedPromoDailyPrice salesUnit{code name label}}}}}}',
         
         }
       
@@ -488,6 +488,7 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCode
             # sorted_products = products
 
         for product in products:
+            
             title = product.get("title")
             currentId = product.get("id")
             if product.get("price") == []:
@@ -504,7 +505,6 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCode
                 
             if price is None:
                 continue
-            
             
             # Remove any currency codes/$/Pound Sign and spaces
             price = re.sub(r'[^0-9\.]', '', price)
@@ -524,8 +524,22 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCode
             
             if showWatchlistCodes == True:
                 printString += f" (prefix: {key} , product: {currentId})"
-                
+            
             print(printString)
+                
+            # Skip first variant, as it is the default
+            for variantOption in product.get("variantOptions")[1:]:
+               variantCode = variantOption.get("code")
+               variantName = variantOption.get("name")
+               if "Bottles" in variantName:
+                   variantName = variantName + " (larger option)"
+               
+               printString = f"\t{variantName} Price Not Available"
+               if showWatchlistCodes == True:
+                printString += f" (prefix: {key} , product: {variantCode})" 
+               
+               print(printString)
+            
             
 if __name__ == "__main__":
     main()
