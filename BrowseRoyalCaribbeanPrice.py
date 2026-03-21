@@ -2,12 +2,13 @@ import requests
 from datetime import datetime
 import argparse
 import re
+import locale
 
 dateDisplayFormat = "%x"
 
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
-    parser.add_argument('-c', '--currency', type=str, default='USD', help='currency (default: USD)')
+    parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
     parser.add_argument('-s', '--ship', type=str, help='Ship')
     parser.add_argument('-d', '--saildate', type=str, help='Sail Date (mm/dd/yy format)')
     parser.add_argument('-o', '--sortorder', choices=['price', 'alpha', 'default'], default="default", help='Set sort order')
@@ -15,6 +16,9 @@ def main():
     args = parser.parse_args()
     
     currency = args.currency
+    if currency == "System":
+        currency = get_system_currency()
+        
     ships = getShips()
 
     if args.ship:
@@ -108,7 +112,23 @@ def main():
     user_input = input("Hit any key to quit: ")
     print("Have a nice day!")
     
+def get_system_currency():
+    # Set the locale to the system's default
+    # An empty string "" makes setlocale search the appropriate environment variables.
+    try:
+        locale.setlocale(locale.LC_ALL, '')
+    except locale.Error as e:
+        print(f"Warning: Could not set locale. Using default 'C' locale. Error: {e}")
+        # Fallback to 'C' locale or handle as needed
+        locale.setlocale(locale.LC_ALL, 'C')
 
+    # Get a dictionary of the local formatting conventions
+    conventions = locale.localeconv()
+    
+    # Extract the international currency symbol (e.g., "USD ")
+    international_symbol = conventions.get('int_curr_symbol', '').strip()
+    return international_symbol
+    
 def getShips():
 
     headers = {
