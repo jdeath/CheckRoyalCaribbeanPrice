@@ -267,7 +267,7 @@ To find the `prefix` and `product` values for items you want to watch:
 3. The `prefix` is the path following /category/ (`pt_internet` in this case)
 4. The `product` is the value following /product/ (`33F1` in this case)
 5. Use the advertised price in the cruise panner. Eg. Do not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
-6. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes.
+6. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes for every item in a cruise.
 
 ### Example Output
 ```
