@@ -312,11 +312,10 @@ def getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key
             
         try:
             response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
-            
         except Exception as e:
-            return None
             print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-
+            return products
+            
         tempProducts = response.json().get("data").get("products").get("commerceProducts")
         if tempProducts is None:
             break
@@ -340,11 +339,11 @@ def printAndSortProducts(products,sortorder,currency,showWatchlistCodes):
 
     for product in sorted_products:
         
-        title = product.get("title").lstrip()
+        
         currentId = product.get("id")
         if product.get("price") == []:
             continue
-            
+        title = product.get("title").lstrip()
         priceStruct = product.get("price")[0]
         
         price = priceStruct.get("formattedPromotionalPrice")
