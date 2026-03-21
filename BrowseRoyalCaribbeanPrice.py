@@ -481,14 +481,15 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCode
      
         # Alpha Sort via API does not always work, so do a force sort with @AESternberg code
         # Price Sorting works fine from the API 
+        # Ultimate dinning package always starts with a " ", so this removes any leading spaces
         if sortorder == 'alpha':
-            sorted_products = sorted(products, key=lambda product: product['title'])
+            sorted_products = sorted(products, key=lambda product: product['title'].lstrip())
         else:
             sorted_products = products
 
         for product in sorted_products:
             
-            title = product.get("title")
+            title = product.get("title").lstrip()
             currentId = product.get("id")
             if product.get("price") == []:
                 continue
