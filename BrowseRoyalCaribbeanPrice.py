@@ -398,8 +398,6 @@ def printAllProducts(shipCode,sailDate,duration,currency, sortorder, showWatchli
     for key in productMap:
         print(productMap[key])
         
-        dayNumber = "all"
-        
         # Display Shore Excursions by day
         if key == "shorex":
             for day in range(1,duration+2):
