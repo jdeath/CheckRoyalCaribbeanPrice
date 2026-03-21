@@ -324,7 +324,7 @@ def getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key
         
     return products
 
-def printAndSortProducts(products,sortorder,currency,showWatchlistCodes):
+def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
     
     if products is None:
         return
@@ -338,7 +338,6 @@ def printAndSortProducts(products,sortorder,currency,showWatchlistCodes):
         sorted_products = products
 
     for product in sorted_products:
-        
         
         currentId = product.get("id")
         if product.get("price") == []:
@@ -403,10 +402,10 @@ def printAllProducts(shipCode,sailDate,duration,currency, sortorder, showWatchli
                 products = getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, day)
                 if products != []:
                     print(f"   Day {day}")
-                    printAndSortProducts(products,sortorder,currency,showWatchlistCodes)
+                    printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes)
         else:
             products = getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, "all")
-            printAndSortProducts(products,sortorder,currency,showWatchlistCodes)
+            printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes)
             
 if __name__ == "__main__":
     main()
