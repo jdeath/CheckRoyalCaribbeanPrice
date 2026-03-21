@@ -310,14 +310,14 @@ def getAllProducts(shipCode,sailDate,currency, sortorder):
             continue
      
         # Sort products based on sort order argument
-        if sortorder == 'alpha':
-            sorted_products = sorted(products, key=lambda product: product['title'])
-        elif sortorder == 'price':
-            sorted_products = sorted(products, key=lambda product: product['lowestAdultPrice'])
-        else:
-            sorted_products = products
+        #if sortorder == 'alpha':
+        #    sorted_products = sorted(products, key=lambda product: product['title'])
+        #elif sortorder == 'price':
+        #    sorted_products = sorted(products, key=lambda product: product['lowestAdultPrice'])
+        #else:
+        #    sorted_products = products
 
-        for product in sorted_products:
+        for product in products:
             title = product.get("title")
             price = product.get("lowestAdultPrice")
             if price == 0:
@@ -386,10 +386,8 @@ def getWebCatagories(ship,saildate):
         productMap[catagory.get("id")] = catagory.get("name")
     
     return productMap
-    
-def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCodes):
-    
-    productMap = getWebCatagories(shipCode,sailDate)
+
+def getProductsGraphPage(shipCode,sailDate,currency, sortorder, key,page):
     
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0',
@@ -426,68 +424,69 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCode
         sortKey = "TITLE"
     else:
         sortKey = "RANK"
+    
+    json_data = {
+        'operationName': 'WebProductsByCategory',
+        'variables': {
+            'category': key,
+            'passengerId': '',
+            'shipCode': shipCode,
+            'sailDate': sailDate,
+            'reservationId': '000000',
+            'pageSize': 12, # Changing to more than 20 will not return anything
+            'currentPage': page,
+            'sorting': {
+                'sortKey': sortKey,
+                'sortKeyOrder': 'ASCENDING',
+            },
+            'filter': {
+                'includeVariantProducts': False, # Changing to true does not do anything
+            },
+            'currencyCode': currency,
+            'includeFilterInfo': False, # Changing to true does not do anything
+            'includeIfABexperience': False,
+        },
+        'query': 'query WebProductsByCategory($category:String!,$passengerId:String,$shipCode:ShipCodeScalar!,$sailDate:LocalDateScalar!,$reservationId:String,$pageSize:Long,$currentPage:Long,$sorting:Sorting,$filter:FilterInput,$currencyCode:String!){products(category:$category,guestTypes:[ADULT],passengerId:$passengerId,shipCode:$shipCode,sailDate:$sailDate,reservationId:$reservationId,pageSize:$pageSize,currentPage:$currentPage,sorting:$sorting,filter:$filter,currencyIso:$currencyCode){... on CommerceProductResultSuccess{commerceProducts{id title variantOptions{code name} price{currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice formattedDailyPrice formattedPromoDailyPrice salesUnit{code name label}}}}}}',
+    
+    }
+  
+    try:
+        response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
+    except Exception as e:
+        return None
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+
+    return response.json().get("data")
         
+
+def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCodes):
+    
+    productMap = getWebCatagories(shipCode,sailDate)
+    
     for key in productMap:
         print(productMap[key])
-
-        json_data = {
-            'operationName': 'WebProductsByCategory',
-            'variables': {
-                'category': key,
-                'passengerId': '',
-                'shipCode': shipCode,
-                'sailDate': sailDate,
-                'reservationId': '000000',
-                'pageSize': 12,
-                'currentPage': 0,
-                'sorting': {
-                    'sortKey': sortKey,
-                    'sortKeyOrder': 'ASCENDING',
-                },
-                'filter': {
-                    'includeVariantProducts': False,
-                },
-                'currencyCode': currency,
-                'includeFilterInfo': False,
-                'includeIfABexperience': False,
-            },
-            'query': 'query WebProductsByCategory($category:String!,$passengerId:String,$shipCode:ShipCodeScalar!,$sailDate:LocalDateScalar!,$reservationId:String,$pageSize:Long,$currentPage:Long,$sorting:Sorting,$filter:FilterInput,$currencyCode:String!){products(category:$category,guestTypes:[ADULT],passengerId:$passengerId,shipCode:$shipCode,sailDate:$sailDate,reservationId:$reservationId,pageSize:$pageSize,currentPage:$currentPage,sorting:$sorting,filter:$filter,currencyIso:$currencyCode){... on CommerceProductResultSuccess{commerceProducts{id title variantOptions{code name} price{currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice formattedDailyPrice formattedPromoDailyPrice salesUnit{code name label}}}}}}',
         
-        }
-      
-        try:
-            response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
-        except Exception as e:
-            print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-            quit()
-
-        
-        payload = response.json().get("data")
-        if payload is None:
-            continue
-        
-        products = payload.get("products").get("commerceProducts")
+        # Get Multiple Pages of Data
+        products = []
+        for page in range(100):
+            tempPayload = getProductsGraphPage(shipCode,sailDate,currency, sortorder, key, page)
+            tempProducts = tempPayload.get("products").get("commerceProducts")
+            if tempProducts is None:
+                break
+            else:
+                products = products + tempProducts 
         
         if products is None:
             continue
      
-        # Not needed as API supports sorting!
-        # Sort products based on sort order argument
-        # if sortorder == 'alpha':
-            # sorted_products = sorted(products, key=lambda product: product['title'])
-        # elif sortorder == 'price':
-            # # The lambda performs the following ('p' is standing in for 'products' in the function)
-            # # 1. Set p['price'][0] to 'x' for simplicity using a walrus operator
-            # # 2. Pick 'formattedPromotionalPrice' if it exists, else 'formattedBasePrice' (0 if neither exist)
-            # # 3. Use re.sub to keep only numbers and decimals
-            # # 4. Convert to float
-            # sorted_products = sorted(products, key=lambda p: float(re.sub(r'[^\d.]', '',
-                # (x := p['price'][0])['formattedPromotionalPrice'] or x['formattedBasePrice'] or "0"
-            # )))
-        # else:
-            # sorted_products = products
+        # Alpha Sort via API does not always work, so do a force sort with @AESternberg code
+        # Price Sorting works fine from the API 
+        if sortorder == 'alpha':
+            sorted_products = sorted(products, key=lambda product: product['title'])
+        else:
+            sorted_products = products
 
-        for product in products:
+        for product in sorted_products:
             
             title = product.get("title")
             currentId = product.get("id")
