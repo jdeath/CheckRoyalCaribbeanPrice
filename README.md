@@ -382,7 +382,7 @@ Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/Check
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe`. 
 
-Defaults to USD currency. If you want a different currency, for example DKK:
+Defaults to system defined currency. If you want a different currency, for example DKK:
 - `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
 
 If you are looking for a specific ship or sail date, you may also specify them on the command line as well.  Some examples are: 
