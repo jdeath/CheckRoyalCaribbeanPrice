@@ -393,7 +393,7 @@ You may sort the resulting list per category alphabetically, by price, or using 
 - `python BrowseRoyalCaribbeanPrice.py -o alpha` or `python BrowseRoyalCaribbeanPrice.py -o price`
 
 Command-line options may be used in any combination.  They are:
-- -c, --currency: currency (default: USD)
+- -c, --currency: currency (default: System currency) (e.g USD, GBP, DKK or others)
 - -s, --ship: The ship to browse for; do not include 'of the Seas' after the ship name (Royal Caribbean) or 'Celebrity' before it (Celebrity)
 - -d, --saildate: Date of the sailing to browse for (date format is mm/dd/yy)
 - -o, --sortorder: Sort each category alphabetically, by price (lowest to highest), or the default order from the server (default)
