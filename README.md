@@ -24,7 +24,6 @@ If the code saved you money or correctly predicted your cabin number, star the r
 
 ## Install (Windows 10/11 Option) - Python Not Required!
 1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice.exe) .  Link points to the latest release
-   - Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
 1. Move downloaded file to a folder and click `CheckRoyalCaribbeanPrice.exe` file on your computer
    - Note: If no config file is found, code will ask to download a simple config file for you and name it correctly. type "y" and hit enter to download
 1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
