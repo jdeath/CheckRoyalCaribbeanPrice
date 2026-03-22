@@ -2,12 +2,13 @@ import requests
 from datetime import datetime
 import argparse
 import re
+import locale
 
 dateDisplayFormat = "%x"
 
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
-    parser.add_argument('-c', '--currency', type=str, default='USD', help='currency (default: USD)')
+    parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
     parser.add_argument('-s', '--ship', type=str, help='Ship')
     parser.add_argument('-d', '--saildate', type=str, help='Sail Date (mm/dd/yy format)')
     parser.add_argument('-o', '--sortorder', choices=['price', 'alpha', 'default'], default="default", help='Set sort order')
@@ -15,6 +16,9 @@ def main():
     args = parser.parse_args()
     
     currency = args.currency
+    if currency == "System":
+        currency = get_system_currency()
+        
     ships = getShips()
 
     if args.ship:
@@ -99,16 +103,31 @@ def main():
             print("")
             print("These are public prices, sale prices for you could be less")
             print("")
-            #This API appears deprecated
-            #getAllProducts(shipcode,sailing['date'],currency, args.sortorder)
-            getAllProductsGraph(shipcode,sailing['date'],currency, args.sortorder,args.watchlistcodes)
+            
+            printAllProducts(shipcode,sailing['date'],sailing['duration'],currency, args.sortorder,args.watchlistcodes)
     else:
         print("Invalid ship selection")
 
     user_input = input("Hit any key to quit: ")
     print("Have a nice day!")
     
+def get_system_currency():
+    # Set the locale to the system's default
+    # An empty string "" makes setlocale search the appropriate environment variables.
+    try:
+        locale.setlocale(locale.LC_ALL, '')
+    except locale.Error as e:
+        print(f"Warning: Could not set locale. Using default 'C' locale. Error: {e}")
+        # Fallback to 'C' locale or handle as needed
+        locale.setlocale(locale.LC_ALL, 'C')
 
+    # Get a dictionary of the local formatting conventions
+    conventions = locale.localeconv()
+    
+    # Extract the international currency symbol (e.g., "USD ")
+    international_symbol = conventions.get('int_curr_symbol', '').strip()
+    return international_symbol
+    
 def getShips():
 
     headers = {
@@ -156,7 +175,6 @@ def getSailings(shipCode):
         'resultSet': '300',
     }
 
-
     try:
         response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
     except Exception as e:
@@ -167,178 +185,12 @@ def getSailings(shipCode):
     sailings = []
     for voyage in voyages:
         sailDate = voyage.get("sailDate")
+        duration = voyage.get("duration")
         voyageDescription = voyage.get("voyageDescription")
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
-        sailings.append({'date': sailDate, 'displayDate': sailDateDisplay,'description': voyageDescription})
+        sailings.append({'date': sailDate, 'displayDate': sailDateDisplay,'description': voyageDescription,'duration':duration})
         
     return sailings
-
-
-###################
-# Get Products
-# This Function Does Not Get All Products
-
-def getProducts(shipCode, sailDate):
-    
-    headers = {
-        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
-        'accept': 'application/json',
-        'appversion': '1.54.0',
-        'accept-language': 'en',
-        'user-agent': 'okhttp/4.10.0',
-    }
-
-    params = {
-        'sailingID': shipCode + sailDate,
-        'offset': '0',
-        'availableForSale': 'true',
-    }
-
-    try:
-        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/prices', params=params, headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
-
-    print(products = response.json().get("payload"))
-        
-    try:
-        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
-
-    products = response.json().get("payload").get("products")
-   
-    for product in products:
-        
-        productTitle = product.get("productTitle")
-        startingFromPrice = product.get("startingFromPrice")
-        
-        availableForSale = product.get("availableForSale")
-        
-        if not availableForSale:
-            continue
-            
-        if not startingFromPrice or not availableForSale:
-            #print(f"{productTitle}: No Price Available")
-            continue
-            
-        adultPrice = startingFromPrice.get("adultPrice")
-        print(f"{productTitle}  {adultPriceString}")
-
-#############################
-# THIS API APPEARS DEPRECATED
-def getAllProducts(shipCode,sailDate,currency, sortorder):
-    productMap = {}
-    productMap["beverage"] = "Beverage Packages"
-    productMap["shorex"] = "Shore Excursions"
-    productMap["dining"] = "Dining Packages"
-    productMap["internet"] = "Internet Packages"
-    productMap["key"] = "VIP Packages"
-    productMap["spa"] = "Spa and Wellness"
-    productMap["onboardactivities"] = "Onboard Activities"
-    productMap["photoPackage"] = "Photo"
-    productMap["arcade"] = "Arcade"
-    productMap["gifts"] = "Gifts and Gear"
-    productMap["fitness"] = "Fitness"
-    
-    # Graph Call needed to get all Pre/Post items
-    #productMap["preandpost"] = "Pre and Post Cruise"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.5',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'X-Requested-With': 'XMLHttpRequest',
-        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
-        'Content-Type': 'application/json',
-        'X-Request-Id': '68c9cf789b5eaf0d9bf17e9d',
-        'Req-App-Id': 'Royal.Web.PlanMyCruise',
-        'Req-App-Vers': '1.79.1',
-        'Account-Id': 'deadface-babe-4000-feed-facade123456',
-        'Origin': 'https://www.royalcaribbean.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.royalcaribbean.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        # Requests doesn't support trailers
-        # 'TE': 'trailers',
-    }
-
-    params = {
-        'reservationId': '000000',
-        'startDate': sailDate,
-        'currentPage': '0',
-        'pageSize': '1000',
-        'currencyIso': currency,
-        'regionCode': 'ISLAN',
-    }
-    json_data = {
-        'textSearch': None,
-        'sortKey': 'rRank-asc',
-        'filterFacets': None,
-    }
-    
-    for key in productMap:
-        print(productMap[key])
-
-        try:
-            response = requests.post(
-                f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog-unauth/v2/{shipCode}/categories/{key}/products',
-                params=params,
-                headers=headers,
-                json=json_data,
-            )
-        except Exception as e:
-            print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-            quit()
-
-        if response.status_code != 200:
-            print(f"Error getting voyage information (API https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog-unauth/v2/{shipCode}/categories/{key}/products returned error code {response.status_code}). Quitting.")
-            quit()
-
-        payload = response.json().get("payload")
-        if payload is None:
-            continue
-            
-        products = payload.get("products")
-        if products is None:
-            continue
-     
-        # Sort products based on sort order argument
-        if sortorder == 'alpha':
-            sorted_products = sorted(products, key=lambda product: product['title'])
-        elif sortorder == 'price':
-            sorted_products = sorted(products, key=lambda product: product['lowestAdultPrice'])
-        else:
-            sorted_products = products
-
-        for product in sorted_products:
-            title = product.get("title")
-            price = product.get("lowestAdultPrice")
-            if price == 0:
-                continue
-                           
-            printString = f"\t{title}:  {price:.2f} {currency}"
-             
-            if product.get("salesUnit") in [ 'PER_DAY' ]:
-                printString =  printString + " per day" 
-            
-            if product.get("salesUnit") in [ 'PER_NIGHT' ]:
-                printString =  printString + " per night"
-             
-            # Promo % off is basically a scam, do not print it 
-            #promoDescription = product.get("promoDescription")    
-            #if promoDescription is not None:
-            #    promoName = promoDescription.get("displayName")
-            #    printString = printString + f" - {promoName}"
-            
-            print(printString)
 
 def getWebCatagories(ship,saildate):
     headers = {
@@ -387,10 +239,8 @@ def getWebCatagories(ship,saildate):
         productMap[catagory.get("id")] = catagory.get("name")
     
     return productMap
-    
-def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCodes):
-    
-    productMap = getWebCatagories(shipCode,sailDate)
+
+def getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, dayNumber="all"):
     
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0',
@@ -427,119 +277,134 @@ def getAllProductsGraph(shipCode,sailDate,currency, sortorder, showWatchlistCode
         sortKey = "TITLE"
     else:
         sortKey = "RANK"
-        
-    for key in productMap:
-        print(productMap[key])
-
-        json_data = {
-            'operationName': 'WebProductsByCategory',
-            'variables': {
-                'category': key,
-                'passengerId': '',
-                'shipCode': shipCode,
-                'sailDate': sailDate,
-                'reservationId': '000000',
-                'pageSize': 12,
-                'currentPage': 0,
-                'sorting': {
-                    'sortKey': sortKey,
-                    'sortKeyOrder': 'ASCENDING',
-                },
-                'filter': {
-                    'includeVariantProducts': False,
-                },
-                'currencyCode': currency,
-                'includeFilterInfo': False,
-                'includeIfABexperience': False,
+    
+    json_data = {
+        'operationName': 'WebProductsByCategory',
+        'variables': {
+            'category': key,
+            'passengerId': '',
+            'shipCode': shipCode,
+            'sailDate': sailDate,
+            'reservationId': '000000',
+            'pageSize': 12, # Changing to more than 20 will not return anything
+            #'currentPage': page, # This will get set later in the code
+            'sorting': {
+                'sortKey': sortKey,
+                'sortKeyOrder': 'ASCENDING',
             },
-            'query': 'query WebProductsByCategory($category:String!,$passengerId:String,$shipCode:ShipCodeScalar!,$sailDate:LocalDateScalar!,$reservationId:String,$pageSize:Long,$currentPage:Long,$sorting:Sorting,$filter:FilterInput,$currencyCode:String!){products(category:$category,guestTypes:[ADULT],passengerId:$passengerId,shipCode:$shipCode,sailDate:$sailDate,reservationId:$reservationId,pageSize:$pageSize,currentPage:$currentPage,sorting:$sorting,filter:$filter,currencyIso:$currencyCode){... on CommerceProductResultSuccess{commerceProducts{id title variantOptions{code name} price{currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice formattedDailyPrice formattedPromoDailyPrice salesUnit{code name label}}}}}}',
-        
+            'filter': {
+                'includeVariantProducts': False, # Changing to true does not do anything
+            },
+            'currencyCode': currency,
+            'includeFilterInfo': False, # Changing to true does not do anything
+            'includeIfABexperience': False,
+        },
+        'query': 'query WebProductsByCategory($category:String!,$passengerId:String,$shipCode:ShipCodeScalar!,$sailDate:LocalDateScalar!,$reservationId:String,$pageSize:Long,$currentPage:Long,$sorting:Sorting,$filter:FilterInput,$currencyCode:String!){products(category:$category,guestTypes:[ADULT],passengerId:$passengerId,shipCode:$shipCode,sailDate:$sailDate,reservationId:$reservationId,pageSize:$pageSize,currentPage:$currentPage,sorting:$sorting,filter:$filter,currencyIso:$currencyCode){... on CommerceProductResultSuccess{commerceProducts{id title variantOptions{code name} price{currency promotionalPrice shipboardPrice formattedPromotionalPrice formattedBasePrice formattedDailyPrice formattedPromoDailyPrice salesUnit{code name label}}}}}}',
         }
-      
+        
+        
+    if dayNumber != "all":
+        json_data['variables']['filter']['dayNumber']= [ dayNumber, ]
+            
+    products = []
+    for page in range(100):        
+        json_data['variables']['currentPage']= page
+            
         try:
             response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
         except Exception as e:
             print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-            quit()
+            return products
+            
+        tempProducts = response.json().get("data").get("products").get("commerceProducts")
+        if tempProducts is None:
+            break
+        else:
+            products = products + tempProducts 
+        
+    return products
 
-        
-        payload = response.json().get("data")
-        if payload is None:
-            continue
-        
-        products = payload.get("products").get("commerceProducts")
-        
-        if products is None:
-            continue
+def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
+    
+    if products is None:
+        return
      
-        # Not needed as API supports sorting!
-        # Sort products based on sort order argument
-        # if sortorder == 'alpha':
-            # sorted_products = sorted(products, key=lambda product: product['title'])
-        # elif sortorder == 'price':
-            # # The lambda performs the following ('p' is standing in for 'products' in the function)
-            # # 1. Set p['price'][0] to 'x' for simplicity using a walrus operator
-            # # 2. Pick 'formattedPromotionalPrice' if it exists, else 'formattedBasePrice' (0 if neither exist)
-            # # 3. Use re.sub to keep only numbers and decimals
-            # # 4. Convert to float
-            # sorted_products = sorted(products, key=lambda p: float(re.sub(r'[^\d.]', '',
-                # (x := p['price'][0])['formattedPromotionalPrice'] or x['formattedBasePrice'] or "0"
-            # )))
-        # else:
-            # sorted_products = products
+    # Alpha Sort via API does not always work, so do a force sort with @AESternberg code
+    # Price Sorting works fine from the API 
+    # Ultimate dinning package always starts with a " ", so this removes any leading spaces
+    if sortorder == 'alpha':
+        sorted_products = sorted(products, key=lambda product: product['title'].lstrip())
+    else:
+        sorted_products = products
 
-        for product in products:
-            title = product.get("title").replace(u'—', '-').replace(u'–', '-')
-            currentId = product.get("id")
-            if product.get("price") == []:
-                continue
-                
-            priceStruct = product.get("price")[0]
+    for product in sorted_products:
+        
+        currentId = product.get("id")
+        if product.get("price") == []:
+            continue
+        priceStruct = product.get("price")[0]
+        
+        price = priceStruct.get("formattedPromotionalPrice")
+        if price is None:
+            price = priceStruct.get("formattedBasePrice")
+        
+        if price is None:
+            price = priceStruct.get("shipboardPrice")
             
-            price = priceStruct.get("formattedPromotionalPrice")
-            if price is None:
-                price = priceStruct.get("formattedBasePrice")
-            
-            if price is None:
-                price = priceStruct.get("shipboardPrice")
-                
-            if price is None:
-                continue
-            
-            # Remove any currency codes/$/Pound Sign and spaces
-            price = re.sub(r'[^0-9\.]', '', price)
-            price = price.replace(" ", "")
-            if price == 0:
-                continue
+        if price is None:
+            continue
+        
+        # Remove any currency codes/$/Pound Sign and spaces
+        price = re.sub(r'[^0-9\.]', '', price)
+        price = price.replace(" ", "")
+        if price == 0:
+            continue
 
-            unit = priceStruct.get("salesUnit").get("name")
+        unit = priceStruct.get("salesUnit").get("name")
+        
+        printString = f"\t{title} {price} {currency}"
+        
+        if unit == "Per Night":
+            printString =  printString + " per night" 
+        
+        if unit == "Per Day":
+            printString =  printString + " per day"
+        
+        if showWatchlistCodes == True:
+            printString += f" (prefix: {key} , product: {currentId})"
+        
+        print(printString)
             
-            printString = f"\t{title} {price} {currency}"
-            
-            if unit == "Per Night":
-                printString =  printString + " per night" 
-            
-            if unit == "Per Day":
-                printString =  printString + " per day"
-            
-            if showWatchlistCodes == True:
-                printString += f" (prefix: {key} , product: {currentId})"
-            
-            print(printString)
-                
-            # Skip first variant, as it is the default
-            for variantOption in product.get("variantOptions")[1:]:
-               variantCode = variantOption.get("code")
-               variantName = variantOption.get("name")
-               if "Bottles" in variantName:
-                   variantName = variantName + " (larger option)"
-               
-               printString = f"\t{variantName} Price Not Available"
-               if showWatchlistCodes == True:
-                printString += f" (prefix: {key} , product: {variantCode})" 
-               
-               print(printString)
-            
+        # Skip first variant, as it is the default
+        for variantOption in product.get("variantOptions")[1:]:
+           variantCode = variantOption.get("code")
+           variantName = variantOption.get("name")
+           if "Bottles" in variantName:
+               variantName = variantName + " (larger option)"
+           
+           printString = f"\t{variantName} Price Not Available"
+           if showWatchlistCodes == True:
+            printString += f" (prefix: {key} , product: {variantCode})" 
+           
+           print(printString)
+           
+def printAllProducts(shipCode,sailDate,duration,currency, sortorder, showWatchlistCodes):
+    
+    productMap = getWebCatagories(shipCode,sailDate)
+        
+    for key in productMap:
+        print(productMap[key])
+        
+        # Display Shore Excursions by day
+        if key == "shorex":
+            for day in range(1,duration+2):
+                products = getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, day)
+                if products != []:
+                    print(f"   Day {day}")
+                    printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes)
+        else:
+            products = getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, "all")
+            printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes)
             
 if __name__ == "__main__":
     main()

@@ -24,7 +24,6 @@ If the code saved you money or correctly predicted your cabin number, star the r
 
 ## Install (Windows 10/11 Option) - Python Not Required!
 1. Download [CheckRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice.exe) .  Link points to the latest release
-   - Note: A windows .exe is auto created upon every release, but the Python code in repo may be newer. 
 1. Move downloaded file to a folder and click `CheckRoyalCaribbeanPrice.exe` file on your computer
    - Note: If no config file is found, code will ask to download a simple config file for you and name it correctly. type "y" and hit enter to download
 1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
@@ -268,7 +267,7 @@ To find the `prefix` and `product` values for items you want to watch:
 3. The `prefix` is the path following /category/ (`pt_internet` in this case)
 4. The `product` is the value following /product/ (`33F1` in this case)
 5. Use the advertised price in the cruise panner. Eg. Do not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
-6. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes.
+6. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes for every item in a cruise.
 
 ### Example Output
 ```
@@ -375,14 +374,14 @@ Thanks to contributors:
 1. Double check you are cancelling the item for the correct cruise
 
 # Browse RoyalCaribbean Prices
-This is a new script that will browse any Royal Caribbean or Celebrity sailing and display current public prices for excursions/drink packages/etc. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean or Celebrity website which has the product prices for that cruise (be sure to be logged out of the website or link will not work). This does not require a configuration file or a Royal Caribbean/Celebrity account. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` website. 
+This will browse any Royal Caribbean or Celebrity sailing and display current public prices for **every** excursion/drink package/dinning package sold on a cruise. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean or Celebrity website which has the product prices for that cruise (be sure to be logged out of the website or link will not work). This does not require a configuration file or a Royal Caribbean/Celebrity account. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` website. 
 
 Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice.exe) 
 
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe`. 
 
-Defaults to USD currency. If you want a different currency, for example DKK:
+Defaults to system defined currency. If you want a different currency, for example DKK:
 - `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
 
 If you are looking for a specific ship or sail date, you may also specify them on the command line as well.  Some examples are: 
@@ -393,7 +392,7 @@ You may sort the resulting list per category alphabetically, by price, or using 
 - `python BrowseRoyalCaribbeanPrice.py -o alpha` or `python BrowseRoyalCaribbeanPrice.py -o price`
 
 Command-line options may be used in any combination.  They are:
-- -c, --currency: currency (default: USD)
+- -c, --currency: currency (default: System currency) (e.g USD, GBP, DKK or others)
 - -s, --ship: The ship to browse for; do not include 'of the Seas' after the ship name (Royal Caribbean) or 'Celebrity' before it (Celebrity)
 - -d, --saildate: Date of the sailing to browse for (date format is mm/dd/yy)
 - -o, --sortorder: Sort each category alphabetically, by price (lowest to highest), or the default order from the server (default)
