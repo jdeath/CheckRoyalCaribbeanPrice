@@ -394,7 +394,8 @@ Command-line options may be used in any combination.  They are:
 - -c, --currency: currency (default: System currency) (e.g USD, GBP, DKK or others)
 - -s, --ship: The ship to browse for; do not include 'of the Seas' after the ship name (Royal Caribbean) or 'Celebrity' before it (Celebrity)
 - -d, --saildate: Date of the sailing to browse for (date format is mm/dd/yy)
-- -o, --sortorder: Sort each category alphabetically, by price (lowest to highest), or the default order from the server (default)
+- -k, --sortkey: Sort each category alphabetically, by price (lowest to highest), or the default order from the server (default)
+- -o, --sortorder: Sort each category in ascending or descending order, based on the sortkey value
 - -w, --watchlistcodes: Display the codes for each product to put in `CheckRoyalCaribbeanPrice.py` product watchlist function (default no display)
 
 Note: Due to API limiations, `BrowseRoyalCaribbeanPrice.py` only shows price for the default variant (eg. 1 Wifi device not 2, 12 evian bottles not 24), These items are for sale, but the API does not return price. The `CheckRoyalCaribbeanPrice.py` script will find the price for these.

@@ -1,20 +1,22 @@
-import requests
-from datetime import datetime
 import argparse
-import re
 import locale
+import re
+import requests
 
 from datetime import datetime
 from unicodedata import combining, normalize
 
 dateDisplayFormat = "%x"
+GREEN = '\033[1;32m'
+RESET = '\033[0m' # Resets color to default
 
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
     parser.add_argument('-s', '--ship', type=str, help='Ship')
     parser.add_argument('-d', '--saildate', type=str, help='Sail Date (mm/dd/yy format)')
-    parser.add_argument('-o', '--sortorder', choices=['price', 'alpha', 'default'], default="default", help='Set sort order')
+    parser.add_argument('-o', '--sortorder', choices=['asc', 'desc'], default="asc", help='Set sorting order')
+    parser.add_argument('-k', '--sortkey', choices=['price', 'alpha', 'default'], default="default", help='Set value to sort on')
     parser.add_argument('-w', '--watchlistcodes', action='store_true', help='Show Codes For Watchlist')
     args = parser.parse_args()
     
@@ -107,12 +109,13 @@ def main():
             print("These are public prices, sale prices for you could be less")
             print("")
             
-            printAllProducts(shipcode,sailing['date'],sailing['duration'],currency, args.sortorder,args.watchlistcodes)
+            printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes)
     else:
         print("Invalid ship selection")
 
     user_input = input("Hit any key to quit: ")
     print("Have a nice day!")
+    
     
 def get_system_currency():
     # Set the locale to the system's default
@@ -130,6 +133,7 @@ def get_system_currency():
     # Extract the international currency symbol (e.g., "USD ")
     international_symbol = conventions.get('int_curr_symbol', '').strip()
     return international_symbol
+    
     
 def getShips():
 
@@ -195,6 +199,7 @@ def getSailings(shipCode):
         
     return sailings
 
+
 def getWebCatagories(ship,saildate):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0',
@@ -243,8 +248,8 @@ def getWebCatagories(ship,saildate):
     
     return productMap
 
-def getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, dayNumber="all"):
-    
+
+def getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,dayNumber="all"):    
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0',
     'Accept': 'application/json',
@@ -274,13 +279,18 @@ def getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key
     # 'TE': 'trailers',
     }
 
-    if sortorder == "price":
-        sortKey = "PRICE"
-    elif sortorder == "alpha":
-        sortKey = "TITLE"
+    if sortkey == "price":
+        apiSortKey = "PRICE"
+    elif sortkey == "alpha":
+        apiSortKey = "TITLE"
     else:
-        sortKey = "RANK"
-    
+        apiSortKey = "RANK"
+
+    if sortorder == "desc":
+        apiSortOrder = "DESCENDING"
+    else:
+        apiSortOrder = "ASCENDING"
+        
     json_data = {
         'operationName': 'WebProductsByCategory',
         'variables': {
@@ -292,8 +302,8 @@ def getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key
             'pageSize': 12, # Changing to more than 20 will not return anything
             #'currentPage': page, # This will get set later in the code
             'sorting': {
-                'sortKey': sortKey,
-                'sortKeyOrder': 'ASCENDING',
+                'sortKey': apiSortKey,
+                'sortKeyOrder': apiSortOrder,
             },
             'filter': {
                 'includeVariantProducts': False, # Changing to true does not do anything
@@ -327,16 +337,19 @@ def getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key
         
     return products
 
-def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
-    
+
+def printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes):
     if products is None:
         return
      
     # Alpha Sort via API does not always work, so do a force sort with @AESternberg code
     # Price Sorting works fine from the API 
     # Ultimate dinning package always starts with a " ", so this removes any leading spaces
-    if sortorder == 'alpha':
-        sorted_products = sorted(products, key=lambda product: product['title'].lstrip())
+    if sortkey == 'alpha':
+        if sortorder == 'desc':
+            sorted_products = sorted(products, key=lambda product: product['title'].lstrip(), reverse=True)
+        else:
+            sorted_products = sorted(products, key=lambda product: product['title'].lstrip())
     else:
         sorted_products = products
 
@@ -349,7 +362,6 @@ def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
 
         # Some unicode characters don't properly print to ASCII terminals
         # Convert unicode non-printable punctuation characters
-#        title = product.get("title").lstrip()
         tmp_title = product.get("title").lstrip()
         tmp_title = tmp_title.replace('\u2013', '-')  # replace en dash with -
         tmp_title = tmp_title.replace('\u2014', '-')  # replace en dash with -
@@ -380,7 +392,7 @@ def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
 
         unit = priceStruct.get("salesUnit").get("name")
         
-        printString = f"\t{title} {price} {currency}"
+        printString = f"\t{title} " + GREEN + f"{price} {currency}"+ RESET
         
         if unit == "Per Night":
             printString =  printString + " per night" 
@@ -389,7 +401,7 @@ def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
             printString =  printString + " per day"
         
         if showWatchlistCodes == True:
-            printString += f" (prefix: {key} , product: {currentId})"
+            printString += f" (prefix: {key}, product: {currentId})"
         
         print(printString)
             
@@ -402,12 +414,12 @@ def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
            
            printString = f"\t{variantName} Price Not Available"
            if showWatchlistCodes == True:
-            printString += f" (prefix: {key} , product: {variantCode})" 
+               printString += f" (prefix: {key}, product: {variantCode})" 
            
            print(printString)
+
            
-def printAllProducts(shipCode,sailDate,duration,currency, sortorder, showWatchlistCodes):
-    
+def printAllProducts(shipCode,sailDate,duration,currency, sortkey, sortorder, showWatchlistCodes):
     productMap = getWebCatagories(shipCode,sailDate)
         
     for key in productMap:
@@ -416,13 +428,14 @@ def printAllProducts(shipCode,sailDate,duration,currency, sortorder, showWatchli
         # Display Shore Excursions by day
         if key == "shorex":
             for day in range(1,duration+2):
-                products = getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, day)
+                products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,day)
                 if products != []:
                     print(f"   Day {day}")
-                    printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes)
+                    printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes)
         else:
-            products = getProductsGraphAllPages(shipCode,sailDate,duration,currency, sortorder, key, "all")
-            printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes)
-            
+            products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,"all")
+            printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes)
+
+
 if __name__ == "__main__":
     main()
