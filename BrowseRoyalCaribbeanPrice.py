@@ -22,7 +22,7 @@ def main():
     
     currency = args.currency
     if currency == "System":
-        currency = get_system_currency()
+        currency = getSystemCurrency()
         
     ships = getShips()
 
@@ -117,7 +117,7 @@ def main():
     print("Have a nice day!")
     
     
-def get_system_currency():
+def getSystemCurrency():
     # Set the locale to the system's default
     # An empty string "" makes setlocale search the appropriate environment variables.
     try:
@@ -419,7 +419,7 @@ def printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCo
            print(printString)
 
            
-def printAllProducts(shipCode,sailDate,duration,currency, sortkey, sortorder, showWatchlistCodes):
+def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showWatchlistCodes):
     productMap = getWebCatagories(shipCode,sailDate)
         
     for key in productMap:
