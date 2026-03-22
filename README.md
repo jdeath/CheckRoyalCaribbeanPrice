@@ -386,7 +386,8 @@ Defaults to system defined currency. If you want a different currency, for examp
 
 If you are looking for a specific ship or sail date, you may also specify them on the command line as well.  Some examples are: 
 - `python BrowseRoyalCaribbeanPrice.py -s Wonder` or `BrowseRoyalCaribbeanPrice.exe -s Wonder`
-- `python BrowseRoyalCaribbeanPrice.py -d 05/10/27` or `BrowseRoyalCaribbeanPrice.exe -d 05/10/27`
+- `python BrowseRoyalCaribbeanPrice.py -d 05/10/2027` or `BrowseRoyalCaribbeanPrice.exe -d 05/10/2027`
+-- Please note that you may need to adjust the date format for your particular locale setting (for example, '5/10/2027' insead of '05/10/2027')
 
 You may sort the resulting list per category alphabetically, by price, or using the default order from Royal Caribbean's servers.  Some examples are:
 - `python BrowseRoyalCaribbeanPrice.py -o alpha` or `python BrowseRoyalCaribbeanPrice.py -o price`

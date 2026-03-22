@@ -4,6 +4,9 @@ import argparse
 import re
 import locale
 
+from datetime import datetime
+from unicodedata import combining, normalize
+
 dateDisplayFormat = "%x"
 
 def main():
@@ -343,6 +346,21 @@ def printAndSortProducts(products,sortorder,currency,key,showWatchlistCodes):
         if product.get("price") == []:
             continue
         priceStruct = product.get("price")[0]
+
+        # Some unicode characters don't properly print to ASCII terminals
+        # Convert unicode non-printable punctuation characters
+#        title = product.get("title").lstrip()
+        tmp_title = product.get("title").lstrip()
+        tmp_title = tmp_title.replace('\u2013', '-')  # replace en dash with -
+        tmp_title = tmp_title.replace('\u2014', '-')  # replace en dash with -
+        tmp_title = tmp_title.replace('\u2018', '`')  # replace left single quotation with `
+        tmp_title = tmp_title.replace('\u2019', '\'')  # replace right single quotation with '
+        tmp_title = tmp_title.replace('\u201C', '"')  # replace left double quotation with "
+        tmp_title = tmp_title.replace('\u201D', '"')  # replace right double quotation with "
+
+        # Convert unicode non-printable accented characters
+        tmp_title = normalize('NFKD', tmp_title)
+        title = ''.join([c for c in tmp_title if not combining(c)])
         
         price = priceStruct.get("formattedPromotionalPrice")
         if price is None:
