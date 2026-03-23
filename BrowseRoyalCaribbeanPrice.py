@@ -104,7 +104,7 @@ def main():
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
                 
             #This link is no longer working for a bogus bookingID
-            print(f"{linkRoot}?bookingId=000000&shipCode={shipcode}&sailDate={sailing['date']}")
+            print(f"{linkRoot}?bookingId=123456&shipCode={shipcode}&sailDate={sailing['date']}")
             print("")
             print("These are public prices, sale prices for you could be less")
             print("")
