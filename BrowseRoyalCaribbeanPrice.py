@@ -10,6 +10,13 @@ dateDisplayFormat = "%x"
 GREEN = '\033[1;32m'
 RESET = '\033[0m' # Resets color to default
 
+appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
+appversion_mobile = '1.54.0'
+user_agent_mobile = 'okhttp/4.10.0'
+
+user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0'
+appkey_web = 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD'
+
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
@@ -146,11 +153,11 @@ def getSystemCurrency():
 def getShips():
 
     headers = {
-        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'appkey': appkey_mobile,
         'accept': 'application/json',
-        'appversion': '1.54.0',
+        'appversion': appversion_mobile,
         'accept-language': 'en',
-        'user-agent': 'okhttp/4.10.0',
+        'user-agent': user_agent_mobile,
     }
 
     params = {
@@ -179,11 +186,11 @@ def getShips():
 
 def getSailings(shipCode):
     headers = {
-        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'appkey': appkey_mobile,
         'accept': 'application/json',
-        'appversion': '1.54.0',
+        'appversion': appversion_mobile,
         'accept-language': 'en',
-        'user-agent': 'okhttp/4.10.0',
+        'user-agent': user_agent_mobile,
     }
 
     params = {
@@ -210,32 +217,9 @@ def getSailings(shipCode):
 
 def getWebCatagories(ship,saildate):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0',
+        'User-Agent': user_agent_web,
         'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'gqlRouter': 'products',
-        'appkey': 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD',
-        'Operating-System': 'Firefox 148.0',
-        'Operating-System-Version': '148.0',
-        'X-APOLLO-OPERATION-NAME': 'WebCategories',
-        'X-APOLLO-OPERATION-TYPE': 'query',
-        'channel': 'web',
-        'X-Request-Id': '69ba051a4aeed730105836a7',
-        'Req-App-Id': 'Royal.Web.PlanMyCruise',
-        'Req-App-Vers': '1.84.1',
-        'Account-Id': 'deadface-babe-4000-feed-facade123456',
-        'Content-Type': 'application/json',
-        'Origin': 'https://www.royalcaribbean.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.royalcaribbean.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        # Requests doesn't support trailers
-        # 'TE': 'trailers',
+        'appkey': appkey_web,
     }
 
     json_data = {
@@ -258,35 +242,13 @@ def getWebCatagories(ship,saildate):
 
 
 def getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,dayNumber="all"):    
+    
     headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0',
-    'Accept': 'application/json',
-    'Accept-Language': 'en-US,en;q=0.5',
-    # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-    'gqlRouter': 'products',
-    'appkey': 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD',
-    'Operating-System': 'Firefox 146.0',
-    'Operating-System-Version': '146.0',
-    'X-APOLLO-OPERATION-NAME': 'WebProductsByCategory',
-    'X-APOLLO-OPERATION-TYPE': 'query',
-    'channel': 'web',
-    'X-Request-Id': '696582d9e496660a4aaf61ac',
-    'Req-App-Id': 'Royal.Web.PlanMyCruise',
-    'Req-App-Vers': '1.83.0',
-    'Account-Id': 'deadface-babe-4000-feed-facade123456',
-    'Content-Type': 'application/json',
-    'Origin': 'https://www.royalcaribbean.com',
-    'DNT': '1',
-    'Sec-GPC': '1',
-    'Connection': 'keep-alive',
-    'Referer': 'https://www.royalcaribbean.com/',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'cross-site',
-    # Requests doesn't support trailers
-    # 'TE': 'trailers',
+        'User-Agent': user_agent_web,
+        'Accept': 'application/json',
+        'appkey': appkey_web,
     }
-
+    
     if sortkey == "price":
         apiSortKey = "PRICE"
     elif sortkey == "alpha":
@@ -446,11 +408,10 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
 
 def getAllActivities(shipCode, sailDate):
     headers = {
-        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'appkey': appkey_mobile,
         'accept': 'application/json',
-        'platform': 'android',
-        'user-agent': 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0',
-        'appversion': '1.70.1',
+        'user-agent': user_agent_mobile,
+        'appversion': appversion_mobile,
     }
 
     params = {
