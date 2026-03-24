@@ -401,4 +401,4 @@ Command-line options may be used in any combination.  They are:
 Note: Due to API limiations, `BrowseRoyalCaribbeanPrice.py` only shows price for the default variant (eg. 1 Wifi device not 2, 12 evian bottles not 24), These items are for sale, but the API does not return price. The `CheckRoyalCaribbeanPrice.py` script will find the price for these.
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
 
-Cruise activity schedule, such as trivia and game shows, often only populated a few days before the cruise. Look at sailing 1 or 2 in the list to get an idea of current activities on the ship.
+Cruise activity schedule, such as trivia and game shows, often only populated a few days before the cruise. Look at sailing 0) or 1) in the list to get an idea of current activities on the ship.This is much faster than changing your cruise in the App!
