@@ -3,7 +3,7 @@ import locale
 import re
 import requests
 
-from datetime import datetime
+from datetime import datetime, date
 from unicodedata import combining, normalize
 
 dateDisplayFormat = "%x"
@@ -109,12 +109,21 @@ def main():
             print("")
             
             printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes)
+            
+            print("Here are the scheduled activities")
+            activities = getAllActivities(shipcode,sailing['date'])
+            printAllActivities(activities)
     else:
         print("Invalid ship selection")
 
     user_input = input("Hit any key to quit: ")
     print("Have a nice day!")
     
+def daysBetween(sailDate,activityDate):
+    d0 = date(int(sailDate[0:4]), int(sailDate[4:6]), int(sailDate[6:8]))
+    d1 = date(int(activityDate[0:4]), int(activityDate[4:6]), int(activityDate[6:8]))
+    delta = d1 - d0 
+    return(str(delta.days + 1))
     
 def getSystemCurrency():
     # Set the locale to the system's default
@@ -435,6 +444,71 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
             products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,"all")
             printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes)
 
+def getAllActivities(shipCode, sailDate):
+    headers = {
+        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'accept': 'application/json',
+        'platform': 'android',
+        'user-agent': 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0',
+        'appversion': '1.70.1',
+    }
+
+    params = {
+            'sailingID': shipCode + sailDate,
+            'limit': '200',
+            'offset': '0',
+            'availableForSale': 'TRUE',
+        }
+    
+    products = []
+    for offset in range(0,10000,200):
+        params['offset'] = offset
+        
+        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
+
+        if response.json() is None or response.json().get("payload") is None:
+            print("No Activities Scheduled")
+            return products
+            
+        tempProducts = response.json().get("payload").get("products")
+
+        for product in tempProducts:
+
+            productType = product.get("productType").get("productType")
+            
+            if productType != "NON_REVENUE_SCHEDULABLE":
+                continue
+                
+            productTitle = product.get("productTitle")
+            location = product.get("productLocation").get("locationTitle")
+            
+            if location is None:
+                continue
+                
+            offering = product.get("offering")
+            for offer in offering:
+                if offer is not None:
+                    
+                    offeringDate = offer.get("offeringDate")
+                    offeringTime = offer.get("offeringTime")
+                    day = daysBetween(sailDate,offeringDate)
+                    products.append({'productTitle':productTitle,'location':location,'offeringDate':offeringDate,'offeringTime':offeringTime,'day':day})
+                    
+            if len(tempProducts) < 200:
+                return products
+    
+    return products
+
+def printAllActivities(activities):
+    
+    for activity in activities:
+        productTitle = activity.get("productTitle")
+        location = activity.get("location")
+        offeringDate = activity.get("offeringDate")
+        offeringTime = activity.get("offeringTime")
+        day = activity.get("day")
+        print(productTitle + " ; " + location + GREEN + " Day " + day + " " + offeringTime + RESET)
+  
 
 if __name__ == "__main__":
     main()
