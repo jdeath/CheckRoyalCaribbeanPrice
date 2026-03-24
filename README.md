@@ -372,7 +372,7 @@ Thanks to contributors:
 1. Double check you are cancelling the item for the correct cruise
 
 # Browse RoyalCaribbean Prices
-This will browse any Royal Caribbean or Celebrity sailing and display current public prices for **every** excursion/drink package/dinning package sold on a cruise. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean or Celebrity website which has the product prices for that cruise (be sure to be logged out of the website or link will not work). This does not require a configuration file or a Royal Caribbean/Celebrity account. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` website. 
+This will browse any Royal Caribbean or Celebrity sailing and display current public prices for **every** excursion/drink package/dinning package sold on a cruise. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean or Celebrity website which has the product prices for that cruise (be sure to be logged out of the website or link will not work). It will also print any scheduled activities for the cruise, such as trivia and gameshows. This program does **not** require a configuration file nor a Royal Caribbean/Celebrity account. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` website. 
 
 Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice.exe) 
 
@@ -400,3 +400,5 @@ Command-line options may be used in any combination.  They are:
 
 Note: Due to API limiations, `BrowseRoyalCaribbeanPrice.py` only shows price for the default variant (eg. 1 Wifi device not 2, 12 evian bottles not 24), These items are for sale, but the API does not return price. The `CheckRoyalCaribbeanPrice.py` script will find the price for these.
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
+
+Cruise activity schedule, such as trivia and game shows, often only populated a few days before the cruise. Look at sailing 1 or 2 in the list to get an idea of current activities on the ship.
