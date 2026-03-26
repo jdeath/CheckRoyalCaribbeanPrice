@@ -2,6 +2,7 @@ import argparse
 import locale
 import re
 import requests
+import sys
 
 from datetime import datetime, date
 from unicodedata import combining, normalize
@@ -17,6 +18,10 @@ user_agent_mobile = 'okhttp/4.10.0'
 user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0'
 appkey_web = 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD'
 
+# Too much output too quickly can overwhelm Python's output buffer, so use this to periodically flush out the buffer
+# Alternatively, we could have called python with -u ("python -u BrowseRoyalCarribbeanPrice.py...")
+flush_print_buffer = sys.stdout.flush
+
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
@@ -25,6 +30,7 @@ def main():
     parser.add_argument('-o', '--sortorder', choices=['asc', 'desc'], default="asc", help='Set sorting order')
     parser.add_argument('-k', '--sortkey', choices=['price', 'alpha', 'default'], default="default", help='Set value to sort on')
     parser.add_argument('-w', '--watchlistcodes', action='store_true', help='Show Codes For Watchlist')
+    parser.add_argument('-a', '--activitysort', choices=['date', 'alpha', 'default'], default="default", help='Show Codes For Watchlist')
     args = parser.parse_args()
     
     currency = args.currency
@@ -112,25 +118,30 @@ def main():
                 
             print(f"{linkRoot}?bookingId=123456&shipCode={shipcode}&sailDate={sailing['date']}")
             print("")
+            
+            print("Gathering list of products.  This may take a few minutes; please be patient.")
             print("These are public prices, sale prices for you could be less")
             print("")
-            
             printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes)
             
-            print("Here are the scheduled activities")
+            print("")
+            print("Gathering list of activities.  This may take a few minutes; please be patient.")
+            flush_print_buffer()
             activities = getAllActivities(shipcode,sailing['date'])
-            printAllActivities(activities)
+            printAllActivities(activities, args.activitysort)
     else:
         print("Invalid ship selection")
 
     user_input = input("Hit any key to quit: ")
     print("Have a nice day!")
     
+
 def daysBetween(sailDate,activityDate):
     d0 = date(int(sailDate[0:4]), int(sailDate[4:6]), int(sailDate[6:8]))
     d1 = date(int(activityDate[0:4]), int(activityDate[4:6]), int(activityDate[6:8]))
     delta = d1 - d0 
     return(str(delta.days + 1))
+
     
 def getSystemCurrency():
     # Set the locale to the system's default
@@ -150,8 +161,24 @@ def getSystemCurrency():
     return international_symbol
     
     
-def getShips():
+def sanitizeString(string_to_clean):
+    # Some unicode characters don't properly print to ASCII terminals
+    # Convert unicode non-printable punctuation characters
+    tmp_string = string_to_clean.lstrip()
+    tmp_string = tmp_string.replace('\u2013', '-')  # replace en dash with -
+    tmp_string = tmp_string.replace('\u2014', '-')  # replace en dash with -
+    tmp_string = tmp_string.replace('\u2018', '`')  # replace left single quotation with `
+    tmp_string = tmp_string.replace('\u2019', '\'')  # replace right single quotation with '
+    tmp_string = tmp_string.replace('\u201C', '"')  # replace left double quotation with "
+    tmp_string = tmp_string.replace('\u201D', '"')  # replace right double quotation with "
+    tmp_string = tmp_string.replace('\u2120', '(SM)')  # replace right double quotation with "
 
+    # Convert unicode non-printable accented characters
+    tmp_string = normalize('NFKD', tmp_string)
+    return ''.join([c for c in tmp_string if not combining(c)])
+
+
+def getShips():
     headers = {
         'appkey': appkey_mobile,
         'accept': 'application/json',
@@ -183,7 +210,6 @@ def getShips():
 
 ###################
 # Get Sailings
-
 def getSailings(shipCode):
     headers = {
         'appkey': appkey_mobile,
@@ -242,7 +268,6 @@ def getWebCatagories(ship,saildate):
 
 
 def getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,dayNumber="all"):    
-    
     headers = {
         'User-Agent': user_agent_web,
         'Accept': 'application/json',
@@ -291,7 +316,7 @@ def getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortord
             
     products = []
     for page in range(100):        
-        json_data['variables']['currentPage']= page
+        json_data['variables']['currentPage'] = page
             
         try:
             response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
@@ -323,27 +348,13 @@ def printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCo
     else:
         sorted_products = products
 
-    for product in sorted_products:
-        
+    for product in sorted_products:        
         currentId = product.get("id")
         if product.get("price") == []:
             continue
         priceStruct = product.get("price")[0]
 
-        # Some unicode characters don't properly print to ASCII terminals
-        # Convert unicode non-printable punctuation characters
-        tmp_title = product.get("title").lstrip()
-        tmp_title = tmp_title.replace('\u2013', '-')  # replace en dash with -
-        tmp_title = tmp_title.replace('\u2014', '-')  # replace en dash with -
-        tmp_title = tmp_title.replace('\u2018', '`')  # replace left single quotation with `
-        tmp_title = tmp_title.replace('\u2019', '\'')  # replace right single quotation with '
-        tmp_title = tmp_title.replace('\u201C', '"')  # replace left double quotation with "
-        tmp_title = tmp_title.replace('\u201D', '"')  # replace right double quotation with "
-
-        # Convert unicode non-printable accented characters
-        tmp_title = normalize('NFKD', tmp_title)
-        title = ''.join([c for c in tmp_title if not combining(c)])
-        
+        title = sanitizeString(product.get("title"))
         price = priceStruct.get("formattedPromotionalPrice")
         if price is None:
             price = priceStruct.get("formattedBasePrice")
@@ -406,6 +417,8 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
             products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,"all")
             printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes)
 
+        flush_print_buffer()
+
 def getAllActivities(shipCode, sailDate):
     headers = {
         'appkey': appkey_mobile,
@@ -434,7 +447,6 @@ def getAllActivities(shipCode, sailDate):
         tempProducts = response.json().get("payload").get("products")
 
         for product in tempProducts:
-
             productType = product.get("productType").get("productType")
             
             if productType != "NON_REVENUE_SCHEDULABLE":
@@ -448,8 +460,7 @@ def getAllActivities(shipCode, sailDate):
                 
             offering = product.get("offering")
             for offer in offering:
-                if offer is not None:
-                    
+                if offer is not None:                    
                     offeringDate = offer.get("offeringDate")
                     offeringTime = offer.get("offeringTime")
                     day = daysBetween(sailDate,offeringDate)
@@ -460,15 +471,24 @@ def getAllActivities(shipCode, sailDate):
     
     return products
 
-def printAllActivities(activities):
-    
-    for activity in activities:
-        productTitle = activity.get("productTitle")
-        location = activity.get("location")
-        offeringDate = activity.get("offeringDate")
+def printAllActivities(activities, sortorder):
+    if sortorder == 'date':
+        sorted_activities = sorted(activities, key=lambda activity: (activity['offeringDate'],activity['offeringTime']))
+    elif sortorder == 'alpha':
+        # This is likely unnecessary, but here just in case RCCL default is no longer alphabetical order
+        sorted_activities = sorted(activities, key=lambda activity: activity['productTitle'])
+    else:
+        sorted_activities = activities
+
+    print("\nHere are the scheduled activities:")
+    flush_print_buffer() # one last flush before printing the activities
+    for activity in sorted_activities:
+        productTitle = sanitizeString(activity.get("productTitle"))
+        location = sanitizeString(activity.get("location"))
+        offeringDate = datetime.strptime(activity.get("offeringDate"), "%Y%m%d").strftime("%B %d, %Y")
         offeringTime = activity.get("offeringTime")
         day = activity.get("day")
-        print(productTitle + " ; " + location + GREEN + " Day " + day + " " + offeringTime + RESET)
+        print(f"{productTitle}\t {location} " + GREEN + f" {offeringDate} (Day {day}) {offeringTime}" + RESET)
   
 
 if __name__ == "__main__":
