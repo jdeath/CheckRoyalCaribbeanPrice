@@ -3,6 +3,7 @@ import locale
 import re
 import requests
 import sys
+import platform
 
 from datetime import datetime, date
 from unicodedata import combining, normalize
@@ -36,6 +37,12 @@ def main():
     currency = args.currency
     if currency == "System":
         currency = getSystemCurrency()
+    
+    if platform.system() == "iOS":
+        global GREEN
+        global RESET
+        GREEN = ""
+        RESET = ""
         
     ships = getShips()
 
@@ -109,11 +116,17 @@ def main():
             print("")
             
             isRoyal = "of the Seas" in shipname
+            
+            numAdults = 2
+            numChildren = 0
+            GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren)
+            print("")
+            
             if isRoyal:
-                print("Direct Link To Royal Caribbean Website: ")
+                print("Direct Link To Royal Caribbean Cruise Planner Website: ")
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
             else:
-                print("Direct Link To Celebrity Website: ")
+                print("Direct Link To Celebrity Cruise Planner Website: ")
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
                 
             print(f"{linkRoot}?bookingId=123456&shipCode={shipcode}&sailDate={sailing['date']}")
@@ -234,9 +247,10 @@ def getSailings(shipCode):
     for voyage in voyages:
         sailDate = voyage.get("sailDate")
         duration = voyage.get("duration")
+        voyageCode = voyage.get("voyageCode")
         voyageDescription = voyage.get("voyageDescription")
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
-        sailings.append({'date': sailDate, 'displayDate': sailDateDisplay,'description': voyageDescription,'duration':duration})
+        sailings.append({'date': sailDate, 'displayDate': sailDateDisplay,'description': voyageDescription,'duration':duration,'voyageCode':voyageCode})
         
     return sailings
 
@@ -489,7 +503,63 @@ def printAllActivities(activities, sortorder):
         offeringTime = activity.get("offeringTime")
         day = activity.get("day")
         print(f"{productTitle}\t {location} " + GREEN + f" {offeringDate} (Day {day}) {offeringTime}" + RESET)
-  
+
+def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildren):
+
+    cookies = {
+        'currency': currency,
+    }
+
+    headers = {
+        'User-Agent': user_agent_web,
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'currency': currency,
+    }
+    
+    filterString = f"id:{packageCode}|adults:{numAdults}|children:{numChildren}|startDate:{sailDate}~{sailDate}"
+    
+    json_data = {
+        'operationName': 'cruiseSearch_Cruises',
+        'variables': {
+            'filters': filterString,
+            'enableNewCasinoExperience': False,
+            'sort': {
+                'by': 'RECOMMENDED',
+            },
+            'pagination': {
+                'count': 100,
+                'skip': 0,
+            },
+        },
+        'query': 'query cruiseSearch_Cruises($filters: String) {cruiseSearch(filters: $filters) {results {cruises {id sailings {sailDate stateroomClassPricing {price {value currency { code }} stateroomClass {id name content { code } }}}}}}}',
+    }
+
+    resp = requests.post('https://www.royalcaribbean.com/cruises/graph', cookies=cookies, headers=headers, json=json_data)
+
+    cruises = resp.json()["data"]["cruiseSearch"]["results"]["cruises"]
+    if cruises:
+        sailings = cruises[0]["sailings"]
+    else:
+        print("         Sailing is sold out")
+        return
+       
+    for sailing in sailings:
+        
+        if sailing["sailDate"].replace("-", "") != sailDate and sailing["sailDate"] != sailDate:
+            continue
+            
+        prices = sailing["stateroomClassPricing"]
+        for price in prices:
+            cabinCode = price["stateroomClass"]["content"]["code"]                
+            cabinType = price["stateroomClass"]["name"]
+            
+            if price["price"] is None:
+                print(f"\t\t{cabinType} sold out")
+            else:    
+                numPassengers = int(numAdults) + int(numChildren)
+                cabinCostPerPerson = float(price["price"]["value"]) * numPassengers
+                print(f"\t\t{GREEN}{cabinCostPerPerson} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
 
 if __name__ == "__main__":
     main()
