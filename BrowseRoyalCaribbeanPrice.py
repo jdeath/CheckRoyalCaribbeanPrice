@@ -275,6 +275,10 @@ def getWebCatagories(ship,saildate):
     catagories = response.json().get("data").get("categories").get("categories")
 
     productMap = {}
+    if catagories is None:
+        print("No Items for Sale")
+        return productMap
+        
     for catagory in catagories:
         productMap[catagory.get("id")] = catagory.get("name")
     
