@@ -516,13 +516,16 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildre
         'Accept-Language': 'en-US,en;q=0.9',
         'currency': currency,
     }
+        
+    formattedSailDate = sailDate[0:4] + "-" + sailDate[4:6] + "-" + sailDate[6:8]
     
-    filterString = f"id:{packageCode}|adults:{numAdults}|children:{numChildren}|startDate:{sailDate}~{sailDate}"
+    filterString = f"id:{packageCode}|adults:{numAdults}|children:{numChildren}|startDate:{formattedSailDate}~{formattedSailDate}"
     
     json_data = {
         'operationName': 'cruiseSearch_Cruises',
         'variables': {
             'filters': filterString,
+            'qualifiers': '',
             'enableNewCasinoExperience': False,
             'sort': {
                 'by': 'RECOMMENDED',
