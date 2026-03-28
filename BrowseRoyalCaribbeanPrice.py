@@ -484,8 +484,8 @@ def getAllActivities(shipCode, sailDate):
                     day = daysBetween(sailDate,offeringDate)
                     products.append({'productTitle':productTitle,'location':location,'offeringDate':offeringDate,'offeringTime':offeringTime,'day':day})
                     
-            if len(tempProducts) < 200:
-                return products
+            #if len(tempProducts) < 200:
+            #    return products
     
     return products
 
