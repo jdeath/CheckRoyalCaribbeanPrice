@@ -684,10 +684,7 @@ def printMDRMenus(shipCode, sailDate, mdrName):
 
     venues = response.json().get("data").get('venues').get('venues')
     for venue in venues:
-        print(venue.get("id"))
-        if venue.get("id") == "COSMO":
-            print(venue)
-        continue
+        
         for menu in venue.get("menus"):
             #print(menu)
             day = menu.get("day")
