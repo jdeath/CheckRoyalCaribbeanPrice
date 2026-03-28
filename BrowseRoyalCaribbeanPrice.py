@@ -136,6 +136,7 @@ def main():
             print("Gathering list of products.  This may take a few minutes; please be patient.")
             print("These are public prices, sale prices for you could be less")
             print("")
+            
             printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes)
             
             print("")
@@ -450,7 +451,7 @@ def getAllActivities(shipCode, sailDate):
             'sailingID': shipCode + sailDate,
             'limit': '200',
             'offset': '0',
-            'availableForSale': 'TRUE',
+            #'availableForSale': 'FALSE',
         }
     
     products = []
@@ -472,10 +473,10 @@ def getAllActivities(shipCode, sailDate):
                 continue
                 
             productTitle = product.get("productTitle")
-            location = product.get("productLocation").get("locationTitle")
+            location = product.get("productLocation").get("locationTitle","")
             
             if location is None:
-                continue
+                location = ""
                 
             offering = product.get("offering")
             for offer in offering:
@@ -501,6 +502,7 @@ def printAllActivities(activities, sortorder):
 
     print("\nHere are the scheduled activities:")
     flush_print_buffer() # one last flush before printing the activities
+    
     for activity in sorted_activities:
         productTitle = sanitizeString(activity.get("productTitle"))
         location = sanitizeString(activity.get("location"))
@@ -509,6 +511,7 @@ def printAllActivities(activities, sortorder):
         day = activity.get("day")
         print(f"{productTitle}\t {location} {GREEN}{offeringDate} (Day {day}) {offeringTime}{RESET}")
 
+    
 def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildren):
     cookies = {
         'currency': currency,
@@ -568,5 +571,49 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildre
                 cabinCostPerPerson = float(price["price"]["value"]) * numPassengers
                 print(f"\t{GREEN}{cabinCostPerPerson} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
 
+# This is not needed, as dress code in list of activities
+def printThemeNights(shipCode,sailDate,durration):
+    
+    headers = {
+        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'accept': 'application/json',
+        'user-agent': 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0',
+        'appversion': '1.70.1',
+    }
+
+    response = requests.get(f'https://api.rccl.com/en/royal/mobile/v1/ships/{shipCode}/sailDate/{sailDate}/needToKnow', headers=headers)
+
+    payload = response.json().get("payload")
+
+    word_list = ["dress", "attire", "theme","casual"]
+
+    foundTheme = 0
+    for needToKnowCard in payload.get("needToKnowCards"):
+        
+        includedDayCards = needToKnowCard.get("includedDayCards")
+        date = needToKnowCard.get("cardIdentifier")[:8]
+        for card in includedDayCards:
+            title = card.get("cardTitle")
+            titleLower = card.get("cardTitle").lower()
+            #if date == '20260402': # I use this to find missing themes
+            #    print(title)
+                
+            if any(word.lower() in titleLower for word in word_list):
+                if "address" in titleLower:
+                    continue
+                foundTheme += 1
+                
+                day = daysBetween(sailDate,date)
+                subtitle = re.split(r'[.!]+', card.get("cardSubtitle"))[0].replace("<p>", "").replace("&nbsp;","")
+                offeringDate = datetime.strptime(date, "%Y%m%d").strftime("%B %d, %Y")
+                print(f"{GREEN}{offeringDate} (Day {day}){RESET} {title}: {subtitle}")
+    
+    if foundTheme == 0:
+        print("Themes Not Available")
+    elif foundTheme < durration:
+        print("Themes Not Fully Loaded")    
+    flush_print_buffer()
+    
+    
 if __name__ == "__main__":
     main()
