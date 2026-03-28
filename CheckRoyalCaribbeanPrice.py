@@ -608,7 +608,7 @@ def getProfile(access_token,accountId,session):
         print(f"\tC&A: {cAndANumber} {cAndALevel} - {cAndASharedPoints} Shared Points ({cAndAPoints} Individual Points)")
         loyaltyNumber = cAndANumber
         totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
-        print(f"\tTotal Trips: {totalTrips} Total Nights: {totalNights}")
+        print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
     
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
@@ -623,7 +623,7 @@ def getProfile(access_token,accountId,session):
         print(f"\tCaptain's Club Number: {captainsClubId} {captainsClubLoyaltyTier} TIER ({captainsClubLoyaltyRelationshipPoints} Shared Points, {captainsClubLoyaltyIndividualPoints} Individual Points)")
         loyaltyNumber = captainsClubId
         totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
-        print(f"\tTotal Trips: {totalTrips} Total Nights: {totalNights}")
+        print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
         print("Using Captains Club Id To Check Cruise Prices")
 
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
