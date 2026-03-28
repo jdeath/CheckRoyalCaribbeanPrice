@@ -13,7 +13,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Can display active sitewide promotions (flash sales, percentage-off deals) for each sailing
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
-- ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, and onboard activity schedule including dress code! No setup/account required!
+- ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, and onboard activity schedule (including dress code and MDR menus for Royal). No setup/account required!
    
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available. The script simply automates what you can do on the Royal Caribbean website.
@@ -401,6 +401,6 @@ Command-line options may be used in any combination.  They are:
 Note: Due to API limiations, `BrowseRoyalCaribbeanPrice.py` only shows price for the default variant (eg. 1 Wifi device not 2, 12 evian bottles not 24), These items are for sale, but the API does not return price. The `CheckRoyalCaribbeanPrice.py` script will find the price for these.
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
 
-Cruise activity schedule, such as trivia and game shows, often only populated a few days before the cruise. Look at sailing 0) or 1) in the list to get an idea of current activities on the ship. This is much faster than changing your cruise in the App! Look for the "Dress Code" activity to see the theme nights.
+Cruise activity schedule, such as trivia and game shows, often only populated a few days before the cruise. Look at sailing 0) or 1) in the list to get an idea of current activities on the ship. This is much faster than changing your cruise in the App! For Royal, look for the "Dress Code" activity to see the theme nights and will also print MDR menu if available.
 
 You can run this on the iPhone, following the iPhone install directions and download the [BrowseRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/BrowseRoyalCaribbeanPrice.py) to your phone, no need to edit as the Browse script does not need username/password.
