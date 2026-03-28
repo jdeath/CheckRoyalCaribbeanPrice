@@ -622,6 +622,8 @@ def getProfile(access_token,accountId,session):
         captainsClubLoyaltyRelationshipPoints = loyalty.get("captainsClubLoyaltyRelationshipPoints")
         print(f"\tCaptain's Club Number: {captainsClubId} {captainsClubLoyaltyTier} TIER ({captainsClubLoyaltyRelationshipPoints} Shared Points, {captainsClubLoyaltyIndividualPoints} Individual Points)")
         loyaltyNumber = captainsClubId
+        totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
+        print(f"\tTotal Trips: {totalTrips} Total Nights: {totalNights}")
         print("Using Captains Club Id To Check Cruise Prices")
 
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
