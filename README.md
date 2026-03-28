@@ -260,12 +260,12 @@ watchList: # Optional, items to monitor for price drops across all your bookings
 ### Finding Product Information
 To find the `prefix` and `product` values for items you want to watch:
 1. Go to your Cruise Planner website and browse to the package you want to watch
-2. Inspect the URL to find the `prefix` and `product`, for example for the Premium WIFI 2 Device Package the URL looks like:
+1. Inspect the URL to find the `prefix` and `product`, for example for the Premium WIFI 2 Device Package the URL looks like:
    `https://www.celebritycruises.com/account/cruise-planner/category/pt_internet/product/33F1?bookingId=&shipCode=&sailDate=`
-3. The `prefix` is the path following /category/ (`pt_internet` in this case)
-4. The `product` is the value following /product/ (`33F1` in this case)
-5. Use the advertised price in the cruise panner. Eg. Do not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
-6. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes for every item in a cruise.
+1. The `prefix` is the path following /category/ (`pt_internet` in this case)
+1. The `product` is the value following /product/ (`33F1` in this case)
+1. Use the advertised price in the cruise panner. Eg. Do not include gratituty. Use per day price for Beverage Package, UDP, Internet, Key.
+1. You can also run the `BrowseRoyalCaribbeanPrice.py` with the `-w` flag to print the watchlist codes for every item in a cruise.
 
 ### Example Output
 ```

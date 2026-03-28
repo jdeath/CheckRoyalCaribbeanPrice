@@ -23,6 +23,7 @@ appkey_web = 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD'
 # Alternatively, we could have called python with -u ("python -u BrowseRoyalCarribbeanPrice.py...")
 flush_print_buffer = sys.stdout.flush
 
+
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
@@ -117,11 +118,6 @@ def main():
             
             isRoyal = "of the Seas" in shipname
             
-            numAdults = 2
-            numChildren = 0
-            GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren)
-            print("")
-            
             if isRoyal:
                 print("Direct Link To Royal Caribbean Cruise Planner Website: ")
                 linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
@@ -130,6 +126,11 @@ def main():
                 linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
                 
             print(f"{linkRoot}?bookingId=123456&shipCode={shipcode}&sailDate={sailing['date']}")
+            print("")
+            
+            numAdults = 2
+            numChildren = 0
+            GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren)
             print("")
             
             print("Gathering list of products.  This may take a few minutes; please be patient.")
@@ -391,7 +392,7 @@ def printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCo
 
         unit = priceStruct.get("salesUnit").get("name")
         
-        printString = f"\t{title} " + GREEN + f"{price} {currency}"+ RESET
+        printString = f"\t{title} {GREEN}{price} {currency}{RESET}"
         
         if unit == "Per Night":
             printString =  printString + " per night" 
@@ -506,10 +507,9 @@ def printAllActivities(activities, sortorder):
         offeringDate = datetime.strptime(activity.get("offeringDate"), "%Y%m%d").strftime("%B %d, %Y")
         offeringTime = activity.get("offeringTime")
         day = activity.get("day")
-        print(f"{productTitle}\t {location} " + GREEN + f" {offeringDate} (Day {day}) {offeringTime}" + RESET)
+        print(f"{productTitle}\t {location} {GREEN}{offeringDate} (Day {day}) {offeringTime}{RESET}")
 
 def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildren):
-
     cookies = {
         'currency': currency,
     }
@@ -552,21 +552,21 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildre
         return
        
     for sailing in sailings:
-        
         if sailing["sailDate"].replace("-", "") != sailDate and sailing["sailDate"] != sailDate:
             continue
             
+        print("Cheapest available cabins for this sailing:")
         prices = sailing["stateroomClassPricing"]
         for price in prices:
             cabinCode = price["stateroomClass"]["content"]["code"]                
             cabinType = price["stateroomClass"]["name"]
             
             if price["price"] is None:
-                print(f"\t\t{cabinType} sold out")
+                print(f"\t{cabinType} sold out")
             else:    
                 numPassengers = int(numAdults) + int(numChildren)
                 cabinCostPerPerson = float(price["price"]["value"]) * numPassengers
-                print(f"\t\t{GREEN}{cabinCostPerPerson} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
+                print(f"\t{GREEN}{cabinCostPerPerson} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
 
 if __name__ == "__main__":
     main()
