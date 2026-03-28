@@ -144,6 +144,12 @@ def main():
             flush_print_buffer()
             activities = getAllActivities(shipcode,sailing['date'])
             printAllActivities(activities, args.activitysort)
+            
+            if isRoyal:
+                print("")
+                print("Gathering list of MDR Menus.  This may take a few minutes; please be patient.")
+                mdrName = getMDRLocations(shipcode,sailing['date'])
+                printMDRMenus(shipcode, sailing['date'],mdrName)
     else:
         print("Invalid ship selection")
 
@@ -613,7 +619,98 @@ def printThemeNights(shipCode,sailDate,durration):
     elif foundTheme < durration:
         print("Themes Not Fully Loaded")    
     flush_print_buffer()
+
+def getMDRLocations(shipCode,sailDate):
+    # This gets the main dinning room name to reduce API data request
+    headers = {
+    'appkey': '5pWJwSTvu30Dkw5GHLVQ5PsmoKRE1arh',
+    'content-type': 'application/json',
+    'user-agent': 'okhttp/4.10.0',
+    }
+
+    json_data = {
+        'operationName': 'MobileAppPLPVenues',
+        'variables': {
+            'category': 'dining',
+            'sailDate': sailDate,
+            'shipCode': shipCode,
+            'reservationId': '',
+            'passengerId': '',
+            'guestTypes': [
+                'ADULT',
+            ],
+            'filter': {
+                'includeNonRevenueProducts': True,
+                'subCategories': [
+                    'dining_main',
+                ],
+            },
+        },
+        'query': 'query MobileAppPLPVenues($category: String!, $sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $reservationId: String!, $passengerId: String!, $guestTypes: [GuestType!], $filter: ProductVenueFilterInput) { productsByVenueCategories(category: $category, shipCode: $shipCode, sailDate: $sailDate, passengerId: $passengerId, reservationId: $reservationId, filter: $filter, guestTypes: $guestTypes) { ... on VenueCategoryResultSuccess { venueCategories { venueSubCategories { venues { id title isSoldOut features { description } locationOnShip { deckDirection deckNumber } media { path } categoryIds products { price { formattedBasePrice formattedPromotionalPrice } productStatus promotion { displayName } cuisine isALaCarte complimentary mealTypeInfo { name } salesUnit { name } stock { stockLevel } productTypeCategoryId } } } } } ... on VenueCategoryExceptions { exceptions { ... on ProductsNotFound { exceptionType message } ... on VenueCategoryNotFound { exceptionType message } ... on VenuesNotFound { exceptionType message } } } } }',
+    }
+
+    response = requests.post('https://api.rccl.com/en/royal/mobile/graphql', headers=headers, json=json_data)
     
+    venues = response.json().get("data").get("productsByVenueCategories").get("venueCategories")[0].get("venueSubCategories")[0].get("venues")
+    
+    for venue in venues:
+        if 'Main Dining Room' in venue.get("title"):
+            return venue.get("id")
+        
+    return None
+
+def printMDRMenus(shipCode, sailDate, mdrName):
+    headers = {
+    'appkey': '5pWJwSTvu30Dkw5GHLVQ5PsmoKRE1arh',
+    'content-type': 'application/json',
+    'user-agent': 'okhttp/4.10.0',
+    }
+
+    json_data = {
+        'operationName': 'MobileAppMenuDetails',
+        'variables': {
+            'sailDate': sailDate,
+            'shipCode': shipCode,
+            'filter': {
+                'ids': [
+                    mdrName,
+                ],
+            },
+        },
+        'query': 'query MobileAppMenuDetails($sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $filter: VenueFilterInput) { venues(sailDate: $sailDate, shipCode: $shipCode, filter: $filter) {  ... on VenueResultSuccess { venues { id menus { day timeOfDay name sections { menuItems { title price advisoryTags { id description } description } name } } title } } ... on VenueExceptions { exceptions {  ... on VenueNotFound {  message } } } } }',
+    }
+
+    response = requests.post('https://api.rccl.com/en/royal/mobile/graphql', headers=headers, json=json_data)
+
+    venues = response.json().get("data").get('venues').get('venues')
+    for venue in venues:
+        print(venue.get("id"))
+        if venue.get("id") == "COSMO":
+            print(venue)
+        continue
+        for menu in venue.get("menus"):
+            #print(menu)
+            day = menu.get("day")
+            timeOfDay = menu.get("timeOfDay")
+            name = menu.get("name")
+            if "Beverage" in name:
+                continue
+                
+            sections = menu.get("sections")
+            print(f"Day {day} {timeOfDay} {name}")
+            for section in sections:
+                sectionName = section.get("name")
+                if "Juices" in sectionName or "Coffee" in sectionName or "Specialty" in sectionName or "Allergens" in sectionName or "Beverage" in sectionName:
+                    continue
+                    
+                print(sectionName)
+                for menuItem in section.get("menuItems"):
+                    title = menuItem.get("title")
+                    if "Safety" in title or "Recommendations" in title:
+                        continue
+                        
+                    print(title)
+                print("")       
     
 if __name__ == "__main__":
     main()
