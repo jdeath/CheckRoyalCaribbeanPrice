@@ -642,16 +642,15 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
             ],
             'filter': {
                 'includeNonRevenueProducts': True,
-                # Handle both Royal and Celeb here
+
                 'subCategories': [
-                    'dining_main',
+                    'dining_main','food_main',
                 ],
             },
         },
         'query': 'query MobileAppPLPVenues($category: String!, $sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $reservationId: String!, $passengerId: String!, $guestTypes: [GuestType!], $filter: ProductVenueFilterInput) { productsByVenueCategories(category: $category, shipCode: $shipCode, sailDate: $sailDate, passengerId: $passengerId, reservationId: $reservationId, filter: $filter, guestTypes: $guestTypes) { ... on VenueCategoryResultSuccess { venueCategories { venueSubCategories { venues { id title isSoldOut features { description } locationOnShip { deckDirection deckNumber } media { path } categoryIds products { price { formattedBasePrice formattedPromotionalPrice } productStatus promotion { displayName } cuisine isALaCarte complimentary mealTypeInfo { name } salesUnit { name } stock { stockLevel } productTypeCategoryId } } } } } ... on VenueCategoryExceptions { exceptions { ... on ProductsNotFound { exceptionType message } ... on VenueCategoryNotFound { exceptionType message } ... on VenuesNotFound { exceptionType message } } } } }',
     }
 
-    print(isRoyal)
     if not isRoyal:
         json_data['variables']['category'] = 'food'
         
