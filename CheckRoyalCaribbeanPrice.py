@@ -548,6 +548,31 @@ def getLoyalty(access_token,accountId,session):
 
     return loyaltyNumber
 
+def getNumberOfNights(access_token,accountId,session,loyaltyNumber):
+    import requests
+
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'account-id': accountId,
+    }
+
+    params = {
+        'loyaltyNumber': loyaltyNumber,
+    }
+
+    response = requests.get(
+        'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/summary',
+        params=params,
+        headers=headers,
+    )
+    
+    payload = response.json().get("payload")
+    totalNights = payload.get("totalNights","0")
+    totalTrips = payload.get("totalTrips","0")
+    
+    return totalNights, totalTrips
+    
 def getProfile(access_token,accountId,session):
 
     loyaltyNumber = None
@@ -582,6 +607,8 @@ def getProfile(access_token,accountId,session):
     if cAndANumber is not None and cAndASharedPoints is not None and cAndASharedPoints > 0:
         print(f"\tC&A: {cAndANumber} {cAndALevel} - {cAndASharedPoints} Shared Points ({cAndAPoints} Individual Points)")
         loyaltyNumber = cAndANumber
+        totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
+        print(f"\tTotal Trips: {totalTrips} Total Nights: {totalNights}")
     
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
