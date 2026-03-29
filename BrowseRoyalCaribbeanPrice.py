@@ -64,10 +64,10 @@ def main():
         i = 0
         print("Select Ship:")
         for ship in ships:
-            print(f"{i}) {ship['name']}")
+            print(f"{BLUE}{i}{RESET}) {GREEN}{ship['name']}{RESET}")
             i = i + 1
-        print("q - Quit")
-        user_input = input("Enter Ship Number: ")
+        print(f"{BLUE}q{RESET}) - Quit")
+        user_input = input(f"Enter Ship Number: ")
         if user_input == 'q' or user_input == 'Q':
             print("Have a nice day!")
             return
@@ -102,10 +102,10 @@ def main():
             print("")
             print("Select sailing:")
             for sailing in sailings:
-                print(f"{i}) {sailing['displayDate']} {sailing['description']}")
+                print(f"{BLUE}{i}{RESET}) {GREEN}{sailing['displayDate']}{RESET} {sailing['description']}")
                 i = i + 1
-            print("q - Quit")
-            user_input = input("Enter Sailing Number: ")
+            print(f"{BLUE}q{RESET}) - Quit")
+            user_input = input(f"Enter Sailing Number: ")
             if user_input == 'q' or user_input == 'Q':
                 print("Have a nice day!")
                 return
@@ -431,7 +431,7 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
     productMap = getWebCatagories(shipCode,sailDate)
         
     for key in productMap:
-        print(productMap[key])
+        print(f"{BLUE}{productMap[key]}{RESET}")
         
         # Display Shore Excursions by day
         if key == "shorex":
