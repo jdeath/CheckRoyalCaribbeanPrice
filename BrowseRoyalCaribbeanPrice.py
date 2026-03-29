@@ -43,8 +43,10 @@ def main():
     if platform.system() == "iOS":
         global GREEN
         global RESET
+        global BLUE
         GREEN = ""
         RESET = ""
+        BLUE = ""
         
     ships = getShips()
 
