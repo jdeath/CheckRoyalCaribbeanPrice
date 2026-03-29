@@ -1,5 +1,6 @@
 import argparse
 import locale
+import os
 import re
 import requests
 import sys
@@ -23,6 +24,17 @@ appkey_web = 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD'
 # Too much output too quickly can overwhelm Python's output buffer, so use this to periodically flush out the buffer
 # Alternatively, we could have called python with -u ("python -u BrowseRoyalCarribbeanPrice.py...")
 flush_print_buffer = sys.stdout.flush
+
+# This "forces" the output on Windows terminals to handle Unicode
+# It's to prevent TypeErrors and UnicodeEncodeErrors
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
+# Some terminals (like MobaXterm) were having trouble with printing unicode up arrow/down arrow
+# This code detects it; add to the list as more are found (if needed)
+problem_envs = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]
+has_terminal_issues = any(k in os.environ for k in problem_envs)
 
 
 def main():
@@ -140,11 +152,9 @@ def main():
             GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren)
             print("")
             
-            
             print("Gathering list of products.  This may take a few minutes; please be patient.")
             print("These are public prices, sale prices for you could be less")
             print("")
-            flush_print_buffer()
             printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes,ports)
             
             print("")
@@ -154,14 +164,14 @@ def main():
             printAllActivities(activities, args.activitysort)
             
             print("")
-            print("Gathering list of MDR Menus.  This may take a few minutes; please be patient.")
+            print("Gathering list of Main Dining Room Menus.  This may take a few minutes; please be patient.")
             flush_print_buffer()
             mdrName = getMDRLocations(shipcode,sailing['date'],isRoyal)
             printMDRMenus(shipcode, sailing['date'],mdrName,ports)
     else:
         print("Invalid ship selection")
 
-    user_input = input("Hit any key to quit: ")
+    user_input = input("Hit ENTER to quit: ")
     print("Have a nice day!")
     
 
@@ -191,9 +201,12 @@ def getSystemCurrency():
     
     
 def sanitizeString(string_to_clean):
+
     # Some unicode characters don't properly print to ASCII terminals
     # Convert unicode non-printable punctuation characters
     tmp_string = string_to_clean.lstrip()
+    tmp_string = tmp_string.replace('\u00AE', '(R)')  # replace zero-width space with space
+    tmp_string = tmp_string.replace('\u200B', ' ')  # replace zero-width space with space
     tmp_string = tmp_string.replace('\u2013', '-')  # replace en dash with -
     tmp_string = tmp_string.replace('\u2014', '-')  # replace en dash with -
     tmp_string = tmp_string.replace('\u2018', '`')  # replace left single quotation with `
@@ -201,6 +214,10 @@ def sanitizeString(string_to_clean):
     tmp_string = tmp_string.replace('\u201C', '"')  # replace left double quotation with "
     tmp_string = tmp_string.replace('\u201D', '"')  # replace right double quotation with "
     tmp_string = tmp_string.replace('\u2120', '(SM)')  # replace right double quotation with "
+
+    if has_terminal_issues:
+        tmp_string = tmp_string.replace('\u2191', '^')  # replace ↑ with ^
+        tmp_string = tmp_string.replace('\u2193', 'v')  # replace ↓ with v
 
     # Convert unicode non-printable accented characters
     tmp_string = normalize('NFKD', tmp_string)
@@ -270,6 +287,7 @@ def getSailings(shipCode):
         
     return sailings
 
+
 def getSailingDetails(shipCode,sailDate):
     headers = {
         'appkey': appkey_mobile,
@@ -292,7 +310,7 @@ def getSailingDetails(shipCode,sailDate):
     portInfo = response.json().get("payload").get("sailingInfo")[0].get("itinerary").get("portInfo")
     ports = {}
     for port in portInfo:
-        title = port.get("title")
+        title = sanitizeString(port.get("title"))
         arrivalDateTime = port.get("arrivalDateTime")
         arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
         departureDateTime = port.get("departureDateTime")
@@ -311,9 +329,16 @@ def getSailingDetails(shipCode,sailDate):
         if portType == "TENDERED":
             printString += f" (Tendered)"
         
-        
-        print(printString)
+        portString = sanitizeString(printString)
+        print(portString)
+
+    if has_terminal_issues:
+        print("(^ means gangway up; v means gangway down)")
+    else:
+        print("(↑ means gangway up; ↓ means gangway down)")
+
     return ports
+
 
 def getWebCatagories(ship,saildate):
     headers = {
@@ -498,6 +523,7 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
 
         flush_print_buffer()
 
+
 def getAllActivities(shipCode, sailDate):
     headers = {
         'appkey': appkey_mobile,
@@ -520,7 +546,6 @@ def getAllActivities(shipCode, sailDate):
         response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
 
         if response.json() is None or response.json().get("payload") is None:
-            print("No Activities Scheduled")
             return products
             
         tempProducts = response.json().get("payload").get("products")
@@ -545,12 +570,14 @@ def getAllActivities(shipCode, sailDate):
                     day = daysBetween(sailDate,offeringDate)
                     products.append({'productTitle':productTitle,'location':location,'offeringDate':offeringDate,'offeringTime':offeringTime,'day':day})
                     
-            #if len(tempProducts) < 200:
-            #    return products
-    
     return products
 
+
 def printAllActivities(activities, sortorder):
+    if len(activities) == 0:
+        print("No Activities Scheduled")
+        return
+    
     if sortorder == 'date':
         sorted_activities = sorted(activities, key=lambda activity: (activity['offeringDate'],activity['offeringTime']))
     elif sortorder == 'alpha':
@@ -559,7 +586,10 @@ def printAllActivities(activities, sortorder):
     else:
         sorted_activities = activities
 
-    flush_print_buffer() # one last flush before printing the activities
+    # Lots of activities are still overflowing the buffer, so periodically flush it
+    num_printed = 0
+    if not num_printed % 250:
+        flush_print_buffer()
     
     for activity in sorted_activities:
         productTitle = sanitizeString(activity.get("productTitle"))
@@ -629,9 +659,9 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildre
                 cabinCostPerPerson = float(price["price"]["value"]) * numPassengers
                 print(f"\t{GREEN}{cabinCostPerPerson} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
 
-# This is not needed, as dress code in list of activities
-def printThemeNights(shipCode,sailDate,durration):
-    
+
+# This is not needed, as dress code is in list of activities
+def printThemeNights(shipCode,sailDate,duration):
     headers = {
         'appkey': appkey_mobile,
         'accept': 'application/json',
@@ -647,7 +677,6 @@ def printThemeNights(shipCode,sailDate,durration):
 
     foundTheme = 0
     for needToKnowCard in payload.get("needToKnowCards"):
-        
         includedDayCards = needToKnowCard.get("includedDayCards")
         date = needToKnowCard.get("cardIdentifier")[:8]
         for card in includedDayCards:
@@ -668,9 +697,10 @@ def printThemeNights(shipCode,sailDate,durration):
     
     if foundTheme == 0:
         print("Themes Not Available")
-    elif foundTheme < durration:
+    elif foundTheme < duration:
         print("Themes Not Fully Loaded")    
     flush_print_buffer()
+
 
 def getMDRLocations(shipCode,sailDate,isRoyal):
     # This gets the main dinning room name to reduce API data request
@@ -721,6 +751,7 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
     
     return venueIds
 
+
 def printMDRMenus(shipCode, sailDate, venueIds,ports):
     headers = {
     'appkey': appkey_mobile,
@@ -744,8 +775,12 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
 
     venues = response.json().get("data").get('venues').get('venues')
     for venue in venues:
-        
-        for menu in venue.get("menus"):
+        menus = venue.get("menus")        
+        if len(menus) == 0:
+            print("Menus not yet populated; please check again later")
+            return
+
+        for menu in menus:
             day = menu.get("day")
             timeOfDay = menu.get("timeOfDay")
             name = menu.get("name")
@@ -753,22 +788,28 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
                 continue
                 
             sections = menu.get("sections")
-            portTitle = ports.get(int(day),"")
+            portTitle = sanitizeString(ports.get(int(day),""))
             # Celebrity sometimes returns too many menus!
             if portTitle == "":
                 continue
                 
             print(f"{GREEN}Day {day} {timeOfDay} {name}{RESET} : {portTitle}")
             for section in sections:
-                sectionName = section.get("name")
+                sectionName = sanitizeString(section.get("name"))
                 if "Juices" in sectionName or "Coffee" in sectionName or "Specialty" in sectionName or "Allergens" in sectionName or "Beverage" in sectionName or "Wine" in sectionName or "Private" in sectionName:
                     continue
                     
                 print(f"{BLUE}{sectionName}{RESET}")
                 for menuItem in section.get("menuItems"):
-                    title = menuItem.get("title")
-                    if "Safety" in title or "Recommendations" in title:
+                    title = sanitizeString(menuItem.get("title"))
+                    if "Safety" in title or "Recommendations" in title or "" == title:
                         continue
+
+                    # For the theme of dinner, the API is listing both the sectionName and title as the same
+                    # No need to clutter the screen with both
+                    if title == sectionName:
+                        continue
+
                     print(title)
                 print("")       
     
