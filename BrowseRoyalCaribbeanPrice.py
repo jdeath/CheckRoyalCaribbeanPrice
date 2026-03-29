@@ -585,7 +585,7 @@ def printThemeNights(shipCode,sailDate,durration):
         'appkey': appkey_mobile,
         'accept': 'application/json',
         'user-agent': user_agent_mobile,
-        'appversion': '1.70.1',
+        'appversion': appversion_mobile,
     }
 
     response = requests.get(f'https://api.rccl.com/en/royal/mobile/v1/ships/{shipCode}/sailDate/{sailDate}/needToKnow', headers=headers)
@@ -648,7 +648,7 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
                 ],
             },
         },
-        'query': 'query MobileAppPLPVenues($category: String!, $sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $reservationId: String!, $passengerId: String!, $guestTypes: [GuestType!], $filter: ProductVenueFilterInput) { productsByVenueCategories(category: $category, shipCode: $shipCode, sailDate: $sailDate, passengerId: $passengerId, reservationId: $reservationId, filter: $filter, guestTypes: $guestTypes) { ... on VenueCategoryResultSuccess { venueCategories { venueSubCategories { venues { id title isSoldOut features { description } locationOnShip { deckDirection deckNumber } media { path } categoryIds products { price { formattedBasePrice formattedPromotionalPrice } productStatus promotion { displayName } cuisine isALaCarte complimentary mealTypeInfo { name } salesUnit { name } stock { stockLevel } productTypeCategoryId } } } } } ... on VenueCategoryExceptions { exceptions { ... on ProductsNotFound { exceptionType message } ... on VenueCategoryNotFound { exceptionType message } ... on VenuesNotFound { exceptionType message } } } } }',
+        'query': 'query MobileAppPLPVenues($category: String!, $sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $reservationId: String!, $passengerId: String!, $guestTypes: [GuestType!], $filter: ProductVenueFilterInput) { productsByVenueCategories(category: $category, shipCode: $shipCode, sailDate: $sailDate, passengerId: $passengerId, reservationId: $reservationId, filter: $filter, guestTypes: $guestTypes) { ... on VenueCategoryResultSuccess { venueCategories { venueSubCategories { venues { id title categoryIds } } } } ... on VenueCategoryExceptions { exceptions { ... on ProductsNotFound { exceptionType message } ... on VenueCategoryNotFound { exceptionType message } ... on VenuesNotFound { exceptionType message } } } } }',
     }
 
     if not isRoyal:
@@ -686,7 +686,7 @@ def printMDRMenus(shipCode, sailDate, venueIds):
                 'ids': venueIds,
             },
         },
-        'query': 'query MobileAppMenuDetails($sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $filter: VenueFilterInput) { venues(sailDate: $sailDate, shipCode: $shipCode, filter: $filter) {  ... on VenueResultSuccess { venues { id menus { day timeOfDay name sections { menuItems { title price description } name } } title } } ... on VenueExceptions { exceptions {  ... on VenueNotFound {  message } } } } }',
+        'query': 'query MobileAppMenuDetails($sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $filter: VenueFilterInput) { venues(sailDate: $sailDate, shipCode: $shipCode, filter: $filter) {  ... on VenueResultSuccess { venues { id menus { day timeOfDay name sections { menuItems { title } name } } title } } ... on VenueExceptions { exceptions {  ... on VenueNotFound {  message } } } } }',
     }
 
     response = requests.post('https://api.rccl.com/en/royal/mobile/graphql', headers=headers, json=json_data)
@@ -695,7 +695,6 @@ def printMDRMenus(shipCode, sailDate, venueIds):
     for venue in venues:
         
         for menu in venue.get("menus"):
-            #print(menu)
             day = menu.get("day")
             timeOfDay = menu.get("timeOfDay")
             name = menu.get("name")
@@ -714,7 +713,6 @@ def printMDRMenus(shipCode, sailDate, venueIds):
                     title = menuItem.get("title")
                     if "Safety" in title or "Recommendations" in title:
                         continue
-                        
                     print(title)
                 print("")       
     
