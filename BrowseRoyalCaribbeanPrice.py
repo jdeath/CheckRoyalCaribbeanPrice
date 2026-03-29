@@ -755,6 +755,10 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
                 
             sections = menu.get("sections")
             portTitle = ports.get(int(day),"")
+            # Celebrity sometimes returns too many menus!
+            if portTitle == "":
+                continue
+                
             print(f"{GREEN}Day {day} {timeOfDay} {name}{RESET} : {portTitle}")
             for section in sections:
                 sectionName = section.get("name")
