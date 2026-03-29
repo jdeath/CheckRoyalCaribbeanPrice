@@ -261,7 +261,6 @@ def getSailings(shipCode):
     voyages = response.json().get("payload").get("voyages")    
     sailings = []
     for voyage in voyages:
-        print(voyage)
         sailDate = voyage.get("sailDate")
         duration = voyage.get("duration")
         voyageCode = voyage.get("voyageCode")
