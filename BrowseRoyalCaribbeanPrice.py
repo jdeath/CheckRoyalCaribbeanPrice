@@ -10,6 +10,7 @@ from unicodedata import combining, normalize
 
 dateDisplayFormat = "%x"
 GREEN = '\033[1;32m'
+BLUE = '\033[94m'
 RESET = '\033[0m' # Resets color to default
 
 appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
@@ -144,7 +145,6 @@ def main():
             flush_print_buffer()
             activities = getAllActivities(shipcode,sailing['date'])
             printAllActivities(activities, args.activitysort)
-            
             
             print("")
             print("Gathering list of MDR Menus.  This may take a few minutes; please be patient.")
@@ -686,7 +686,7 @@ def printMDRMenus(shipCode, sailDate, venueIds):
                 'ids': venueIds,
             },
         },
-        'query': 'query MobileAppMenuDetails($sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $filter: VenueFilterInput) { venues(sailDate: $sailDate, shipCode: $shipCode, filter: $filter) {  ... on VenueResultSuccess { venues { id menus { day timeOfDay name sections { menuItems { title price advisoryTags { id description } description } name } } title } } ... on VenueExceptions { exceptions {  ... on VenueNotFound {  message } } } } }',
+        'query': 'query MobileAppMenuDetails($sailDate: LocalDateScalar!, $shipCode: ShipCodeScalar!, $filter: VenueFilterInput) { venues(sailDate: $sailDate, shipCode: $shipCode, filter: $filter) {  ... on VenueResultSuccess { venues { id menus { day timeOfDay name sections { menuItems { title price description } name } } title } } ... on VenueExceptions { exceptions {  ... on VenueNotFound {  message } } } } }',
     }
 
     response = requests.post('https://api.rccl.com/en/royal/mobile/graphql', headers=headers, json=json_data)
@@ -703,13 +703,13 @@ def printMDRMenus(shipCode, sailDate, venueIds):
                 continue
                 
             sections = menu.get("sections")
-            print(f"Day {day} {timeOfDay} {name}")
+            print(f"{GREEN}Day {day} {timeOfDay} {name}{RESET}")
             for section in sections:
                 sectionName = section.get("name")
                 if "Juices" in sectionName or "Coffee" in sectionName or "Specialty" in sectionName or "Allergens" in sectionName or "Beverage" in sectionName or "Wine" in sectionName or "Private" in sectionName:
                     continue
                     
-                print(sectionName)
+                print(f"{BLUE}{sectionName}{RESET}")
                 for menuItem in section.get("menuItems"):
                     title = menuItem.get("title")
                     if "Safety" in title or "Recommendations" in title:
