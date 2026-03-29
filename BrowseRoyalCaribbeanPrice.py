@@ -559,7 +559,6 @@ def printAllActivities(activities, sortorder):
     else:
         sorted_activities = activities
 
-    print("\nHere are the scheduled activities:")
     flush_print_buffer() # one last flush before printing the activities
     
     for activity in sorted_activities:
