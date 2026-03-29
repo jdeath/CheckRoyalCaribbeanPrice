@@ -582,9 +582,9 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildre
 def printThemeNights(shipCode,sailDate,durration):
     
     headers = {
-        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
+        'appkey': appkey_mobile,
         'accept': 'application/json',
-        'user-agent': 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0',
+        'user-agent': user_agent_mobile,
         'appversion': '1.70.1',
     }
 
@@ -624,9 +624,9 @@ def printThemeNights(shipCode,sailDate,durration):
 def getMDRLocations(shipCode,sailDate,isRoyal):
     # This gets the main dinning room name to reduce API data request
     headers = {
-    'appkey': '5pWJwSTvu30Dkw5GHLVQ5PsmoKRE1arh',
+    'appkey': appkey_mobile,
     'content-type': 'application/json',
-    'user-agent': 'okhttp/4.10.0',
+    'user-agent': user_agent_mobile,
     }
 
     json_data = {
@@ -672,9 +672,9 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
 
 def printMDRMenus(shipCode, sailDate, venueIds):
     headers = {
-    'appkey': '5pWJwSTvu30Dkw5GHLVQ5PsmoKRE1arh',
+    'appkey': appkey_mobile,
     'content-type': 'application/json',
-    'user-agent': 'okhttp/4.10.0',
+    'user-agent': user_agent_mobile,
     }
 
     json_data = {
