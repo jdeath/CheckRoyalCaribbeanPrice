@@ -205,6 +205,7 @@ def sanitizeString(string_to_clean):
     # Some unicode characters don't properly print to ASCII terminals
     # Convert unicode non-printable punctuation characters
     tmp_string = string_to_clean.lstrip()
+    tmp_string = tmp_string.replace('\u00AE', '(R)')  # replace zero-width space with space
     tmp_string = tmp_string.replace('\u200B', ' ')  # replace zero-width space with space
     tmp_string = tmp_string.replace('\u2013', '-')  # replace en dash with -
     tmp_string = tmp_string.replace('\u2014', '-')  # replace en dash with -
@@ -585,7 +586,10 @@ def printAllActivities(activities, sortorder):
     else:
         sorted_activities = activities
 
-    flush_print_buffer() # one last flush before printing the activities
+    # Lots of activities are still overflowing the buffer, so periodically flush it
+    num_printed = 0
+    if not num_printed % 250:
+        flush_print_buffer()
     
     for activity in sorted_activities:
         productTitle = sanitizeString(activity.get("productTitle"))
