@@ -119,6 +119,10 @@ def main():
             print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
             print("")
             
+            flush_print_buffer()
+            ports = getSailingDetails(shipcode,sailing['date'])
+            print("")
+            
             isRoyal = "of the Seas" in shipname
             
             if isRoyal:
@@ -136,11 +140,12 @@ def main():
             GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren)
             print("")
             
+            
             print("Gathering list of products.  This may take a few minutes; please be patient.")
             print("These are public prices, sale prices for you could be less")
             print("")
-            
-            printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes)
+            flush_print_buffer()
+            printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes,ports)
             
             print("")
             print("Gathering list of activities.  This may take a few minutes; please be patient.")
@@ -152,7 +157,7 @@ def main():
             print("Gathering list of MDR Menus.  This may take a few minutes; please be patient.")
             flush_print_buffer()
             mdrName = getMDRLocations(shipcode,sailing['date'],isRoyal)
-            printMDRMenus(shipcode, sailing['date'],mdrName)
+            printMDRMenus(shipcode, sailing['date'],mdrName,ports)
     else:
         print("Invalid ship selection")
 
@@ -256,6 +261,7 @@ def getSailings(shipCode):
     voyages = response.json().get("payload").get("voyages")    
     sailings = []
     for voyage in voyages:
+        print(voyage)
         sailDate = voyage.get("sailDate")
         duration = voyage.get("duration")
         voyageCode = voyage.get("voyageCode")
@@ -265,6 +271,50 @@ def getSailings(shipCode):
         
     return sailings
 
+def getSailingDetails(shipCode,sailDate):
+    headers = {
+        'appkey': appkey_mobile,
+        'accept': 'application/json',
+        'appversion': appversion_mobile,
+        'accept-language': 'en',
+        'user-agent': user_agent_mobile,
+    }
+
+    params = {
+        'resultSet': '300',
+    }
+
+    try:
+        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/voyages/{shipCode}{sailDate}/enriched', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    portInfo = response.json().get("payload").get("sailingInfo")[0].get("itinerary").get("portInfo")
+    ports = {}
+    for port in portInfo:
+        title = port.get("title")
+        arrivalDateTime = port.get("arrivalDateTime")
+        arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
+        departureDateTime = port.get("departureDateTime")
+        portType = port.get("portType")
+        day = port.get("day")
+        # Save port names for later
+        ports[int(day)] = title
+        
+        printString = f"Day {day} ({arrivalDateDisplay}): {title}"
+        if portType == "EMBARK":
+            printString += f" ↑ {departureDateTime[9:13]}"
+        elif portType == "DEBARK":
+            printString += f" ↓ {arrivalDateTime[9:13]}"
+        elif title != "Cruising":
+            printString += f" ↓ {arrivalDateTime[9:13]} ↑ {departureDateTime[9:13]}"
+        if portType == "TENDERED":
+            printString += f" (Tendered)"
+        
+        
+        print(printString)
+    return ports
 
 def getWebCatagories(ship,saildate):
     headers = {
@@ -429,7 +479,7 @@ def printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCo
            print(printString)
 
            
-def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showWatchlistCodes):
+def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showWatchlistCodes,ports):
     productMap = getWebCatagories(shipCode,sailDate)
         
     for key in productMap:
@@ -440,7 +490,8 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
             for day in range(1,duration+2):
                 products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,day)
                 if products != []:
-                    print(f"   Day {day}")
+                    portTitle = ports.get(int(day),"")
+                    print(f"   Day {day} : {portTitle}")
                     printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes)
         else:
             products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,"all")
@@ -672,7 +723,7 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
     
     return venueIds
 
-def printMDRMenus(shipCode, sailDate, venueIds):
+def printMDRMenus(shipCode, sailDate, venueIds,ports):
     headers = {
     'appkey': appkey_mobile,
     'content-type': 'application/json',
@@ -704,7 +755,8 @@ def printMDRMenus(shipCode, sailDate, venueIds):
                 continue
                 
             sections = menu.get("sections")
-            print(f"{GREEN}Day {day} {timeOfDay} {name}{RESET}")
+            portTitle = ports.get(int(day),"")
+            print(f"{GREEN}Day {day} {timeOfDay} {name}{RESET} : {portTitle}")
             for section in sections:
                 sectionName = section.get("name")
                 if "Juices" in sectionName or "Coffee" in sectionName or "Specialty" in sectionName or "Allergens" in sectionName or "Beverage" in sectionName or "Wine" in sectionName or "Private" in sectionName:
