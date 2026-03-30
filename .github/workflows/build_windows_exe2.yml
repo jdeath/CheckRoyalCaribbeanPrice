@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
+          pip install pyinstaller requests
           # If you have a requirements.txt file:
           # Install requirements later, as may make binary smaller
           #pip install -r requirements.txt
