@@ -721,8 +721,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 
             passengerNames += f"{firstName}, "
             
-            # API says Checkin Time is in UTC, but I think in local time
-            # Todo, send reminder to checkin if not done and past date
+            # API says Boarding Time is in UTC, but I think in local time
             if guest.get("onlineCheckinStatus") == "COMPLETED":
                 boarding_hour = guest.get("arrivalTime")[9:11]
                 boarding_min = guest.get("arrivalTime")[11:13]
@@ -743,8 +742,12 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         print(f"{sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
         
+        # Print Boarding Info or provide check in information
         if checkinString != "":
             print(checkinString)
+        else:
+            GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj)
+        
         
         finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
         finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
@@ -1214,74 +1217,6 @@ def getShipDictionary():
         shipCodes[shipCode] = name
     return shipCodes
 
-# Get SailDates From a Ship Code
-def getSailDates(shipCode):
-    headers = {
-        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
-        'accept': 'application/json',
-        'appversion': '1.54.0',
-        'accept-language': 'en',
-        'user-agent': 'okhttp/4.10.0',
-    }
-
-    params = {
-        'resultSet': '100',
-    }
-
-
-    try:
-        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
-
-    voyages = response.json().get("payload").get("voyages")    
-    sailDates = []
-    for voyage in voyages:
-        sailDate = voyage.get("sailDate")
-        sailDates.append(sailDate)
-        voyageDescription = voyage.get("voyageDescription")
-        voyageId = voyage.get("voyageId")
-        voyageCode = voyage.get("voyageCode")
-        print(f"{sailDate} {voyageDescription}")
-
-    return sailDates
-
-# Get Available Products from shipcode and saildate
-def getProducts(shipCode, sailDate):
-    
-    headers = {
-        'appkey': 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc',
-        'accept': 'application/json',
-        'appversion': '1.54.0',
-        'accept-language': 'en',
-        'user-agent': 'okhttp/4.10.0',
-    }
-
-    params = {
-        'sailingID': shipCode + sailDate,
-        'offset': '0',
-        'availableForSale': 'all',
-    }
-
-    try:
-        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
-
-    products = response.json().get("payload").get("products")
-    for product in products:
-        productTitle = product.get("productTitle")
-        startingFromPrice = product.get("startingFromPrice")
-        
-        availableForSale = product.get("availableForSale")
-        if not startingFromPrice or not availableForSale:
-            continue
-            
-        adultPrice = startingFromPrice.get("adultPrice")
-        print(f"{productTitle} {adultPrice}")
-
 def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     # Unused, need javascript parsing to see offer
     # Could notify when Royal Up is available, but not too useful.
@@ -1475,14 +1410,44 @@ def GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sai
     payload = response.json().get("payload")
     if not payload:
         return
-        
+    
     amount = payload.get("amount")
     cur = payload.get("currencyIso")
     
     if amount and amount > 0:
         print(f"\tOnboard Credit of {amount} {cur}")
-   
 
+def GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj):
+    
+    headers = {
+        'Access-Token': access_token,
+        'AppKey': appKey,
+        'Account-Id': accountId,
+    }
+        
+    try:
+        response = requests.get(
+            f'https://aws-prd.api.rccl.com/en/royal/web/v3/ships/voyages/{shipCode}{sailDate}/enriched',
+            headers=headers,
+        )
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    payload = response.json().get("payload")
+    if not payload:
+        return
+
+    isCheckinAvailable = payload.get("sailingInfo")[0].get("isCheckinAvailable")
+    checkWindowOpenStartDateTime = payload.get("sailingInfo")[0].get("checkWindowOpenStartDateTime")
+    
+    if isCheckinAvailable:
+        print(f"{RED}Check In Available and Not Completed{RESET}")
+    else:
+        dt = datetime.fromisoformat(checkWindowOpenStartDateTime)
+        local_dt = dt.astimezone().strftime(dateDisplayFormat + " %X %Z")
+        print(f"Check In opens on: {local_dt}")
+        
 if __name__ == "__main__":
     config_path = get_config_path()
     apobj, notify_on_error = build_apprise_from_config(config_path)
