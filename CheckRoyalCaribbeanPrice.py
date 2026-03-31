@@ -11,6 +11,7 @@ import argparse
 import locale
 import sys
 import traceback
+import time
 
 appKey = "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"
 
@@ -141,7 +142,9 @@ def main(config_path=None):
             if 'reservationPricePaid' in data:
                 reservationPricePaid=data.get('reservationPricePaid', {})
             
+            
             if 'accountInfo' in data:
+                numAccounts = len(data['accountInfo'])
                 for accountInfo in data['accountInfo']:
                     username = accountInfo['username']
                     password = accountInfo['password']
@@ -163,15 +166,21 @@ def main(config_path=None):
 
                     print(f"\nChecking {friendlyCruiseLine} for user {username}")
                     session = requests.session()
+                    global foundItems # Clear found items between accounts
+                    foundItems = [] # Clear found items between accounts
                     access_token,accountId,session = login(username,password,session,cruiseLineName)
-                    #getLoyalty(access_token,accountId,session)
                     stateFromProfile, loyaltyNumber = getProfile(access_token,accountId,session)
                     if state is None:
                         state = stateFromProfile
                         
                     discountFlags = [loyaltyNumber, state, senior, military, police]
                     getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
-        
+                
+                    if numAccounts > 1:
+                        session.close()
+                        print("Sleeping for 30 seconds to allow API to cool down between accounts")
+                        time.sleep(30)
+                
             if 'cruises' in data:
                 for cruises in data['cruises']:
                         cruiseURL = cruises['cruiseURL'] 
