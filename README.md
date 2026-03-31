@@ -27,9 +27,9 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Move downloaded file to a folder and click `CheckRoyalCaribbeanPrice.exe` file on your computer
    - Note: If no config file is found, code will ask to download a simple config file for you and name it correctly. type "y" and hit enter to download
 1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
+1. The downloaded configuration file will log the output to "output.txt", this avoids requiring to keep the output on screen.
 1. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
 1. After confirmed working, add more options into `config.yaml` and review the automation/notification section below if you want to run it automatically a couple times a day!
-1. The downloaded configuration file will log the output to "output.txt", this avoids requiring to keep the output on screen.
 1. To keep output on screen, go to folder you put `CheckRoyalCaribbeanPrice.exe`, type `cmd` and hit enter in the location field. A dos prompt window should open up. Type `CheckRoyalCaribbeanPrice.exe` in the dos prompt:
 
  
@@ -149,7 +149,7 @@ accountInfo:
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
-To log your output to a file, add the LogFile line:
+To log your output to a file, add the LogFile line. If you do not want logging, remove the line
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
