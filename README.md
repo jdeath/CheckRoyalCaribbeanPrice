@@ -409,7 +409,7 @@ Command-line options may be used in any combination.  They are:
 - -o, --sortorder: Sort each category in ascending or descending order, based on the sortkey value
 - -w, --watchlistcodes: Display the codes for each product to put in `CheckRoyalCaribbeanPrice.py` product watchlist function (default no display)
 - -l, --logfile: Output also saves to file (eg. output.txt)
-- 
+   
 Note: Due to API limiations, `BrowseRoyalCaribbeanPrice.py` only shows price for the default variant (eg. 1 Wifi device not 2, 12 evian bottles not 24), These items are for sale, but the API does not return price. The `CheckRoyalCaribbeanPrice.py` script will find the price for these.
 There are no plans to add price checking/price history to this script. Use the `CheckRoyalCaribbeanPrice.py` script for that. If you really want to check public prices which may not be representative of the real deal you can get, just use `RoyalPriceTracker.com`.
 
