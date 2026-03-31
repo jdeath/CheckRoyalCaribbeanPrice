@@ -30,6 +30,26 @@ dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by con
 
 shipDictionary = {}
 
+class Logger(object):
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        self.log = open(filename, "a", encoding="utf-8")
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        delimiter = f"\n{'='*60}\n--- RUN STARTED: {timestamp_str} ---\n{'='*60}\n"
+        self.log.write(delimiter)
+        self.log.flush()
+
+    def write(self, message):
+        self.terminal.write(message)
+        # Remove ANSI color codes so the text file is readable, not filled with \033
+        clean_message = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', message)
+        self.log.write(clean_message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
 def get_config_path():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
     parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
@@ -68,7 +88,13 @@ def main(config_path=None):
             if 'dateDisplayFormat' in data:
                 global dateDisplayFormat
                 dateDisplayFormat = data['dateDisplayFormat']
-            
+
+            if 'logFile' in data:
+                logFile = data['logFile']
+                print(f"Logging run to file: {logFile}")
+                sys.stdout = Logger(logFile)
+                sys.stderr = sys.stdout
+                
             print("Report generated " + timestamp.strftime(dateDisplayFormat + " %X"))
             
             if 'apprise' in data:
@@ -239,11 +265,11 @@ def login(username,password,session,cruiseLineName):
         response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
     
     if response.status_code != 200:
         print(f"{cruiseLineName} website might be down, username/password incorrect, or have unsupported symbol in password. Quitting.")
-        exit(1)
+        sys.exit(1)
           
     access_token = response.json().get("access_token")
     
@@ -318,7 +344,7 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
         )
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
     
     payload = response.json().get("payload")
     if payload is None:
@@ -360,7 +386,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
         )
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     payload = response.json().get("payload")
     if payload is None:
@@ -515,7 +541,7 @@ def getLoyalty(access_token,accountId,session):
         response = session.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     loyalty = response.json().get("payload").get("loyaltyInformation")
     cAndANumber = loyalty.get("crownAndAnchorId")
@@ -586,7 +612,7 @@ def getProfile(access_token,accountId,session):
         response = session.get(f"https://aws-prd.api.rccl.com/en/royal/web/v3/guestAccounts/{accountId}", headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     state = None
     payload = response.json().get("payload")
@@ -659,7 +685,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         )
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     for booking in response.json().get("payload").get("profileBookings"):
         reservationId = booking.get("bookingId")
@@ -834,11 +860,11 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         )
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
  
     if response.status_code != 200:
         print(f"Error getting voyage information (returned error code {response.status_code}). Try again later.\nQuitting.")
-        exit(1)
+        sys.exit(1)
 
     # Check for my orders and orders others booked for me
     for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
@@ -861,7 +887,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 )
             except Exception as e:
                 print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-                exit(1)
+                sys.exit(1)
             
             response = requests.get(
                 f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory/{orderCode}',
@@ -1029,7 +1055,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
         response = requests.get(url,headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
     
     
     soup = BeautifulSoup(response.text, "html.parser")
@@ -1175,7 +1201,7 @@ def getShips():
         response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     shipCodes = []
     ships = response.json().get("payload").get("ships")
@@ -1206,7 +1232,7 @@ def getShipDictionary():
         response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     ships = response.json().get("payload").get("ships")
 
@@ -1251,7 +1277,7 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
         response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     for booking in response.json().get("payload"):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
@@ -1405,7 +1431,7 @@ def GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sai
         )
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     payload = response.json().get("payload")
     if not payload:
@@ -1432,7 +1458,7 @@ def GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,ship
         )
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
 
     payload = response.json().get("payload")
     if not payload:
