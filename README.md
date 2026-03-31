@@ -29,6 +29,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. # means comment and will be ignored
 1. Click `CheckRoyalCaribbeanPrice.exe` again and watch magic!
 1. After confirmed working, add more options into `config.yaml` and review the automation/notification section below if you want to run it automatically a couple times a day!
+1. The downloaded configuration file will log the output to "output.txt", this avoids requiring to keep the output on screen.
 1. To keep output on screen, go to folder you put `CheckRoyalCaribbeanPrice.exe`, type `cmd` and hit enter in the location field. A dos prompt window should open up. Type `CheckRoyalCaribbeanPrice.exe` in the dos prompt:
 
  
@@ -137,6 +138,7 @@ apprise_test: false # Optional
 apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
   - url: "mailto://user:password@gmail.com"
   - url: "ntfy://abcfeg3839439djd"
+logFile: "output.txt"
 ```
 
 If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
@@ -145,6 +147,15 @@ accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
+```
+
+To log your output to a file, add the LogFile line:
+```yaml
+accountInfo:
+  - username: "user@gmail.com" # Your Royal Caribbean User Name
+    password: "pa$$word" # Your Royal Caribbean Password
+    cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
+logFile: "output.txt"
 ```
 
 To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality #, residency (USA/CAN only) and senior discounts automatically from your account/booking. It will add fire/police & military discounts if set in your configuration. Residency makes a difference, be sure to set manually if your profile does not have this info! If people in the cabin are from different states than you, suggest making a manual cruise watch for the people in other states than in your account. It will find any publically offered OBC and display it (but not subtract it because it is only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
