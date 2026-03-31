@@ -29,3 +29,4 @@ reservationFriendlyNames: # Optional, only used if you want to display a name ne
   '8912345': "Winter Cruise"
 showPromos: true # Optional, show active sitewide promotions for each sailing
 dateDisplayFormat: "%m/%d/%Y" # Optional, only needed if you want to override the system's default date display formatting
+logFile: "output.txt"
