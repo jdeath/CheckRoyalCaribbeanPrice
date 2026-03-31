@@ -226,6 +226,7 @@ showPromos: true
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you want, with the same number of adults and kids
 1. Select a cruise and select your room type/room. Be sure to enter your C&A number and any senior/military/police discounts in the "Apply Promo Code and Exclusive Rates" link to the left. **Use your C&A or Celebrity # depending on the cruise. Do not use username. Bug in Royal Website requires your number not username**
+1. If you want a refundable deposit, trip insurance, or include gratituies be sure to select them on the "preferences screen"
 1. Complete until they ask for your personal/guest information
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
