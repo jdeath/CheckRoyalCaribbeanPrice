@@ -1018,6 +1018,13 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
         username = params.get("r0H",[None])[0]
         state = params.get("r0k",[None])[0]
     
+    # if have anyting for r0u, then refundable
+    refundable = params.get("r0u",["XXX"])[0] != "XXX"
+    # if have r0n = n or nothing, no travel insurance
+    travelInsurance = params.get("r0n",["n"])[0] != "n"
+    # if have r0m = n or nothing, no prepaid grats
+    prepaidGrats = params.get("r0m",["n"])[0] != "n"
+    
     senior = params.get("r0t",["n"])[0]
     military = params.get("r0q",["n"])[0]
     police1 = params.get("r0r",["n"])[0]
@@ -1040,6 +1047,16 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
     if usedDiscounts != "":
        preString = preString + " (" + usedDiscounts[:-2] + " Discount)"
     
+    addons = ""
+    if travelInsurance:
+       addons += "Travel Protection, "
+    if refundable:
+       addons += "Refundable Deposit, "
+    if prepaidGrats:
+       addons += "Prepaid grats, "
+    if addons != "":
+       preString = preString + " (" + addons[:-2] + ")"  
+       
     m = re.search('www.(.*).com', url)
     cruiseLineName = m.group(1)
     
@@ -1056,6 +1073,13 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
     #    encoded_bytes = base64.urlsafe_b64encode(data_bytes)
     #    encoded_string = encoded_bytes.decode('utf-8')
     #    url += f"&r0H={encoded_string}"
+    
+    if prepaidGrats:
+        url += f"&r0m=y"
+    if travelInsurance:
+        url += f"&r0n=y"
+    if refundable:
+        url += f"&r0u=y"
     if loyaltyNumber is not None:
         url += f"&r0l={loyaltyNumber}"
     if state is not None:
