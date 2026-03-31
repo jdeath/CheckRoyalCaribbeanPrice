@@ -149,7 +149,7 @@ accountInfo:
     cruiseLine: "royal" # or "celebrity", This is optional and defaults to royal if not present
 ```
 
-To log your output to a file, add the LogFile and change output.txt to whatever you want. If you do not want logging, remove the line
+To log your output to a file, add the LogFile: line and change "output.txt" to whatever you want. If you do not want logging, remove the line
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
