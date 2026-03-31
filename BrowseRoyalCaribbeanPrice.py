@@ -36,7 +36,6 @@ if sys.platform == "win32":
 problem_envs = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]
 has_terminal_issues = any(k in os.environ for k in problem_envs)
 
-
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
@@ -46,6 +45,7 @@ def main():
     parser.add_argument('-k', '--sortkey', choices=['price', 'alpha', 'default'], default="default", help='Set value to sort on')
     parser.add_argument('-w', '--watchlistcodes', action='store_true', help='Show Codes For Watchlist')
     parser.add_argument('-a', '--activitysort', choices=['date', 'alpha', 'default'], default="default", help='Show Codes For Watchlist')
+    parser.add_argument('-l', '--logfile', type=str, help='optional logfile, eg. output.txt')
     args = parser.parse_args()
     
     currency = args.currency
@@ -59,7 +59,12 @@ def main():
         GREEN = ""
         RESET = ""
         BLUE = ""
-        
+
+    if args.logfile:
+       print(f"Logging run to file: {args.logfile}")
+       sys.stdout = Logger(args.logfile)
+       sys.stderr = sys.stdout
+            
     ships = getShips()
 
     if args.ship:
@@ -173,7 +178,26 @@ def main():
 
     user_input = input("Hit ENTER to quit: ")
     print("Have a nice day!")
-    
+
+class Logger(object):
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        self.log = open(filename, "a", encoding="utf-8")
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        delimiter = f"\n{'='*60}\n--- RUN STARTED: {timestamp_str} ---\n{'='*60}\n"
+        self.log.write(delimiter)
+        self.log.flush()
+
+    def write(self, message):
+        self.terminal.write(message)
+        # Remove ANSI color codes so the text file is readable, not filled with \033
+        clean_message = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', message)
+        self.log.write(clean_message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
 
 def daysBetween(sailDate,activityDate):
     d0 = date(int(sailDate[0:4]), int(sailDate[4:6]), int(sailDate[6:8]))
