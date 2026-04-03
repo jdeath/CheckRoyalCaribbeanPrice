@@ -783,6 +783,10 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         print(f"\n{reservationDisplay}")
         
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
+        
+        if not any(shipCode in d for d in shipDictionary):
+            shipDictionary[shipCode] = "Unknown Ship"
+            
         print(f"{sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
         
         # Print Boarding Info or provide check in information
@@ -1539,6 +1543,7 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
         json_data = json.loads(unescaped)
         data = json_data.get("data")
         # Loop through data to see if desired room is available
+        # This also has price information, but not at the required detail
         stateroomTypes = (data.get("rooms")[0]).get("options").get("stateroomTypes")
         for stateroomType in stateroomTypes:
             stateroomSubtypes = stateroomType.get("stateroomSubtypes")
@@ -1547,6 +1552,7 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
                 cur_categoryCode = stateroomSubtype.get("categoryCode")
                 #print("Desired: " + stateroomSubtypeCode + " " + categoryCode)
                 #print("Cur:     " + cur_subTypeCode + " " + categoryCode)
+                #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}") 
                 if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
                     return True
 
