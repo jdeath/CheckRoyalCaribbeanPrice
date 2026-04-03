@@ -178,8 +178,8 @@ def main(config_path=None):
                 
                     if numAccounts > 1:
                         session.close()
-                        print("Sleeping for 30 seconds to allow API to cool down between accounts")
-                        time.sleep(30)
+                        print("Sleeping for 5 seconds to allow API to cool down between accounts")
+                        time.sleep(5)
                 
             if 'cruises' in data:
                 for cruises in data['cruises']:
@@ -1185,7 +1185,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         
         if desireRefundPrice and paidPrice > basePrice:
             tempString += f"{YELLOW} Non-Refunable price {basePrice} {currencyCode} is lower than you paid{RESET}"
-        if desireRefundPrice:
+        elif desireRefundPrice:
             tempString += f" Non-refundable price is {basePrice} {currencyCode}"
             
         print(tempString)
