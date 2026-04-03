@@ -170,7 +170,9 @@ accountInfo:
     police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not available in account
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked with a refundable deposit, put an R before the Price (R1999.98). If you booked with included gratitues, put a G in front of the price (G1999.99). If you booked with trip insurance, put an I in front of price (I1999.99). You can use any or all combinations (GIR1999.99). This will cause the code to request the correct price from the API.
+
+If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -179,7 +181,7 @@ accountInfo:
 displayCruisePrices: true
 reservationPricePaid:
   'XXXXXX': 4568.48
-  'YYYYYY': 4172.71
+  'YYYYYY': R4172.71
 ```
 If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this:
 ```yaml
@@ -227,6 +229,7 @@ showPromos: true
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you want, with the same number of adults and kids
 1. Select a cruise and select your room type/room. Be sure to enter your C&A number and any senior/military/police discounts in the "Apply Promo Code and Exclusive Rates" link to the left. **Use your C&A or Celebrity # depending on the cruise. Do not use username. Bug in Royal Website requires your number not username**
 1. If you want a refundable deposit, trip insurance, or include gratituies be sure to select them on the "preferences screen"
+1. For Celebrity, DO NOT click "Upgrade to included WIFI and drinks". The code cannot handle that (yet). You will have to remove this cost from the price.
 1. Complete until they ask for your personal/guest information
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
