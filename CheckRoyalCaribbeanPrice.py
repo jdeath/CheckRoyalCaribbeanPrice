@@ -184,8 +184,9 @@ def main(config_path=None):
             if 'cruises' in data:
                 for cruises in data['cruises']:
                         cruiseURL = cruises['cruiseURL'] 
-                        paidPrice = float(cruises['paidPrice'])
-                        get_cruise_price(cruiseURL, paidPrice, apobj, False, None,None)
+                        paidPrice = cruises['paidPrice']
+                        session = requests.session()
+                        get_cruise_price(cruiseURL, session, paidPrice, apobj, False, None,None)
                         
     except FileNotFoundError:
         print("No Configuration File Found")
@@ -584,8 +585,12 @@ def getLoyalty(access_token,accountId,session):
     return loyaltyNumber
 
 def getNumberOfNights(access_token,accountId,session,loyaltyNumber):
-    import requests
 
+    # Set to -1 as this API call sometimes fails
+    # But not worth quiting over
+    totalNights = -1
+    totalTrips = -1
+    
     headers = {
         'Access-Token': access_token,
         'AppKey': appKey,
@@ -603,8 +608,9 @@ def getNumberOfNights(access_token,accountId,session,loyaltyNumber):
     )
     
     payload = response.json().get("payload")
-    totalNights = payload.get("totalNights","0")
-    totalTrips = payload.get("totalTrips","0")
+    if payload is not None:
+        totalNights = payload.get("totalNights","-1")
+        totalTrips = payload.get("totalTrips","-1")
     
     return totalNights, totalTrips
     
@@ -643,7 +649,8 @@ def getProfile(access_token,accountId,session):
         print(f"\tC&A: {cAndANumber} {cAndALevel} - {cAndASharedPoints} Shared Points ({cAndAPoints} Individual Points)")
         loyaltyNumber = cAndANumber
         totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
-        print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
+        if totalNights > 0:
+            print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
     
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
@@ -658,7 +665,8 @@ def getProfile(access_token,accountId,session):
         print(f"\tCaptain's Club Number: {captainsClubId} {captainsClubLoyaltyTier} TIER ({captainsClubLoyaltyRelationshipPoints} Shared Points, {captainsClubLoyaltyIndividualPoints} Individual Points)")
         loyaltyNumber = captainsClubId
         totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
-        print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
+        if totalNights > 0:
+            print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
         print("Using Captains Club Id To Check Cruise Prices")
 
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
@@ -813,13 +821,14 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             else:
                 cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r={police}&r0s=n&r0q={military}&r0t={senior}&r0D=y"
                 
+                
             paidPrice = None
             #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
-                paidPrice = float(reservationPricePaid.get(str(reservationId)))
+                paidPrice = reservationPricePaid.get(str(reservationId))
             
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber, state)
+                get_cruise_price(cruisePriceURL, session, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber, state)
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -962,25 +971,13 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     #getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest,guestPassengerId,firstName,room,orderCode,orderDate,owner)
                     getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,paidPrice,currency,product,apobj, guestPassengerId,guestAgeString,firstName,room,orderCode,orderDate,owner,False,cruiseLineName, salesUnit, numberOfNights)
 
-def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
-
-    headers = {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'accept-language': 'en-US,en;q=0.9',
-        'priority': 'u=0, i',
-        'sec-ch-ua': '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'document',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-site': 'none',
-        'sec-fetch-user': '?1',
-        'upgrade-insecure-requests': '1',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-    }
-      
+def parseProvidedURL(url):
+    
     parsed_url = urlparse(url)
     params = parse_qs(parsed_url.query)
+    
+    domain = parsed_url.netloc
+    isRoyal = "royal" in domain
     
     sailDate = params.get("sailDate")[0]
     currencyCodeList = params.get("selectedCurrencyCode")
@@ -990,9 +987,7 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
         currencyCode = currencyCodeList[0]
     
     bookingOfficeCountryCode = params.get("country")[0] 
-    sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat)
     shipCode = params.get("shipCode")[0]
-    shipName = shipDictionary[shipCode]    
     
     cabinClassString = ""
     if params.get("cabinClassType") is not None:
@@ -1004,36 +999,51 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
     stateroomSubtype = params.get("r0e")[0]
     stateroomCategoryCode = params.get("r0f")[0]
     
-    preString = f"{sailDateDisplay} {shipName} {cabinClassString} {stateroomCategoryCode}"
-    
     packageCode = params.get("packageCode")[0]
     numberOfAdults = params.get("r0a")[0]
     numberOfChildren = params.get("r0c")[0]
+        
+    loyaltyNumber = params.get("r0l",[None])[0]
+    username = params.get("r0H",[None])[0]
+    state = params.get("r0k",[None])[0]
     
-    usedDiscounts = ""
-    # Add in Discount codes
-    
-    if not automaticURL:
-        loyaltyNumber = params.get("r0l",[None])[0]
-        username = params.get("r0H",[None])[0]
-        state = params.get("r0k",[None])[0]
-    
-    # if have anyting for r0u, then refundable
     refundable = params.get("r0u",["XXX"])[0] != "XXX"
-    # if have r0n = n or nothing, no travel insurance
     travelInsurance = params.get("r0n",["n"])[0] != "n"
-    # if have r0m = n or nothing, no prepaid grats
     prepaidGrats = params.get("r0m",["n"])[0] != "n"
     
-    senior = params.get("r0t",["n"])[0]
-    military = params.get("r0q",["n"])[0]
-    police1 = params.get("r0r",["n"])[0]
-    police2 = params.get("r0s",["n"])[0]
-    if police1 == "y" or police2 == "y":
-        police = "y"
-    else:
-        police = "n"
-        
+    senior = params.get("r0t",["n"])[0] == "y"
+    military = params.get("r0q",["n"])[0] == "y"
+    police = params.get("r0r",["n"])[0] == "y"
+    fire = params.get("r0s",["n"])[0] 
+    
+    return isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,senior,military,police,fire
+    
+
+def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
+    
+    isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,senior,military,police,fire = parseProvidedURL(url)
+    roomNumber = None
+
+    results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,numberOfAdults,numberOfChildren)
+    
+    roomIsFound = results != {}
+    numberOfNights = results.get("sailingNights")
+    shipName = shipDictionary.get(shipCode)
+
+    sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat) 
+    
+    preString = f"{sailDateDisplay} {shipName} {cabinClassString} {stateroomCategoryCode}"
+    
+    paidPriceLetters = ""
+    if paidPrice is not None and isinstance(paidPrice, str):
+        # Use G,I,R as keys in the price
+        paidPriceLetters = "".join([char for char in paidPrice if char.isalpha()])
+        # Remove letters from price
+        paidPrice = re.sub(r'[a-zA-Z]', '', paidPrice)
+        # make a float as it now only has numbers
+        paidPrice = float(paidPrice)
+    
+    usedDiscounts = ""
     if loyaltyNumber is not None:
        usedDiscounts += "Loyalty, "
     if state is not None:
@@ -1047,71 +1057,50 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
     if usedDiscounts != "":
        preString = preString + " (" + usedDiscounts[:-2] + " Discount)"
     
+    # Add discount addon information into string to print
     addons = ""
-    if travelInsurance:
-       addons += "Travel Protection, "
-    if refundable:
-       addons += "Refundable Deposit, "
-    if prepaidGrats:
-       addons += "Prepaid grats, "
-    if addons != "":
-       preString = preString + " (" + addons[:-2] + ")"  
-       
-    m = re.search('www.(.*).com', url)
-    cruiseLineName = m.group(1)
     
-    # Remake the URL in a format that works to check the class of room. Should avoid issues
-    if not automaticURL:
-        if params.get("r0j") is None: # This is for a GTY Room, as r0j is the room number normally
-            url = f"https://www.{cruiseLineName}.com/checkout/add-ons?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0b=n&r0r={police}&r0s={police}&r0q={military}&r0t={senior}&r0D=y&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0g=BESTRATE&r0h=n&r0C=y"
-        else: # This is for a non GTY Room
-            url = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={sailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={currencyCode}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r={police}&r0s={police}&r0q={military}&r0t={senior}&r0D=y"
+    refundNotFound = False
     
-    # Username does not work
-    #if username is not None:
-    #    data_bytes = username.encode('utf-8')
-    #    encoded_bytes = base64.urlsafe_b64encode(data_bytes)
-    #    encoded_string = encoded_bytes.decode('utf-8')
-    #    url += f"&r0H={encoded_string}"
-    
-    if prepaidGrats:
-        url += f"&r0m=y"
-    if travelInsurance:
-        url += f"&r0n=y"
-    if refundable:
-        url += f"&r0u=y"
-    if loyaltyNumber is not None:
-        url += f"&r0l={loyaltyNumber}"
-    if state is not None:
-        url += f"&r0k={state}"
-    try:
-        response = requests.get(url,headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
-    
-    
-    soup = BeautifulSoup(response.text, "html.parser")
-    soupFind = soup.find("span",attrs={"data-testid":"pricing-total"})
-    
-    # Check if Get to: Guest Info, Room Selection, Or Addons Panel
-    # These are the three types of webpages that occur if your room is available
-    roomIsFound = re.search("GuestInfoPanel_heading|RoomLocationPanel_title|AddOnsPanel_heading", response.text) 
-
-    # If final payment date is none, get info from URL
-    if finalPaymentDate is None:
-        # Extract Number of Nights from URL
-        if params.get("groupId") is not None:
-            groupID = params.get("groupId")[0]
-            part = groupID[2:4]
-    
-        packageCode = None
-        if params.get("packageCode") is not None:
-            packageCode = params.get("packageCode")[0]
-            part = packageCode[2:4]
+    if roomIsFound:
+        fareStruct = results.get("baseFare")
+        price = fareStruct.get("fare")
+        grats = fareStruct.get("gratuities")
+        ins = fareStruct.get("insurance")
+        obc = fareStruct.get("obc")
         
-        numbers_only = "".join(c for c in part if c.isdigit())
-        numberOfNights = int(numbers_only)
+        # Save this for later
+        basePrice = price
+        baseGrats = grats
+        baseIns = ins
+        
+        desireRefundPrice = False
+        if refundable or "R" in paidPriceLetters:
+           desireRefundPrice = True
+           addons += "Refundable Deposit, "
+           fareStruct = results.get("refundFare")
+           if fareStruct is not None:
+               price = fareStruct.get("fare")
+               grats = fareStruct.get("gratuities")
+               ins = fareStruct.get("insurance")
+               obc = fareStruct.get("obc")
+           else:
+               refundNotFound = True
+           
+        if travelInsurance or "I" in paidPriceLetters:
+           addons += "Travel Protection, "
+           price += ins
+           basePrice += baseIns
+        if prepaidGrats or "G" in paidPriceLetters:
+           addons += "Prepaid grats, "
+           price += grats
+           basePrice += baseGrats
+       
+        # Strip last ,
+        if addons != "":
+            preString = preString + " (" + addons[:-2] + ")"  
+    
+    if finalPaymentDate is None:
         finalPaymentDate = getFinalPaymentDate(numberOfNights,sailDate.replace('-', ''))
         
     finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
@@ -1134,36 +1123,15 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
             GetCruisePriceFromAPI(currencyCode, packageCode, sailDate, cabinClassString, numberOfAdults, numberOfChildren)
         return
         
-    if soupFind is None:
-        textString = preString + " Not Available"
-        print(YELLOW + textString + RESET)
-        apobj.notify(body=textString, title='Cruise Room Not Available')
-        return
-    
-    priceString = soupFind.text
-    # Extract Numbers from String. Should handle all currency
-    numbers = re.findall(r"[+-]?\d[\d.,]*", priceString)
-    if numbers:
-        price = string_to_float(numbers[0])
-    else:
-        price = None
     
     if paidPrice is None:
         tempString = GREEN + f"{preString}: Current Price {price} {currencyCode}" + RESET
         print(tempString)
         return
     
-    # Find OBC and substract from price
-    obcFind = soup.find("p",attrs={"data-testid":"onboardcreditsbox-primary-label"})
-    obcValue = 0
-    if obcFind:
-        obcString = obcFind.find("span").get_text(strip=True)
-        obcValue = re.findall(r"[+-]?\d[\d.,]*", obcString)
-        if obcValue is None:
-            obcValue = 0
-        else:
-            obcValue = string_to_float(obcValue[0])
-            #price -= obcValue # not subtract because not in correct currency
+    # Find OBC
+    obcValue = float(obc)
+    obcString = obc
     
     if price < paidPrice: 
         saving = round(paidPrice - price, 2)
@@ -1210,7 +1178,14 @@ def get_cruise_price(url, paidPrice, apobj, automaticURL,finalPaymentDate,loyalt
         if obcValue > 0:
             tempString += f" not including {obcString} OBC"
         tempString += ")"   
+        
+        if desireRefundPrice and paidPrice > basePrice:
+            tempString += f"{YELLOW} Non-Refunable price {basePrice} {currencyCode} is lower than you paid{RESET}"
+        if desireRefundPrice:
+            tempString += f" Non-refundable price is {basePrice} {currencyCode}"
+            
         print(tempString)
+        
 
 # Unused Functions
 # For Future Capability
@@ -1506,7 +1481,167 @@ def GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,ship
         dt = datetime.fromisoformat(checkWindowOpenStartDateTime)
         local_dt = dt.astimezone().strftime(dateDisplayFormat + " %X %Z")
         print(f"Check In opens on: {local_dt}")
+
+
+def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount):
+    
+    headers = {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0',
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'accept-language': 'en-US,en;q=0.9',
+        }
+
+    params = {
+        'packageCode': packageId,
+        'sailDate': sailDate,
+        'country': countryCode,
+        'selectedCurrencyCode': currencyCode,
+        'shipCode': packageId[0:2],
+        'cabinClassType': 'INTERIOR', # Still returns all
+        'roomIndex': '0',
+        'r0a': adultCount,
+        'r0c': childCount,
+        'r0b': 'n',
+        'r0r': 'n',
+        'r0s': 'n',
+        'r0q': 'n',
+        'r0t': 'n',
+        'r0d': 'INTERIOR', # Still returns all
+        'r0D': 'y',
+        'rgVisited': 'true',
+        'r0C': 'y',
+    }
+
+    if isRoyal:
+        apiURL = 'https://www.royalcaribbean.com/room-selection/type-and-subtype'
+    else:
+        apiURL = 'https://www.celebritycruises.com/room-selection/type-and-subtype'
+    
+    response = requests.get(
+        apiURL,
+        params=params,
+        headers=headers,
+    )
+
+    # Extract json from html
+    if isRoyal:
+        start_var = "$L34\\\",null,"
+    else:
+        start_var = "$L33\\\",null,"
         
+    end_var = "]}]}]]"
+    pattern = rf"{re.escape(start_var)}(.*?){re.escape(end_var)}"
+    match = re.search(pattern, response.text)
+    if match:
+        result = match.group(1)
+        # Format text so will load as json. Needs to be done twice
+        unescaped = json.loads(f'"{result}"')
+        json_data = json.loads(unescaped)
+        data = json_data.get("data")
+        # Loop through data to see if desired room is available
+        stateroomTypes = (data.get("rooms")[0]).get("options").get("stateroomTypes")
+        for stateroomType in stateroomTypes:
+            stateroomSubtypes = stateroomType.get("stateroomSubtypes")
+            for stateroomSubtype in stateroomSubtypes:
+                cur_subTypeCode = stateroomSubtype.get("code")
+                cur_categoryCode = stateroomSubtype.get("categoryCode")
+                #print("Desired: " + stateroomSubtypeCode + " " + categoryCode)
+                #print("Cur:     " + cur_subTypeCode + " " + categoryCode)
+                if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
+                    return True
+
+    return False
+
+def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomTypeCode,stateroomSubtypeCode,categoryCode,roomNumber,loyaltyNumber,stateCode,fireFighter,military,police,senior,adultCount,childCount):
+    
+    roomAvailable = checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
+    
+    results = {}
+    
+    if not roomAvailable:
+        #print("Room not available")
+        return results
+    
+    headers = {
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0',
+    'accept': '*/*',
+    'accept-language': 'en-US,en;q=0.9',
+    'content-type': 'application/json',
+    }
+
+    params = ''
+    
+    
+    json_data = {
+        'countryCode': countryCode,
+        'packageId': packageId,
+        'sailDate': sailDate,
+        'currencyCode': currencyCode,
+        'language': 'en',
+        'rooms': [
+            {
+                'stateroomTypeCode': stateroomTypeCode,
+                'stateroomSubtypeCode': stateroomSubtypeCode,
+                'categoryCode': categoryCode,
+                'fareCode': 'BESTRATE',
+                'accessible': False,
+                #'roomNumber': roomNumber,
+                'qualifiers': {
+                    #'loyaltyNumber': loyaltyNumber,
+                    #'stateCode': stateCode,
+                    'fireFighter': fireFighter=="y",
+                    'military': military=="y",
+                    'police': police=="y",
+                    'senior': senior=="y",
+                },
+                'occupancy': {
+                    'adultCount': adultCount,
+                    'childCount': childCount,
+                },
+            },
+        ],
+    }
+    
+    if roomNumber is not None:
+        json_data['rooms'][0]['roomNumber'] = roomNumber
+    if stateCode is not None:
+        json_data['rooms'][0]['qualifiers']['qualifiers'] = qualifiers
+    if loyaltyNumber is not None:
+        json_data['rooms'][0]['qualifiers']['loyaltyNumber'] = loyaltyNumber
+    
+    if isRoyal:
+        apiURL = 'https://www.royalcaribbean.com/checkout/api/v1/rooms/checkout'
+    else:
+        apiURL = 'https://www.celebritycruises.com/checkout/api/v1/rooms/checkout'    
+        
+    response = requests.post(apiURL,
+        params=params,
+        headers=headers,
+        json=json_data,
+    )
+    
+    room = response.json().get("rooms")[0]
+    baseFare = room.get("baseFare",None)
+    sailingNights = response.json().get("sailing").get("itinerary").get("sailingNights")
+    results['sailingNights'] = sailingNights
+    
+    if baseFare is not None:
+        base_fare = baseFare.get("pricing").get("amount")
+        base_gratuities = baseFare.get("gratuities")
+        base_insurance = baseFare.get("insurance")
+        obc = baseFare.get("pricing").get("invoice").get("onboardCredits",0)
+        results['baseFare'] = {'fare': base_fare,'gratuities': base_gratuities,'insurance': base_insurance,'obc':obc}
+        
+    baseRefundableFare = room.get("baseRefundableFare",None)
+    if baseRefundableFare is not None:
+        refund_fare = baseRefundableFare.get("pricing").get("amount")
+        refund_gratuities = baseRefundableFare.get("gratuities")
+        refund_insurance = baseRefundableFare.get("insurance")
+        obc = baseRefundableFare.get("pricing").get("invoice").get("onboardCredits",0)
+        results['refundFare'] = {'fare': refund_fare,'gratuities': refund_gratuities,'insurance': refund_insurance,'obc':obc}
+   
+    return results
+    
 if __name__ == "__main__":
     config_path = get_config_path()
     apobj, notify_on_error = build_apprise_from_config(config_path)
