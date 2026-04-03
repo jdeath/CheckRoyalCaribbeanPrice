@@ -142,7 +142,6 @@ def main(config_path=None):
             if 'reservationPricePaid' in data:
                 reservationPricePaid=data.get('reservationPricePaid', {})
             
-            
             if 'accountInfo' in data:
                 numAccounts = len(data['accountInfo'])
                 for accountInfo in data['accountInfo']:
@@ -1050,6 +1049,9 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         paidPrice = re.sub(r'[a-zA-Z]', '', paidPrice)
         # make a float as it now only has numbers
         paidPrice = float(paidPrice)
+        if 'A' in paidPriceLetters and isRoyal:
+            print("Royal Does Not Have All In Fare")
+            print("Price Check May Not Work. Check Documentation")
     
     usedDiscounts = ""
     if loyaltyNumber is not None:
