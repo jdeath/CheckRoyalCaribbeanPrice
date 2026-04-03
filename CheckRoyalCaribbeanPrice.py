@@ -185,6 +185,8 @@ def main(config_path=None):
                 for cruises in data['cruises']:
                         cruiseURL = cruises['cruiseURL'] 
                         paidPrice = cruises['paidPrice']
+                        # Remove letters from here. You should have the correct URL if have addons
+                        paidPrice = re.sub(r'[a-zA-Z]', '', paidPrice)
                         session = requests.session()
                         get_cruise_price(cruiseURL, session, paidPrice, apobj, False, None,None)
                         
@@ -830,7 +832,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
                 paidPrice = reservationPricePaid.get(str(reservationId))
-            
+                
             if stateroomType != "NONE":
                 get_cruise_price(cruisePriceURL, session, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber, state)
             else:
@@ -1011,6 +1013,8 @@ def parseProvidedURL(url):
     username = params.get("r0H",[None])[0]
     state = params.get("r0k",[None])[0]
     
+    allIncluded = params.get("r0o",["XXX"])[0] != "XXX"
+    
     refundable = params.get("r0u",["XXX"])[0] != "XXX"
     travelInsurance = params.get("r0n",["n"])[0] != "n"
     prepaidGrats = params.get("r0m",["n"])[0] != "n"
@@ -1020,12 +1024,12 @@ def parseProvidedURL(url):
     police = params.get("r0r",["n"])[0] == "y"
     fire = params.get("r0s",["n"])[0] 
     
-    return isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,senior,military,police,fire
+    return isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire
     
 
 def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
     
-    isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,senior,military,police,fire = parseProvidedURL(url)
+    isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire = parseProvidedURL(url)
     roomNumber = None
 
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,numberOfAdults,numberOfChildren)
@@ -1067,7 +1071,14 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
     refundNotFound = False
     
     if roomIsFound:
-        fareStruct = results.get("baseFare")
+        
+        baseFareString = "baseFare"
+        refundFareString = "baseRefundableFare"
+        if allIncluded:
+            baseFareString = "allIncludedFare"
+            refundFareString = "allIncludedRefundableFare" 
+            
+        fareStruct = results.get(baseFareString)
         price = fareStruct.get("fare")
         grats = fareStruct.get("gratuities")
         ins = fareStruct.get("insurance")
@@ -1082,7 +1093,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         if refundable or "R" in paidPriceLetters:
            desireRefundPrice = True
            addons += "Refundable Deposit, "
-           fareStruct = results.get("refundFare")
+           fareStruct = results.get(refundFareString)
            if fareStruct is not None:
                price = fareStruct.get("fare")
                grats = fareStruct.get("gratuities")
@@ -1099,7 +1110,9 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
            addons += "Prepaid grats, "
            price += grats
            basePrice += baseGrats
-       
+        if allIncluded or "A" in paidPriceLetters:
+           addons += "All Included, "
+            
         # Strip last ,
         if addons != "":
             preString = preString + " (" + addons[:-2] + ")"  
@@ -1644,7 +1657,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
         refund_gratuities = baseRefundableFare.get("gratuities")
         refund_insurance = baseRefundableFare.get("insurance")
         obc = baseRefundableFare.get("pricing").get("invoice").get("onboardCredits",0)
-        results['refundFare'] = {'fare': refund_fare,'gratuities': refund_gratuities,'insurance': refund_insurance,'obc':obc}
+        results['baseRefundableFare'] = {'fare': refund_fare,'gratuities': refund_gratuities,'insurance': refund_insurance,'obc':obc}
     
     allIncludedFare = room.get("allIncludedFare",None)
     if allIncludedFare is not None:
