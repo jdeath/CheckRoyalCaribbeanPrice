@@ -1025,7 +1025,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
     roomNumber = None
 
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,numberOfAdults,numberOfChildren)
-    
+        
     roomIsFound = results != {}
     numberOfNights = results.get("sailingNights")
     shipName = shipDictionary.get(shipCode)
@@ -1621,10 +1621,10 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
     )
     
     room = response.json().get("rooms")[0]
-    baseFare = room.get("baseFare",None)
     sailingNights = response.json().get("sailing").get("itinerary").get("sailingNights")
     results['sailingNights'] = sailingNights
     
+    baseFare = room.get("baseFare",None)
     if baseFare is not None:
         base_fare = baseFare.get("pricing").get("amount")
         base_gratuities = baseFare.get("gratuities")
@@ -1639,7 +1639,23 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
         refund_insurance = baseRefundableFare.get("insurance")
         obc = baseRefundableFare.get("pricing").get("invoice").get("onboardCredits",0)
         results['refundFare'] = {'fare': refund_fare,'gratuities': refund_gratuities,'insurance': refund_insurance,'obc':obc}
-   
+    
+    allIncludedFare = room.get("allIncludedFare",None)
+    if allIncludedFare is not None:
+        base_fare = allIncludedFare.get("pricing").get("amount")
+        base_gratuities = allIncludedFare.get("gratuities")
+        base_insurance = allIncludedFare.get("insurance")
+        obc = allIncludedFare.get("pricing").get("invoice").get("onboardCredits",0)
+        results['allIncludedFare'] = {'fare': base_fare,'gratuities': base_gratuities,'insurance': base_insurance,'obc':obc}
+        
+    allIncludedRefundableFare = room.get("allIncludedRefundableFare",None)
+    if allIncludedRefundableFare is not None:
+        base_fare = allIncludedRefundableFare.get("pricing").get("amount")
+        base_gratuities = allIncludedRefundableFare.get("gratuities")
+        base_insurance = allIncludedRefundableFare.get("insurance")
+        obc = allIncludedRefundableFare.get("pricing").get("invoice").get("onboardCredits",0)
+        results['allIncludedRefundableFare'] = {'fare': base_fare,'gratuities': base_gratuities,'insurance': base_insurance,'obc':obc}    
+    
     return results
     
 if __name__ == "__main__":
