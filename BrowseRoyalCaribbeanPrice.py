@@ -275,6 +275,9 @@ def getShips():
         name = ship.get("name")
         shipNames.append({'code': shipCode, 'name': name})
     
+    #Force Hero until it is added to the API
+    shipNames.append({'code': 'HE', 'name': 'Hero of the Seas'})
+    
     return shipNames
 
 
@@ -330,9 +333,15 @@ def getSailingDetails(shipCode,sailDate):
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
         exit(1)
-
-    portInfo = response.json().get("payload").get("sailingInfo")[0].get("itinerary").get("portInfo")
+    
     ports = {}
+    
+    itinerary = response.json().get("payload").get("sailingInfo")[0].get("itinerary")
+    if itinerary is  None:
+        return ports
+        
+    portInfo = itinerary.get("portInfo")
+    
     for port in portInfo:
         title = sanitizeString(port.get("title"))
         arrivalDateTime = port.get("arrivalDateTime")
@@ -381,7 +390,15 @@ def getWebCatagories(ship,saildate):
     }
 
     response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
-    catagories = response.json().get("data").get("categories").get("categories")
+    
+    productMap = {}
+    
+    catagories1 = response.json().get("data").get("categories")
+    if catagories1 is None:
+        print("No Items for Sale")
+        return productMap
+    
+    catagories = catagories1.get("categories")
 
     productMap = {}
     if catagories is None:
@@ -761,9 +778,15 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
         
     response = requests.post('https://api.rccl.com/en/royal/mobile/graphql', headers=headers, json=json_data)
     
-    venues = response.json().get("data").get("productsByVenueCategories").get("venueCategories")[0].get("venueSubCategories")[0].get("venues")
-    
     venueIds = []
+    
+    productsByVenueCategories = response.json().get("data").get("productsByVenueCategories")
+    if productsByVenueCategories is None:
+        return venueIds
+        
+    venues = productsByVenueCategories.get("venueCategories")[0].get("venueSubCategories")[0].get("venues")
+    
+    
     for venue in venues:
         # For Royal Caribbean, All menus are the same
         if isRoyal:
@@ -797,7 +820,13 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
 
     response = requests.post('https://api.rccl.com/en/royal/mobile/graphql', headers=headers, json=json_data)
 
-    venues = response.json().get("data").get('venues').get('venues')
+    venues1 = response.json().get("data").get('venues')
+    if venues1 is None:
+        print("Menus not yet populated; please check again later")
+        return
+        
+    venues = venues1.get('venues')
+    
     for venue in venues:
         menus = venue.get("menus")        
         if len(menus) == 0:
