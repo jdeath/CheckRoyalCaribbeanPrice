@@ -715,6 +715,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         sys.exit(1)
 
     for booking in response.json().get("payload").get("profileBookings"):
+        #print(booking)
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
         sailDate = booking.get("sailDate")
