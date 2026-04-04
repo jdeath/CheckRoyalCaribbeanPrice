@@ -1035,10 +1035,10 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
     
     isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode = parseProvidedURL(url)
     roomNumber = None
-
+    
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
-        
-    roomIsFound = results != {}
+    
+    roomAvailable = results.get("roomAvailable")
     numberOfNights = results.get("sailingNights")
     shipName = shipDictionary.get(shipCode)
 
@@ -1079,7 +1079,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
     
     refundNotFound = False
     
-    if roomIsFound:
+    if roomAvailable:
         
         baseFareString = "baseFare"
         refundFareString = "baseRefundableFare"
@@ -1125,14 +1125,14 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         # Strip last ,
         if addons != "":
             preString = preString + " (" + addons[:-2] + ")"  
-    
+ 
     if finalPaymentDate is None:
         finalPaymentDate = getFinalPaymentDate(numberOfNights,sailDate.replace('-', ''))
         
     finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
     pastFinalPaymentDate = date.today() > finalPaymentDate
     
-    if not roomIsFound:
+    if not roomAvailable:
         textString = f"{preString} Not For Sale"
         if automaticURL and pastFinalPaymentDate:
             textString += ". Past Final Payment Date of " + finalPaymentDateDisplay
@@ -1585,10 +1585,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
     roomAvailable = checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
     
     results = {}
-    
-    if not roomAvailable:
-        #print("Room not available")
-        return results
+    results['roomAvailable'] = roomAvailable
     
     headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0',
@@ -1630,6 +1627,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
             },
         ],
     }
+    
     if couponCode is not None:
         json_data['rooms'][0]['couponCode'] = couponCode
     if roomNumber is not None:
