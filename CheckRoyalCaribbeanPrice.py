@@ -163,7 +163,8 @@ def main(config_path=None):
                        cruiseLineName =  "royalcaribbean"
                        friendlyCruiseLine = "Royal Caribbean"
 
-                    print(f"\nChecking {friendlyCruiseLine} for user {username}")
+                    print(f"\n  Using {friendlyCruiseLine} for user {username}")
+                    print(f"        {friendlyCruiseLine} loyaly number will be used for checking cabin prices")
                     session = requests.session()
                     global foundItems # Clear found items between accounts
                     foundItems = [] # Clear found items between accounts
@@ -670,13 +671,13 @@ def getProfile(access_token,accountId,cruiseLineName,session):
         totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
         if totalNights > 0:
             print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
-        print("Using Captains Club Id To Check Cruise Prices")
 
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
     if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
+    # Return the correct loyality number based on the account being used
     if cruiseLineName == "royalcaribbean":
         loyaltyNumberToUse = cAndANumber
     else:
@@ -852,7 +853,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
-        #getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
+        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
         if watchListItems:
