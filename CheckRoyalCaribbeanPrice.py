@@ -1104,7 +1104,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         
         baseFareString = "baseFare"
         refundFareString = "baseRefundableFare"
-        if allIncluded:
+        if allIncluded or 'A' in paidPriceLetters:
             baseFareString = "allIncludedFare"
             refundFareString = "allIncludedRefundableFare" 
             
@@ -1190,7 +1190,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         if automaticURL and not pastFinalPaymentDate:
             textString = f"Rebook! {preString} New price of {price} {currencyCode}"
             if obcValue > 0:
-                textString += f" not including {obcString} OBC"
+                textString += f" not including {obcString} USD OBC"
             textString += f" is lower than {paidPrice}"
             
             if minimumSavingAlert is not None and saving < minimumSavingAlert:
@@ -1204,7 +1204,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         if  automaticURL and pastFinalPaymentDate:
             textString = f"Past Final Payment Date of {finalPaymentDateDisplay} : {preString} New price of {price} {currencyCode}"
             if obcValue > 0:
-                textString += f" not including {obcString} OBC"
+                textString += f" not including {obcString} USD OBC"
             textString += f" is lower than {paidPrice}"
             print(YELLOW + textString + RESET)
             # Do not notify as no need!
