@@ -829,7 +829,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r={police}&r0s=n&r0q={military}&r0t={senior}&r0D=y"
                 
             if dp340 and cruiseLineName == "royalcaribbean" and numberOfAdults == 1 and numberOfChildren == 0:
-                cruisePriceURL += "r0i=dp340"
+                cruisePriceURL += "&r0i=dp340"
             
             paidPrice = None
             #print(cruisePriceURL)
