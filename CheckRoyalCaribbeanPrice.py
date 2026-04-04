@@ -1638,10 +1638,10 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
                 'qualifiers': {
                     #'loyaltyNumber': loyaltyNumber,
                     #'stateCode': stateCode,
-                    'fireFighter': fireFighter=="y",
-                    'military': military=="y",
-                    'police': police=="y",
-                    'senior': senior=="y",
+                    'fireFighter': fireFighter,
+                    'military': military,
+                    'police': police,
+                    'senior': senior,
                 },
                 'occupancy': {
                     'adultCount': adultCount,
