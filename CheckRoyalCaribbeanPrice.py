@@ -1037,6 +1037,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
     isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode = parseProvidedURL(url)
     roomNumber = None
     
+    #print(locals())
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
     
     roomAvailable = results.get("roomAvailable")
