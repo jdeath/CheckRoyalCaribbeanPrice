@@ -1146,7 +1146,11 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         # If cruise room not available, print other room prices
         # Only do this for watchlist rooms
         if packageCode and not automaticURL:
-            GetCruisePriceFromAPI(currencyCode, packageCode, sailDate, cabinClassString, numberOfAdults, numberOfChildren)
+            #GetCruisePriceFromAPI(currencyCode, packageCode, sailDate, cabinClassString, numberOfAdults, numberOfChildren)
+            # Save API call since I have the rooms already!
+            print(f"\tAvailable Rooms (non-discounted price) for {numberOfAdults} Adult and {numberOfChildren} Child on This Sailing Are:")
+            for availableRoom in results.get("availableRooms"):
+                print(f"\t{availableRoom.get('name')} {availableRoom.get('price')} - Rooms Left {availableRoom.get('roomsLeft')}")
         return
         
     
@@ -1558,6 +1562,7 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
     end_var = "]}]}]]"
     pattern = rf"{re.escape(start_var)}(.*?){re.escape(end_var)}"
     match = re.search(pattern, response.text)
+    availableRooms = []
     if match:
         result = match.group(1)
         # Format text so will load as json. Needs to be done twice
@@ -1567,6 +1572,7 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
         # Loop through data to see if desired room is available
         # This also has price information, but not at the required detail
         stateroomTypes = (data.get("rooms")[0]).get("options").get("stateroomTypes")
+        
         for stateroomType in stateroomTypes:
             stateroomSubtypes = stateroomType.get("stateroomSubtypes")
             for stateroomSubtype in stateroomSubtypes:
@@ -1575,14 +1581,20 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
                 #print("Desired: " + stateroomSubtypeCode + " " + categoryCode)
                 #print("Cur:     " + cur_subTypeCode + " " + categoryCode)
                 #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}") 
+                
                 if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
-                    return True
-
-    return False
+                    return True, {}
+                    
+                # Here we add available rooms. I will only use it if sold out, so ok if exits if room found
+                price = stateroomSubtype.get("pricing").get("invoice").get("total")
+                roomsLeft = stateroomSubtype.get("roomsLeft")
+                availableRooms.append({"name":stateroomSubtype.get('name') + " " + cur_categoryCode + " " + cur_subTypeCode,"price":price,"roomsLeft":roomsLeft})
+                
+    return False, availableRooms
 
 def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomTypeCode,stateroomSubtypeCode,categoryCode,roomNumber,loyaltyNumber,stateCode,fireFighter,military,police,senior,couponCode,adultCount,childCount):
     
-    roomAvailable = checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
+    roomAvailable, availableRooms = checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
     
     results = {}
     results['roomAvailable'] = roomAvailable
@@ -1684,6 +1696,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
         obc = allIncludedRefundableFare.get("pricing").get("invoice").get("onboardCredits",0)
         results['allIncludedRefundableFare'] = {'fare': base_fare,'gratuities': base_gratuities,'insurance': base_insurance,'obc':obc}    
     
+    results['availableRooms'] = availableRooms
     return results
     
 if __name__ == "__main__":
