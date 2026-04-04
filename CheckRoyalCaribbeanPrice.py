@@ -1040,6 +1040,13 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
     
     roomAvailable = results.get("roomAvailable")
+    if not roomAvailable and couponCode is not None:
+        print(f"Coupon Code {couponCode} May Have Failed - Trying Without")
+        couponCode = None
+        results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
+        
+    
+    roomAvailable = results.get("roomAvailable")
     numberOfNights = results.get("sailingNights")
     shipName = shipDictionary.get(shipCode)
 
@@ -1598,6 +1605,8 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
     roomAvailable, availableRooms = checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
     
     results = {}
+    sailingNights = 0
+    results['sailingNights'] = sailingNights
     results['roomAvailable'] = roomAvailable
     
     headers = {
@@ -1624,7 +1633,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
                 'fareCode': 'BESTRATE',
                 'accessible': False,
                 #'roomNumber': roomNumber,
-                #'couponCode': couponCode
+                #'couponCode': couponCode,
                 'qualifiers': {
                     #'loyaltyNumber': loyaltyNumber,
                     #'stateCode': stateCode,
@@ -1661,7 +1670,14 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
         json=json_data,
     )
     
-    room = response.json().get("rooms")[0]
+    rooms = response.json().get("rooms")
+    if rooms is None:
+        # Print Error Message and set room available to false
+        print("Room Price Not Found")
+        results['roomAvailable'] = False
+        return results
+        
+    room = rooms[0]
     sailingNights = response.json().get("sailing").get("itinerary").get("sailingNights")
     results['sailingNights'] = sailingNights
     
