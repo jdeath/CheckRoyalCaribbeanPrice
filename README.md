@@ -170,7 +170,7 @@ accountInfo:
     police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not available in account
 displayCruisePrices: true
 ```
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received, but excluding any upgrades or gratuities. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked with a refundable deposit, put an R before the Price (R1999.98). If you booked with included gratitues, put a G in front of the price (G1999.99). If you booked with trip insurance, put an I in front of price (I1999.99). You can use any or all combinations (GIR1999.99). This will cause the code to request the correct price from the API.
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked with a refundable deposit, put an R before the Price (R1999.98). If you booked with included gratitues, put a G in front of the price (G1999.99). If Celebrity with All-In price put an A (A1999.99). If you booked with trip insurance, put an I in front of price (I1999.99). You can use any or all combinations (GIRA1999.99). This will cause the code to request the correct price from the API.
 
 If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
 ```yaml
@@ -183,7 +183,7 @@ reservationPricePaid:
   'XXXXXX': 4568.48
   'YYYYYY': R4172.71
 ```
-If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this:
+If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this. Do not add letters before this paidPrice.
 ```yaml
 cruises:
   - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
@@ -228,12 +228,11 @@ showPromos: true
 1. Be sure you are logged out of the Royal Caribbean / Celebrity Website. If you are logged in, the URL you get in Step 5 will not work.
 1. Go to Royal Caribbean or Celebrity and do a mock booking of the room you want, with the same number of adults and kids
 1. Select a cruise and select your room type/room. Be sure to enter your C&A number and any senior/military/police discounts in the "Apply Promo Code and Exclusive Rates" link to the left. **Use your C&A or Celebrity # depending on the cruise. Do not use username. Bug in Royal Website requires your number not username**
-1. If you want a refundable deposit, trip insurance, or include gratituies be sure to select them on the "preferences screen"
-1. For Celebrity, DO NOT click "Upgrade to included WIFI and drinks". The code cannot handle that (yet). You will have to remove this cost from the price.
+1. If you want a refundable deposit, trip insurance, included gratituies, or Celebrity only All-In package be sure to select them on the "preferences screen"
 1. Complete until they ask for your personal/guest information
 1. At this point, you should see a blue bar at the bottom right of webpage with a price
 1. Copy the entire URL from the top of your browser into the cruiseURL field. The url should start with `https://www.royalcaribbean.com/checkout/guest-info?...` or `https://www.celebritycruises.com/checkout/guest-info?...` where `...` is a bunch of stuff. Copy the entire URL
-1. Put the price you paid in the paidPrice field. Remove the `$` and any `,` . Subtract any OBC you recieved from Royal or your TA.
+1. Put the price you paid in the paidPrice field. Remove the `$` and any `,` . Subtract any OBC you recieved from Royal or your TA. Do not add letters in this price, the code can tell from the URL if you included gratities, All-In package, etc.
 1. Run the tool and see if it works
 1. You can add multiple cruiseURL/paidPrice to track multiple cruises or rooms on a cruise
 1. If the code says the price is cheaper, do a mock booking to see if cabin is still available. You need to do this from a new search on the Royal Caribbean / Celebrity website. Do not just put the cruiseURL in your browser.
