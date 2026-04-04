@@ -168,7 +168,7 @@ def main(config_path=None):
                     global foundItems # Clear found items between accounts
                     foundItems = [] # Clear found items between accounts
                     access_token,accountId,session = login(username,password,session,cruiseLineName)
-                    stateFromProfile, loyaltyNumber, cAndAPoints = getProfile(access_token,accountId,session)
+                    stateFromProfile, loyaltyNumber, cAndAPoints = getProfile(access_token,accountId,cruiseLineName,session)
                     if state is None:
                         state = stateFromProfile
                         
@@ -615,7 +615,7 @@ def getNumberOfNights(access_token,accountId,session,loyaltyNumber):
     
     return totalNights, totalTrips
     
-def getProfile(access_token,accountId,session):
+def getProfile(access_token,accountId,cruiseLineName,session):
 
     loyaltyNumber = None
     cAndASharedPoints = 0
@@ -677,8 +677,13 @@ def getProfile(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-    # Use shared points to determine if eligible for dp340
-    return state, loyaltyNumber, cAndASharedPoints
+    if cruiseLineName == "royalcaribbean":
+        loyaltyNumberToUse = cAndANumber
+    else:
+        loyaltyNumberToUse = captainsClubId
+        
+    # Use Royal shared points to determine if eligible for dp340
+    return state, loyaltyNumberToUse, cAndASharedPoints
 
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags):
 
@@ -847,7 +852,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
-        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
+        #getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
         if watchListItems:
@@ -1039,6 +1044,7 @@ def parseProvidedURL(url):
 
 def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
     
+    #print(url)
     isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode = parseProvidedURL(url)
     roomNumber = None
     
@@ -1555,7 +1561,7 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
         'rgVisited': 'true',
         'r0C': 'y',
     }
-
+    
     if isRoyal:
         apiURL = 'https://www.royalcaribbean.com/room-selection/type-and-subtype'
     else:
@@ -1671,7 +1677,6 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
         apiURL = 'https://www.celebritycruises.com/checkout/api/v1/rooms/checkout'    
         
     response = requests.post(apiURL,
-        params=params,
         headers=headers,
         json=json_data,
     )
