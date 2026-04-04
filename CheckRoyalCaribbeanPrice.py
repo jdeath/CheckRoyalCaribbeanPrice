@@ -832,6 +832,11 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             if dp340 and cruiseLineName == "royalcaribbean" and numberOfAdults == 1 and numberOfChildren == 0:
                 cruisePriceURL += "&r0i=dp340"
             
+            if loyaltyNumber is not None:
+                cruisePriceURL += f"&r0l={loyaltyNumber}"
+            if state is not None:
+                cruisePriceURL += f"&r0k={state}"
+            
             paidPrice = None
             #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
