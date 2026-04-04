@@ -654,7 +654,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
         loyaltyNumber = cAndANumber
         totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
         if totalNights > 0:
-            print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
+            print(f"\tTotal Trips on Royal: {totalTrips} - Total Nights: {totalNights}")
     
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
@@ -670,7 +670,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
         loyaltyNumber = captainsClubId
         totalNights, totalTrips = getNumberOfNights(access_token,accountId,session,loyaltyNumber)
         if totalNights > 0:
-            print(f"\tTotal Trips: {totalTrips} - Total Nights: {totalNights}")
+            print(f"\tTotal Trips on Celebrity: {totalTrips} - Total Nights: {totalNights}")
 
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
     if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
@@ -715,7 +715,6 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         sys.exit(1)
 
     for booking in response.json().get("payload").get("profileBookings"):
-        #print(booking)
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
         sailDate = booking.get("sailDate")
@@ -753,12 +752,19 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             stateroomSubtype = booking.get("stateroomSubtype")
             
             # Work around for Celebrity Concierge GTY which does not return this info
+            # Work around for Royal Interior GTY which does not return this info
             if stateroomCategoryCode is None and stateroomSubtype is None:
-                stateroomCategoryCode = "XC"
-                stateroomSubtype = "XC"
+                if brandCode == "C":
+                    stateroomCategoryCode = "XC"
+                    stateroomSubtype = "XC"
+                else:
+                    stateroomCategoryCode = "ZI"
+                    stateroomSubtype = "ZI"
+                
                 if displayCruisePrices:
                     print(YELLOW + "Data is missing from API. Cruise Price Check May Not Work - Use Manual Method" + RESET)
-                
+            
+                    
             numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
