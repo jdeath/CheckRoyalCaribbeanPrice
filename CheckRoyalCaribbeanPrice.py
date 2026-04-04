@@ -1027,7 +1027,7 @@ def parseProvidedURL(url):
     senior = params.get("r0t",["n"])[0] == "y"
     military = params.get("r0q",["n"])[0] == "y"
     police = params.get("r0r",["n"])[0] == "y"
-    fire = params.get("r0s",["n"])[0] 
+    fire = params.get("r0s",["n"])[0] == "y"
     
     return isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode
     
