@@ -168,11 +168,11 @@ def main(config_path=None):
                     global foundItems # Clear found items between accounts
                     foundItems = [] # Clear found items between accounts
                     access_token,accountId,session = login(username,password,session,cruiseLineName)
-                    stateFromProfile, loyaltyNumber = getProfile(access_token,accountId,session)
+                    stateFromProfile, loyaltyNumber, cAndAPoints = getProfile(access_token,accountId,session)
                     if state is None:
                         state = stateFromProfile
                         
-                    discountFlags = [loyaltyNumber, state, senior, military, police]
+                    discountFlags = [loyaltyNumber, state, senior, military, police, cAndAPoints >= 340]
                     getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
                 
                     if numAccounts > 1:
@@ -618,6 +618,7 @@ def getNumberOfNights(access_token,accountId,session,loyaltyNumber):
 def getProfile(access_token,accountId,session):
 
     loyaltyNumber = None
+    cAndAPoints = 0
     headers = {
         'Access-Token': access_token,
         'AppKey': appKey,
@@ -639,6 +640,7 @@ def getProfile(access_token,accountId,session):
             residencyCountryCode = address.get("residencyCountryCode",None)
             if residencyCountryCode == "USA" or residencyCountryCode == "CAN":
                 state = address.get("state",None)    
+    
     
     loyalty = payload.get("loyaltyInformation")
     cAndANumber = loyalty.get("crownAndAnchorId")
@@ -675,7 +677,7 @@ def getProfile(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-    return state, loyaltyNumber
+    return state, loyaltyNumber, cAndAPoints
 
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags):
 
@@ -814,7 +816,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         # Print Current Prices
         if displayCruisePrices:
     
-            [loyaltyNumber, state, senior, military, police] = discountFlags
+            [loyaltyNumber, state, senior, military, police, dp340] = discountFlags
             # Override if booking says will have a senior
             if senior == "n" and haveASenior:
                 senior = "y"
@@ -826,7 +828,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             else:
                 cruisePriceURL = f"https://www.{cruiseLineName}.com/room-selection/room-location?packageCode={packageCode}&sailDate={urlSailDate}&country={bookingOfficeCountryCode}&selectedCurrencyCode={bookingCurrency}&shipCode={shipCode}&roomIndex=0&r0a={numberOfAdults}&r0c={numberOfChildren}&r0d={stateroomTypeName}&r0e={stateroomSubtype}&r0f={stateroomCategoryCode}&r0b=n&r0r={police}&r0s=n&r0q={military}&r0t={senior}&r0D=y"
                 
-                
+            if dp340 and cruiseLineName == "royalcaribbean" and numberOfAdults == 1 and numberOfChildren == 0:
+                cruisePriceURL += "r0i=dp340"
+            
             paidPrice = None
             #print(cruisePriceURL)
             if str(reservationId) in reservationPricePaid:
@@ -1018,20 +1022,21 @@ def parseProvidedURL(url):
     travelInsurance = params.get("r0n",["n"])[0] != "n"
     prepaidGrats = params.get("r0m",["n"])[0] != "n"
     
+    couponCode = params.get("r0i",[None])[0]
     senior = params.get("r0t",["n"])[0] == "y"
     military = params.get("r0q",["n"])[0] == "y"
     police = params.get("r0r",["n"])[0] == "y"
     fire = params.get("r0s",["n"])[0] 
     
-    return isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire
+    return isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode
     
 
 def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
     
-    isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire = parseProvidedURL(url)
+    isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode = parseProvidedURL(url)
     roomNumber = None
 
-    results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,numberOfAdults,numberOfChildren)
+    results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
         
     roomIsFound = results != {}
     numberOfNights = results.get("sailingNights")
@@ -1064,6 +1069,8 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
        usedDiscounts += "Police, " 
     if military == "y":
        usedDiscounts += "Military, " 
+    if couponCode is not None:
+       usedDiscounts += f"Coupon {couponCode}, " 
     if usedDiscounts != "":
        preString = preString + " (" + usedDiscounts[:-2] + " Discount)"
     
@@ -1573,7 +1580,7 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
 
     return False
 
-def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomTypeCode,stateroomSubtypeCode,categoryCode,roomNumber,loyaltyNumber,stateCode,fireFighter,military,police,senior,adultCount,childCount):
+def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomTypeCode,stateroomSubtypeCode,categoryCode,roomNumber,loyaltyNumber,stateCode,fireFighter,military,police,senior,couponCode,adultCount,childCount):
     
     roomAvailable = checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
     
@@ -1607,6 +1614,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
                 'fareCode': 'BESTRATE',
                 'accessible': False,
                 #'roomNumber': roomNumber,
+                #'couponCode': couponCode
                 'qualifiers': {
                     #'loyaltyNumber': loyaltyNumber,
                     #'stateCode': stateCode,
@@ -1622,11 +1630,12 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
             },
         ],
     }
-    
+    if couponCode is not None:
+        json_data['rooms'][0]['couponCode'] = couponCode
     if roomNumber is not None:
         json_data['rooms'][0]['roomNumber'] = roomNumber
     if stateCode is not None:
-        json_data['rooms'][0]['qualifiers']['qualifiers'] = qualifiers
+        json_data['rooms'][0]['qualifiers']['stateCode'] = stateCode
     if loyaltyNumber is not None:
         json_data['rooms'][0]['qualifiers']['loyaltyNumber'] = loyaltyNumber
     
