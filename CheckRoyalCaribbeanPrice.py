@@ -618,7 +618,7 @@ def getNumberOfNights(access_token,accountId,session,loyaltyNumber):
 def getProfile(access_token,accountId,session):
 
     loyaltyNumber = None
-    cAndAPoints = 0
+    cAndASharedPoints = 0
     headers = {
         'Access-Token': access_token,
         'AppKey': appKey,
@@ -677,7 +677,8 @@ def getProfile(access_token,accountId,session):
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
-    return state, loyaltyNumber, cAndAPoints
+    # Use shared points to determine if eligible for dp340
+    return state, loyaltyNumber, cAndASharedPoints
 
 def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags):
 
