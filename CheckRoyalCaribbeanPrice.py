@@ -1592,7 +1592,7 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
                 #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}") 
                 
                 if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
-                    return True, {}
+                    return True, []
                     
                 # Here we add available rooms. I will only use it if sold out, so ok if exits if room found
                 price = stateroomSubtype.get("pricing").get("invoice").get("total")
@@ -1676,6 +1676,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
         # Print Error Message and set room available to false
         print("Room Price Not Found")
         results['roomAvailable'] = False
+        results['availableRooms'] = availableRooms
         return results
         
     room = rooms[0]
