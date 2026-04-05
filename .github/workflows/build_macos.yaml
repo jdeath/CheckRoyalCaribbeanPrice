@@ -31,12 +31,18 @@ jobs:
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
           pyinstaller --windowed BrowseRoyalCaribbeanPrice.py
 
+      - name: Get upload URL
+        id: geturl
+        run:   |
+         upload_url=$(curl -sL https://api.github.com/repos/${{github.repository}}/releases/latest?access_token=${{ secrets.GITHUB_TOKEN }} | jq -r '.upload_url')
+         echo ::set-output name=upload_url::$upload_url
+         
       - name: upload windows artifact
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ steps.geturl.outputs.upload_url }} # ${{ github.event.release.upload_url }}
           asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice.pkg
           asset_name: BrowseRoyalCaribbeanPrice.pkg
           asset_content_type: application/octet-stream
@@ -52,7 +58,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url:  ${{ steps.geturl.outputs.upload_url }} # ${{ github.event.release.upload_url }}
           asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice.pkg
           asset_name: CheckRoyalCaribbeanPrice.pkg
           asset_content_type: application/octet-stream
