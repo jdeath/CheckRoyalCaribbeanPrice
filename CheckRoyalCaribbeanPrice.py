@@ -164,7 +164,7 @@ def main(config_path=None):
                        friendlyCruiseLine = "Royal Caribbean"
 
                     print(f"\n  Using {friendlyCruiseLine} for user {username}")
-                    print(f"        {friendlyCruiseLine} loyaly number will be used for checking cabin prices")
+                    print(f"        {friendlyCruiseLine} loyalty number will be used for checking cabin prices")
                     session = requests.session()
                     global foundItems # Clear found items between accounts
                     foundItems = [] # Clear found items between accounts
