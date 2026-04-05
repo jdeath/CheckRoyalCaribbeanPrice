@@ -1,0 +1,56 @@
+name: Build MacOS Executable with PyInstaller
+
+on:
+  workflow_dispatch
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: write # Grants write access to repository contents for this job only
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12' # Specify your desired Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller requests
+          # If you have a requirements.txt file:
+          # Install requirements later, as may make binary smaller
+          #pip install -r requirements.txt
+
+      # Do this first, as has less dependencies
+      - name: Package BrowseApplication with PyInstaller
+        run: |
+          # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
+          pyinstaller --onefile --windowed BrowseRoyalCaribbeanPrice.py
+
+      - name: upload windows artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          name: macos-app
+          path: dist/
+      
+      - name: Package Application with PyInstaller
+        run: |
+          # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
+          pip install Apprise bs4
+          pyinstaller --onefile --windowed --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
+
+      - name: upload windows artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          name: macos-app
+          path: dist/
+      
+      
