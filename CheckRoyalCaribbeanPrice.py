@@ -869,8 +869,8 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 get_cruise_price(cruisePriceURL, session, paidPriceStruct, apobj, True, finalPaymentDate, loyaltyNumber, state)
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
-
-        print("Skipping GetOrders") #getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
+                
+        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
         if watchListItems:
