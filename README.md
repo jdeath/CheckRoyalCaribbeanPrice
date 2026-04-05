@@ -201,13 +201,8 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
 displayCruisePrices: true
 reservationPricePaid:
-  - reservation:  XXXXXX
-    paidPrice: 4172.71
-    allInUpgrade: false # Optional, defaults to false
-    gratuities: false # Optional, defaults to false
-    tripInsurance: false # Optional, defaults to false
-    refundable: false # Optional, defaults to false
-    couponCode: DP340 # Optional, defaults to none. Will use DP340 if you qualify automatically
+  - reservation:  XXXXXX # Required
+    paidPrice: 4172.71 # Required
   - reservation:  YYYYY
     paidPrice: 3172.71
     allInUpgrade: false # Optional, defaults to false
