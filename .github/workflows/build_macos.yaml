@@ -29,7 +29,7 @@ jobs:
       - name: Package BrowseApplication with PyInstaller
         run: |
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
-          pyinstaller --onefile --windowed BrowseRoyalCaribbeanPrice.py
+          pyinstaller --windowed BrowseRoyalCaribbeanPrice.py
 
       - name: upload windows artifact
         uses: actions/upload-release-asset@v1
@@ -37,23 +37,23 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice
-          asset_name: BrowseRoyalCaribbeanPrice
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice.app
+          asset_name: BrowseRoyalCaribbeanPrice.app
           asset_content_type: application/octet-stream
       
       - name: Package Application with PyInstaller
         run: |
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
           pip install Apprise bs4
-          pyinstaller --onefile --windowed --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
+          pyinstaller --windowed --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
 
       - name: upload windows artifact
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice
-          asset_name: CheckRoyalCaribbeanPrice
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice.app
+          asset_name: CheckRoyalCaribbeanPrice.app
           asset_content_type: application/octet-stream
-      
-      
+    
