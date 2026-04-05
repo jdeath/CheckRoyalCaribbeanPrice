@@ -5,6 +5,7 @@ import re
 import requests
 import sys
 import platform
+import json
 
 from datetime import datetime, date
 from unicodedata import combining, normalize
@@ -152,6 +153,7 @@ def main():
             print(f"{linkRoot}?bookingId=123456&shipCode={shipcode}&sailDate={sailing['date']}")
             print("")
             
+            
             numAdults = 2
             numChildren = 0
             GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren)
@@ -274,9 +276,9 @@ def getShips():
         shipCode = ship.get("shipCode")
         name = ship.get("name")
         shipNames.append({'code': shipCode, 'name': name})
-    
-    #Force Hero until it is added to the API
-    shipNames.append({'code': 'HE', 'name': 'Hero of the Seas'})
+        if shipCode == "HM":
+            #Force Hero until it is added to the API
+            shipNames.append({'code': 'HE', 'name': 'Hero of the Seas'})
     
     return shipNames
 
@@ -865,6 +867,6 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
 
                     print(title)
                 print("")       
-    
+  
 if __name__ == "__main__":
     main()
