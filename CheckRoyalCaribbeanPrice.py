@@ -141,7 +141,7 @@ def main(config_path=None):
             reservationPricePaid = {}
             if 'reservationPricePaid' in data:
                 reservationPricePaid=data.get('reservationPricePaid', {})
-            
+                
             if 'accountInfo' in data:
                 numAccounts = len(data['accountInfo'])
                 for accountInfo in data['accountInfo']:
@@ -185,10 +185,9 @@ def main(config_path=None):
                 for cruises in data['cruises']:
                         cruiseURL = cruises['cruiseURL'] 
                         paidPrice = cruises['paidPrice']
-                        # Remove letters from here. You should have the correct URL if have addons
-                        paidPrice = re.sub(r'[a-zA-Z]', '', paidPrice)
+                        paidPriceStruct = {"paidPrice":float(paidPrice)} # For New structure
                         session = requests.session()
-                        get_cruise_price(cruiseURL, session, paidPrice, apobj, False, None,None)
+                        get_cruise_price(cruiseURL, session, paidPriceStruct, apobj, False, None,None)
                         
     except FileNotFoundError:
         print("No Configuration File Found")
@@ -754,15 +753,18 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             # Work around for Celebrity Concierge GTY which does not return this info
             # Work around for Royal Interior GTY which does not return this info
             if stateroomCategoryCode is None and stateroomSubtype is None:
-                if stateroomType == "B" and brandCode == "C":
-                    stateroomCategoryCode = "XC"
-                    stateroomSubtype = "XC"
-                if stateroomType == "I" and brandCode == "R":
-                    stateroomCategoryCode = "ZI"
-                    stateroomSubtype = "ZI"
+                 if displayCruisePrices:
+                    print(YELLOW + "Data is missing from API. Code is taking a guess to fixing" + RESET)
+                    print(YELLOW + "Add category override in config.yaml if wrong category" + RESET)
+                    
+                 if stateroomType == "B" and brandCode == "C":
+                     stateroomCategoryCode = "XC"
+                     stateroomSubtype = "XC"
+                 if stateroomType == "I" and brandCode == "R":
+                     stateroomCategoryCode = "ZI"
+                     stateroomSubtype = "ZI"
                 
-                if displayCruisePrices:
-                    print(YELLOW + "Data is missing from API. Cruise Price Check May Not Work - Use Manual Method" + RESET)
+                
             
                     
             numberOfPassengers = numberOfPassengers + 1
@@ -850,17 +852,25 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             if state is not None:
                 cruisePriceURL += f"&r0k={state}"
             
-            paidPrice = None
+            paidPriceStruct = None
             #print(cruisePriceURL)
-            if str(reservationId) in reservationPricePaid:
-                paidPrice = reservationPricePaid.get(str(reservationId))
+            
+            if isinstance(reservationPricePaid,list):
+                print("Update Config To Use New Paid Price Structure - See Readme")
+                if str(reservationId) in reservationPricePaid:
+                    paidPrice = reservationPricePaid.get(str(reservationId))
+                    paidPriceStruct = {"paidPrice":float(paidPrice)} # For New structure
+            else:        
+                for reservation in reservationPricePaid:
+                    if int(reservationId) == int(reservation.get("reservation")):
+                        paidPriceStruct = reservation
                 
             if stateroomType != "NONE":
-                get_cruise_price(cruisePriceURL, session, paidPrice, apobj, True, finalPaymentDate, loyaltyNumber, state)
+                get_cruise_price(cruisePriceURL, session, paidPriceStruct, apobj, True, finalPaymentDate, loyaltyNumber, state)
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
-        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
+        print("Skipping GetOrders") #getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
         if watchListItems:
@@ -1050,12 +1060,35 @@ def parseProvidedURL(url):
     return isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode
     
 
-def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
+def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPaymentDate,loyaltyNumber=None,state=None):
     
     #print(url)
     isRoyal,sailDate,currencyCode,bookingOfficeCountryCode,shipCode,cabinClassString,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,packageCode,numberOfAdults,numberOfChildren,loyaltyNumber,username,state,refundable,travelInsurance,prepaidGrats,allIncluded,senior,military,police,fire,couponCode = parseProvidedURL(url)
     roomNumber = None
     
+    # Get Overrides if needed
+    paidPrice = None
+    if paidPriceStruct is not None:
+        paidPrice = paidPriceStruct.get("paidPrice",None)
+        allIncluded = paidPriceStruct.get("allInUpgrade",False)
+        prepaidGrats = paidPriceStruct.get("gratuities",False)
+        travelInsurance = paidPriceStruct.get("tripInsurance",False)
+        refundable = paidPriceStruct.get("refundable",False)
+        couponCode = paidPriceStruct.get("couponCode",couponCode)
+        stateroomCategoryCode =  paidPriceStruct.get("catagoryOverride",stateroomCategoryCode)
+        stateroomSubtype =  paidPriceStruct.get("stateroomSubtype",stateroomCategoryCode)
+        senior = paidPriceStruct.get("senior",senior)
+        military = paidPriceStruct.get("military",military)
+        police = paidPriceStruct.get("police",police)
+        fire = paidPriceStruct.get("fire",fire)
+        loyaltyNumber = paidPriceStruct.get("loyaltyNumber",loyaltyNumber)
+        state = paidPriceStruct.get("state",state)
+        
+        if allIncluded and isRoyal:
+            print("Royal Does Not Have All In Fare")
+            print("Price Check May Not Work. Check Documentation")
+        
+        
     #print(locals())
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
     
@@ -1065,7 +1098,6 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         couponCode = None
         results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
         
-    
     roomAvailable = results.get("roomAvailable")
     numberOfNights = results.get("sailingNights")
     shipName = shipDictionary.get(shipCode)
@@ -1073,18 +1105,6 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
     sailDateDisplay = datetime.strptime(sailDate, "%Y-%m-%d").strftime(dateDisplayFormat) 
     
     preString = f"{sailDateDisplay} {shipName} {cabinClassString} {stateroomCategoryCode}"
-    
-    paidPriceLetters = ""
-    if paidPrice is not None and isinstance(paidPrice, str):
-        # Use G,I,R as keys in the price
-        paidPriceLetters = "".join([char for char in paidPrice if char.isalpha()])
-        # Remove letters from price
-        paidPrice = re.sub(r'[a-zA-Z]', '', paidPrice)
-        # make a float as it now only has numbers
-        paidPrice = float(paidPrice)
-        if 'A' in paidPriceLetters and isRoyal:
-            print("Royal Does Not Have All In Fare")
-            print("Price Check May Not Work. Check Documentation")
     
     usedDiscounts = ""
     if loyaltyNumber is not None:
@@ -1111,7 +1131,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         
         baseFareString = "baseFare"
         refundFareString = "baseRefundableFare"
-        if allIncluded or 'A' in paidPriceLetters:
+        if allIncluded:
             baseFareString = "allIncludedFare"
             refundFareString = "allIncludedRefundableFare" 
             
@@ -1127,7 +1147,7 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
         baseIns = ins
         
         desireRefundPrice = False
-        if refundable or "R" in paidPriceLetters:
+        if refundable:
            desireRefundPrice = True
            addons += "Refundable Deposit, "
            fareStruct = results.get(refundFareString)
@@ -1139,15 +1159,15 @@ def get_cruise_price(url, session, paidPrice, apobj, automaticURL,finalPaymentDa
            else:
                refundNotFound = True
            
-        if travelInsurance or "I" in paidPriceLetters:
+        if travelInsurance:
            addons += "Travel Protection, "
            price += ins
            basePrice += baseIns
-        if prepaidGrats or "G" in paidPriceLetters:
+        if prepaidGrats:
            addons += "Prepaid grats, "
            price += grats
            basePrice += baseGrats
-        if allIncluded or "A" in paidPriceLetters:
+        if allIncluded:
            addons += "All Included, "
             
         # Strip last ,
