@@ -214,7 +214,7 @@ reservationPricePaid:
     state: "CA" # Optional, defaults to state in your account
     loyaltyNumber: 12345 # Optional, defaults to loyalty number in your account
 ```
-
+<hr>
 If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this. Do not add letters before this paidPrice.
 ```yaml
 cruises:
