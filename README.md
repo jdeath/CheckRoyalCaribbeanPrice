@@ -163,6 +163,7 @@ accountInfo:
 displayCruisePrices: true
 ```
 <hr>
+
 **Note: This paragraph is for versions <= 3.2.1 . If using python in repository, use next paragraph:**
 **Note: Updated code will still allow this format above...for now**
 If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked with a refundable deposit, put an R before the Price (R1999.98). If you booked with included gratitues, put a G in front of the price (G1999.99). If Celebrity with All-In price put an A (A1999.99). If you booked with trip insurance, put an I in front of price (I1999.99). You can use any or all combinations (GIRA1999.99). This will cause the code to request the correct price from the API.
@@ -179,6 +180,7 @@ reservationPricePaid:
   'YYYYYY': R4172.71
 ```
 <hr>
+
 **Note: This paragraph is for versions > 3.2.1 or if using python in repository**
 **Note: Code will still allow old format above...for now**
 **Note: Old code will not allow this new format**
@@ -215,6 +217,7 @@ reservationPricePaid:
     loyaltyNumber: 12345 # Optional, defaults to loyalty number in your account
 ```
 <hr>
+
 If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this. Do not add letters before this paidPrice.
 ```yaml
 cruises:
