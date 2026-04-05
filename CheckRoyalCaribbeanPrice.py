@@ -854,13 +854,12 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             
             paidPriceStruct = None
             #print(cruisePriceURL)
-            
-            if isinstance(reservationPricePaid,dict):
+            if isinstance(reservationPricePaid,dict) and reservationPricePaid:
                 print("Update Config To Use New Paid Price Structure - See Readme")
                 if str(reservationId) in reservationPricePaid:
                     paidPrice = reservationPricePaid.get(str(reservationId))
                     paidPriceStruct = {"paidPrice":float(paidPrice)} # For New structure
-            else:        
+            elif isinstance(reservationPricePaid,list):        
                 for reservation in reservationPricePaid:
                     if int(reservationId) == int(reservation.get("reservation")):
                         paidPriceStruct = reservation
