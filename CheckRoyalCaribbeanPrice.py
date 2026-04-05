@@ -750,7 +750,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         for guest in guests:
             stateroomCategoryCode = guest.get("stateroomCategoryCode")
             stateroomSubtype = booking.get("stateroomSubtype")
-            stateroomType = = booking.get("stateroomType")
+            stateroomType = booking.get("stateroomType")
             # Work around for Celebrity Concierge GTY which does not return this info
             # Work around for Royal Interior GTY which does not return this info
             if stateroomCategoryCode is None and stateroomSubtype is None:
