@@ -168,7 +168,7 @@ displayCruisePrices: true
 
 **Note: Updated code will still mostly allow this format above...for now**
 
-**Note: Updated code will support the old price format, but not support the IGRA qualifiers. Update format**
+**Note: Updated code will support the old price format, but not support the IGRA qualifiers. Update format as described in next section**
 
 If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked with a refundable deposit, put an R before the Price (R1999.98). If you booked with included gratitues, put a G in front of the price (G1999.99). If Celebrity with All-In price put an A (A1999.99). If you booked with trip insurance, put an I in front of price (I1999.99). You can use any or all combinations (GIRA1999.99). This will cause the code to request the correct price from the API.
 
@@ -187,11 +187,11 @@ reservationPricePaid:
 
 **Note: This paragraph is for versions > 3.2.1 or if using python in repository**
 
-**Note: Code will still allow old format above...for now**
+**Note: Code will still allow old format above, except for IGRA qualifiers**
 
 **Note: Old code will not allow this new format**
 
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked a special fare, you must set the corresponding value. You only need to set what you need, will default to false. If you booked with a refundable deposit, set `refundable = true`. If you booked with included gratitues, set `gratuities=true`. If Celebrity with All-In price, set `allInUpgrade=true`. If you booked with trip insurance, set `tripInsurance=true`. All of the others are optional, if you do not set them they default to false or will use the information in your account. This will cause the code to request the correct price from the API. Note some GTY rooms do not have the proper information set in your account. You may need to override the catagory codes. Post an issue if you need help.
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked a special fare, you must set the corresponding keys. You only need to set what you need, will default to false. If you booked with a refundable deposit, set `refundable = true`. If you booked with included gratitues, set `gratuities=true`. If Celebrity with All-In price, set `allInUpgrade=true`. If you booked with trip insurance, set `tripInsurance=true`. All of the others keys are optional, if you do not set them they default to false or will use the information (state, loyalty number, etc) from your account. This will let the code to request the correct price from the API. Note some GTY rooms do not have the proper information set in your account. You may need to override the catagory codes, the code will print an error message if this applies to you. Post an issue if you need help.
 
 If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
 ```yaml
@@ -203,7 +203,7 @@ displayCruisePrices: true
 reservationPricePaid:
   - reservation:  XXXXXX # Required
     paidPrice: 4172.71 # Required
-  - reservation:  YYYYY
+  - reservation:  YYYYY 
     paidPrice: 3172.71
     allInUpgrade: false # Optional, defaults to false
     gratuities: false # Optional, defaults to false
