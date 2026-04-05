@@ -461,6 +461,8 @@ def getShipDictionary():
         shipCode = ship.get("shipCode")
         name = ship.get("name")
         shipCodes[shipCode] = name
+    
+    shipCodes["HE"] = "Hero of the Seas"
     return shipCodes
 
 # Get SailDates From a Ship Code
