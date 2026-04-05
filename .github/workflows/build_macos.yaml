@@ -36,8 +36,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          name: macos-app
-          path: dist/
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice
+          asset_name: BrowseRoyalCaribbeanPrice
+          asset_content_type: application/octet-stream
       
       - name: Package Application with PyInstaller
         run: |
@@ -50,7 +52,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          name: macos-app
-          path: dist/
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice
+          asset_name: CheckRoyalCaribbeanPrice
+          asset_content_type: application/octet-stream
       
       
