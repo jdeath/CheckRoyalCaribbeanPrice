@@ -855,7 +855,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             paidPriceStruct = None
             #print(cruisePriceURL)
             
-            if isinstance(reservationPricePaid,list):
+            if isinstance(reservationPricePaid,dict):
                 print("Update Config To Use New Paid Price Structure - See Readme")
                 if str(reservationId) in reservationPricePaid:
                     paidPrice = reservationPricePaid.get(str(reservationId))
