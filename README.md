@@ -119,10 +119,6 @@ Create your `config.yaml` file with the below information. Feel free to copy the
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
-    state: "CA" # Optional. Will pull from your account if not set. Override to use different state/province for cabin prices. USA/CAN country only
-    senior: false # Optional. Will pull from booking if not set. Override to force for cabin prices. 
-    military: false # Optional, use military discount for cabin prices. Must be set to true to if military, not in account
-    police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not in account
   - username: "user@gmail.com" # Your Celebrity User Name
     password: "pa$$word" # Your Celebrity Password
     cruiseLine: "celebrity" # Must indicate if celebrity
