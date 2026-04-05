@@ -170,6 +170,8 @@ accountInfo:
     police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not available in account
 displayCruisePrices: true
 ```
+<hr>
+**Note: This paragraph is for versions <= 3.2.1 . If using python in repository, use next paragraph:**
 If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked with a refundable deposit, put an R before the Price (R1999.98). If you booked with included gratitues, put a G in front of the price (G1999.99). If Celebrity with All-In price put an A (A1999.99). If you booked with trip insurance, put an I in front of price (I1999.99). You can use any or all combinations (GIRA1999.99). This will cause the code to request the correct price from the API.
 
 If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
@@ -183,6 +185,42 @@ reservationPricePaid:
   'XXXXXX': 4568.48
   'YYYYYY': R4172.71
 ```
+<hr>
+**Note: This paragraph is for versions > 3.2.1 or if using python in repository**
+**Note: Code will still allow old format above...for now**
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked a special fare, you must set the corresponding value. You only need to set what you need, will default to false. If you booked with a refundable deposit, set `refundable = true`. If you booked with included gratitues, set `gratuities=true`. If Celebrity with All-In price, set `allInUpgrade=true`. If you booked with trip insurance, set `tripInsurance=true`. All of the others are optional, if you do not set them they default to false or will use the information in your account. This will cause the code to request the correct price from the API. Note some GTY rooms do not have the proper information set in your account. You may need to override the catagory codes. Post an issue if you need help.
+
+If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
+```yaml
+accountInfo:
+  - username: "user@gmail.com" # Your Royal Caribbean User Name
+    password: "pa$$word" # Your Royal Caribbean Password 
+    cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
+displayCruisePrices: true
+reservationPricePaid:
+  - reservation:  XXXXXX
+    paidPrice: 4172.71
+    allInUpgrade: false # Optional, defaults to false
+    gratuities: false # Optional, defaults to false
+    tripInsurance: false # Optional, defaults to false
+    refundable: false # Optional, defaults to false
+    couponCode: DP340 # Optional, defaults to none. Will use DP340 if you qualify automatically
+  - reservation:  YYYYY
+    paidPrice: 3172.71
+    allInUpgrade: false # Optional, defaults to false
+    gratuities: false # Optional, defaults to false
+    tripInsurance: true # Optional, defaults to false
+    refundable: false # Optional, defaults to false
+    catagoryOverride: "XB" # Optional, defaults to not override if this line is not present
+    subcatagoryOverride : "XB" # Optional, defaults to not override if this line is not present
+    senior: false # Optional, defaults to false
+    military: false # Optional, defaults to false
+    fire: false # Optional, defaults to false
+    police: false # Optional, defaults to false
+    state: "CA" # Optional, defaults to state in your account
+    loyaltyNumber: 12345 # Optional, defaults to loyalty number in your account
+```
+
 If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this. Do not add letters before this paidPrice.
 ```yaml
 cruises:
