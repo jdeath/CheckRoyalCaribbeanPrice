@@ -42,19 +42,21 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise bs4`
      
-## Install (iOS / iPhone - May work for Android too)
+## Install (iOS / iPhone or Android)
 This will run a stripped down version to work on the free Python iPhone app. As stripped down, it only supports excursion/drink packages etc. It does not support cruise fare price checks. It does not support apprise notifications, so you will have to watch the log to see any price drops. You need to edit the python file directly (directions below) because it does not use the config.yaml file. But allows you to check prices on the go. Works on the ship even *without* the internet package!
 
-1. Get Python From Appstore. `https://apps.apple.com/us/app/python-coding-editor-ide-app/id6444399635`
-   -   Free version is fine, no need to make inapp purchases
-   -   Please let me know if there is an Android app equivalent that works
-2. Download `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
+1. Install Python on your Phone
+   - iOS: Get Python From Appstore. `https://apps.apple.com/us/app/python-coding-editor-ide-app/id6444399635`
+      - Free version is fine, no need to make inapp purchases. Some have reported opening files is not longer supported 
+   - iOS: iSH app and install python3 may also work: `https://apps.apple.com/us/app/ish-shell/id1436902243`  
+   - Android:  Get pydroid 3 : `https://play.google.com/store/apps/details?id=ru.iiec.pydroid3`
+3. Download `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
    -   Use a text editor to add your username and password between the "" a few lines down.
    -   If you are are using a Celebrity account, remove `#` before `#cruiseLineName = "celebritycruises"`
    -   Ignore the `Edit Config File` section below, that only pretains to computer installations
-3. Email yourself the edited `PhonePriceCheck.py`
+4. Email yourself the edited `PhonePriceCheck.py`
    -    On your iPhone, save the emailed `PhonePriceCheck.py` to your files section. This can be done by clicking the attachment, select share, then select saved files
-4. Open Python App
+5. Open Python App (these are iOS instructions, need to modify for Android)
    -    Tap the blue hamburger icon just below the adverstisement
    -    Tap "Load from File"
    -    Select the PhonePriceCheck.py file you downloaded
