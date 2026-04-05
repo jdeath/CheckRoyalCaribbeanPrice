@@ -57,7 +57,7 @@ This will run a stripped down version to work on the free Python iPhone app. As 
 4. Email yourself the edited `PhonePriceCheck.py`
    -    On your iPhone, save the emailed `PhonePriceCheck.py` to your files section. This can be done by clicking the attachment, select share, then select saved files
 5. Open Python App (these are iOS instructions, need to modify for Android)
-   -    Tap the blue hamburger icon just below the adverstisement
+   -    Tap the **blue** hamburger icon on the right side of the screen, just below the adverstisement
    -    Tap "Load from File"
    -    Select the PhonePriceCheck.py file you downloaded
    -    To run: tap the arrow icon at top right of screen (between a bug icon and a `...` icon)
