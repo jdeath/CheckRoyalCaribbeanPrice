@@ -154,16 +154,12 @@ accountInfo:
 logFile: "output.txt"
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. So the price should be accurrate.  Will apply loyality #, residency (USA/CAN only) and senior discounts automatically from your account/booking. If you are Diamond Plus 340+ on a solo booking, it will automatically apply. It will add fire/police & military discounts if set in your configuration. Residency makes a difference, be sure to set manually if your profile does not have this info! If people in the cabin are from different states than you, suggest making a manual cruise watch for the people in other states than in your account. It will find any publically offered OBC and display it (but not subtract it because it is only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. If you are Diamond Plus 340+ on a solo booking, it will automatically apply. It will find any publically offered OBC and display it (but not subtract it because it is only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice. If you need any special fares or discounts, see below section to compare to the price you paid.
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
     password: "pa$$word" # Your Royal Caribbean Password
-    cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal
-    state: "CA" # Optional. Will pull from your account if not present. Override to use different state/province for cabin prices. 
-    senior: false # Optional. Will pull from booking if not present. Override to force for cabin prices. 
-    military: false # Optional, use military discount for cabin prices. Must be set to true to if military, not available in account
-    police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not available in account
+    cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal (note the L is capitalized)
 displayCruisePrices: true
 ```
 <hr>
