@@ -45,8 +45,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url: ${{ steps.geturl.outputs.upload_url }} # ${{ github.event.release.upload_url }}
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice.app
-          asset_name: BrowseRoyalCaribbeanPrice.app
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice
+          asset_name: BrowseRoyalCaribbeanPrice
           asset_content_type: application/octet-stream
       
       - name: Package Application with PyInstaller
@@ -61,7 +61,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url:  ${{ steps.geturl.outputs.upload_url }} # ${{ github.event.release.upload_url }}
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice.app
-          asset_name: CheckRoyalCaribbeanPrice.app
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice
+          asset_name: CheckRoyalCaribbeanPrice
           asset_content_type: application/octet-stream
     
