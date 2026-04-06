@@ -1713,8 +1713,11 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
         headers=headers,
         json=json_data,
     )
-    
-    rooms = response.json().get("rooms")
+    try:
+        rooms = response.json().get("rooms")
+    except:
+        rooms = None
+        
     if rooms is None:
         # Print Error Message and set room available to false
         print("Room Price Not Found")
