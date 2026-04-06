@@ -21,6 +21,7 @@ user_agent_mobile = 'okhttp/4.10.0'
 
 user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0'
 appkey_web = 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD'
+appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 
 # Too much output too quickly can overwhelm Python's output buffer, so use this to periodically flush out the buffer
 # Alternatively, we could have called python with -u ("python -u BrowseRoyalCarribbeanPrice.py...")
@@ -327,8 +328,6 @@ def getSailingDetails(shipCode,sailDate):
     'appversion': appversion_mobile,
     }
     
-    print(f"{shipCode}{sailDate}")
-
     try:
         response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/voyages/{shipCode}{sailDate}/enriched', headers=headers)
     except Exception as e:
