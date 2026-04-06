@@ -43,7 +43,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url: ${{ steps.geturl.outputs.upload_url }} # ${{ github.event.release.upload_url }}
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice.pkg
           asset_name: BrowseRoyalCaribbeanPrice.pkg
           asset_content_type: application/octet-stream
       
@@ -59,7 +59,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url:  ${{ steps.geturl.outputs.upload_url }} # ${{ github.event.release.upload_url }}
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice.pkg
           asset_name: CheckRoyalCaribbeanPrice.pkg
           asset_content_type: application/octet-stream
     
