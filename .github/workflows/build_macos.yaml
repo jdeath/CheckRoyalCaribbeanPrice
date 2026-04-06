@@ -30,7 +30,7 @@ jobs:
       - name: Package BrowseApplication with PyInstaller
         run: |
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
-          pyinstaller --onefile --windowed --target-architecture universal2 BrowseRoyalCaribbeanPrice.py
+          pyinstaller --onefile --target-architecture universal2 BrowseRoyalCaribbeanPrice.py
 
       - name: Get release
         id: get_release
@@ -52,7 +52,7 @@ jobs:
         run: |
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
           pip install Apprise bs4
-          pyinstaller --target-architecture universal2 --onefile --windowed --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
+          pyinstaller --target-architecture universal2 --onefile --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
 
       - name: upload windows artifact
         uses: actions/upload-release-asset@v1
