@@ -47,17 +47,16 @@ This will run a stripped down version to work on the free Python iPhone app. As 
 
 1. Install Python on your Phone
    - iOS: Get Python From Appstore. `https://apps.apple.com/us/app/python-coding-editor-ide-app/id6444399635`
-      - Free version is fine, no need to make inapp purchases. Some have reported opening files is not longer supported 
-   - iOS: iSH app and install python3 may also work: `https://apps.apple.com/us/app/ish-shell/id1436902243`  
+      - Free version is fine, no need to make inapp purchases.
    - Android:  Get pydroid 3 : `https://play.google.com/store/apps/details?id=ru.iiec.pydroid3`
 3. Download `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
    -   Use a text editor to add your username and password between the "" a few lines down.
    -   If you are are using a Celebrity account, remove `#` before `#cruiseLineName = "celebritycruises"`
    -   Ignore the `Edit Config File` section below, that only pretains to computer installations
 4. Email yourself the edited `PhonePriceCheck.py`
-   -    On your iPhone, save the emailed `PhonePriceCheck.py` to your files section. This can be done by clicking the attachment, select share, then select saved files
+   -   On your iPhone, save the emailed `PhonePriceCheck.py` to your files section. This can be done by clicking the attachment, select share, then select saved files
 5. Open Python App (these are iOS instructions, need to modify for Android)
-   -    Tap the **blue** hamburger icon on the right side of the screen, just below the adverstisement
+   -    Tap the **blue** hamburger icon on the top right side of the screen, just below the adverstisement
    -    Tap "Load from File"
    -    Select the PhonePriceCheck.py file you downloaded
    -    To run: tap the arrow icon at top right of screen (between a bug icon and a `...` icon)
