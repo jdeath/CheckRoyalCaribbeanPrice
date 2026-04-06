@@ -16,7 +16,7 @@ BLUE = '\033[94m'
 RESET = '\033[0m' # Resets color to default
 
 appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
-appversion_mobile = '1.54.0'
+appversion_mobile = '1.70.1'
 user_agent_mobile = 'okhttp/4.10.0'
 
 user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0'
@@ -318,20 +318,19 @@ def getSailings(shipCode):
 
 
 def getSailingDetails(shipCode,sailDate):
-    headers = {
-        'appkey': appkey_mobile,
-        'accept': 'application/json',
-        'appversion': appversion_mobile,
-        'accept-language': 'en',
-        'user-agent': user_agent_mobile,
-    }
+    
 
-    params = {
-        'resultSet': '300',
+    headers = {
+    'appkey': appkey_mobile,
+    'accept': 'application/json',
+    'user-agent': user_agent_mobile,
+    'appversion': appversion_mobile,
     }
+    
+    print(f"{shipCode}{sailDate}")
 
     try:
-        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/voyages/{shipCode}{sailDate}/enriched', params=params, headers=headers)
+        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/voyages/{shipCode}{sailDate}/enriched', headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
         exit(1)
@@ -339,7 +338,7 @@ def getSailingDetails(shipCode,sailDate):
     ports = {}
     
     itinerary = response.json().get("payload").get("sailingInfo")[0].get("itinerary")
-    if itinerary is  None:
+    if itinerary is None:
         return ports
         
     portInfo = itinerary.get("portInfo")
@@ -785,9 +784,14 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
     productsByVenueCategories = response.json().get("data").get("productsByVenueCategories")
     if productsByVenueCategories is None:
         return venueIds
-        
-    venues = productsByVenueCategories.get("venueCategories")[0].get("venueSubCategories")[0].get("venues")
     
+    venueCategory = productsByVenueCategories.get("venueCategories")
+    if venueCategory is None:
+        return venueIds
+        
+    venues = venueCategory[0].get("venueSubCategories")[0].get("venues")
+    if venues is None:
+        return venueIds
     
     for venue in venues:
         # For Royal Caribbean, All menus are the same
@@ -828,7 +832,10 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
         return
         
     venues = venues1.get('venues')
-    
+    if venues is None:
+        print("Menus not yet populated; please check again later")
+        return
+        
     for venue in venues:
         menus = venue.get("menus")        
         if len(menus) == 0:
