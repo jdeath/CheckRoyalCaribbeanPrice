@@ -1091,8 +1091,9 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         
         if allIncluded and isRoyal:
             print("Royal Does Not Have All In Fare")
-            print("Price Check May Not Work. Check Documentation")
-           
+            print("Removing All In Fare. Check Documentation")
+            allIncluded = False
+            
     #print(locals())
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
     
