@@ -1,4 +1,4 @@
-name: Build MacOS Executable with PyInstaller
+name: Build MacOS Intel Executable with PyInstaller
 
 on:
   release:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     permissions:
       contents: write # Grants write access to repository contents for this job only
     steps:
@@ -30,7 +30,7 @@ jobs:
       - name: Package BrowseApplication with PyInstaller
         run: |
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
-          pyinstaller --onefile --target-architecture universal2 BrowseRoyalCaribbeanPrice.py
+          pyinstaller --onefile --name "BrowseRoyalCaribbeanPrice_MacOS_x86" BrowseRoyalCaribbeanPrice.py
 
       - name: Get release
         id: get_release
@@ -38,29 +38,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
          
-      - name: upload windows artifact
+      - name: upload X86 artifact
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice
-          asset_name: BrowseRoyalCaribbeanPrice
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice_MacOS_x86
+          asset_name: BrowseRoyalCaribbeanPrice_MacOS_x86
           asset_content_type: application/octet-stream
       
       - name: Package Application with PyInstaller
         run: |
           # Replace 'your_script.py' with your main Python script or 'your_app.spec' if using a spec file
           pip install Apprise bs4
-          pyinstaller --target-architecture universal2 --onefile --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py
+          pyinstaller --onefile --collect-all apprise --collect-all bs4 --name "CheckRoyalCaribbeanPrice_MacOS_x86" CheckRoyalCaribbeanPrice.py
 
-      - name: upload windows artifact
+      - name: upload X86 artifact
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url:  ${{ github.event.release.upload_url }}
-          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice
-          asset_name: CheckRoyalCaribbeanPrice
+          asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice_MacOS_x86
+          asset_name: CheckRoyalCaribbeanPrice_MacOS_x86
           asset_content_type: application/octet-stream
     
