@@ -272,7 +272,7 @@ def login(username,password,session,cruiseLineName):
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ZzlTMDIzdDc0NDczWlVrOTA5Rk42OEYwYjRONjdQU09oOTJvMDR2TDBCUjY1MzdwSTJ5Mmg5NE02QmJVN0Q2SjpXNjY4NDZrUFF2MTc1MDk3NW9vZEg1TTh6QzZUYTdtMzBrSDJRNzhsMldtVTUwRkNncXBQMTN3NzczNzdrN0lC',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
+        'User-Agent': user_agent_web,
     }
     
     urlSafePassword  = quote(password, safe='')
@@ -1081,7 +1081,7 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         refundable = paidPriceStruct.get("refundable",False)
         couponCode = paidPriceStruct.get("couponCode",couponCode)
         stateroomCategoryCode =  paidPriceStruct.get("catagoryOverride",stateroomCategoryCode)
-        stateroomSubtype =  paidPriceStruct.get("stateroomSubtype",stateroomCategoryCode)
+        stateroomSubtype =  paidPriceStruct.get("stateroomSubtype",stateroomSubtype)
         senior = paidPriceStruct.get("senior",senior)
         military = paidPriceStruct.get("military",military)
         police = paidPriceStruct.get("police",police)
@@ -1092,8 +1092,7 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         if allIncluded and isRoyal:
             print("Royal Does Not Have All In Fare")
             print("Price Check May Not Work. Check Documentation")
-        
-        
+           
     #print(locals())
     results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
     
@@ -1203,7 +1202,9 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
             # Save API call since I have the rooms already!
             print(f"\tAvailable Rooms (non-discounted price) for {numberOfAdults} Adult and {numberOfChildren} Child on This Sailing Are:")
             for availableRoom in results.get("availableRooms"):
-                print(f"\t{availableRoom.get('name')} {availableRoom.get('price')} - Rooms Left {availableRoom.get('roomsLeft')}")
+                roomsLeft = availableRoom.get('roomsLeft')
+                if roomsLeft is not None and roomsLeft > 0:
+                    print(f"\t{availableRoom.get('name')} {availableRoom.get('price')} - Rooms Left {roomsLeft}")
         return
         
     
@@ -1634,7 +1635,6 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
                 #print("Desired: " + stateroomSubtypeCode + " " + categoryCode)
                 #print("Cur:     " + cur_subTypeCode + " " + categoryCode)
                 #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}") 
-                
                 if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
                     return True, []
                     
