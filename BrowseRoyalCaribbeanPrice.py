@@ -344,21 +344,18 @@ def getSailingDetails(shipCode,sailDate):
     for port in portInfo:
         title = sanitizeString(port.get("title"))
         arrivalDateTime = port.get("arrivalDateTime")
-        
-        arrivalDateDisplay = "None"
-        arrivalDateTime = "               "
-        
-        portType = port.get("portType")
-        day = port.get("day")
+        portType = port.get("portType","Unknown")
+        day = port.get("day","Unknown")
+        ports[int(day)] = title
         if arrivalDateTime is None:
             print(f"Day {day}: {title}")
             continue
-            
+        
+        arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
         departureDateTime = port.get("departureDateTime")
-        portType = port.get("portType")
-        day = port.get("day")
+        
         # Save port names for later
-        ports[int(day)] = title
+        
         
         printString = f"Day {day} ({arrivalDateDisplay}): {title}"
         if portType == "EMBARK":
