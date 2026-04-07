@@ -2,7 +2,6 @@ import requests
 import yaml
 from apprise import Apprise
 from datetime import datetime,date, timedelta, timezone
-from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs, quote
 import re
 import base64
@@ -18,7 +17,7 @@ appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
 appversion_mobile = '1.70.1'
 user_agent_mobile = 'okhttp/4.10.0'
 
-user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0'
+user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
 appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 
 currencyOverride = ""
