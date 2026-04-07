@@ -45,7 +45,7 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/BrowseRoyalCaribbeanPrice
-          asset_name: BrowseRoyalCaribbeanPrice_MacOS
+          asset_name: BrowseRoyalCaribbeanPrice
           asset_content_type: application/octet-stream
       
       - name: Package Application with PyInstaller
@@ -61,6 +61,6 @@ jobs:
         with:
           upload_url:  ${{ github.event.release.upload_url }}
           asset_path: /Users/runner/work/CheckRoyalCaribbeanPrice/CheckRoyalCaribbeanPrice/dist/CheckRoyalCaribbeanPrice
-          asset_name: CheckRoyalCaribbeanPrice_MacOS
+          asset_name: CheckRoyalCaribbeanPrice
           asset_content_type: application/octet-stream
     
