@@ -37,6 +37,25 @@ If the code saved you money or correctly predicted your cabin number, star the r
 
 7. Optional: For advanced users, you can compile the .exe yourself (because you do not trust files from the internet) with: `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` 
 
+## Install (MacOS Option) - Python Not Required!
+1. Download [CheckRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_arm64) or [CheckRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_intel) depending on your Mac hardware
+1. Open a terminal (Command + Spacebar, type Terminal, and press Return)
+1. type `cd Downloads`
+1. type `chmod 755 CheckRoyalCaribbeanPrice_MacOS_intel` or `chmod 755 CheckRoyalCaribbeanPrice_MacOS_arm64` depending on your architecture
+1. Open Finder. Go to downloads
+1. Click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
+1. A malware warning will pop up. Click Done
+1. Go to Settings->Privacy and Security . Under security you will see the Check Script was blocked. Click Open anyways. A menu will pop up, Click Open Anyway and put your computer password in
+1. Go back to finder and click CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
+   - Note: If no config file is found, code will ask to download a simple config file for you and name it correctly. type "y" and hit enter to download
+1. The file will be saved in the root of your home directory, not in current directory
+1. Open Finder. Go To Menu Bar and click Go->Home
+1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. `#` means comment and everything to the right will be ignored
+1. The downloaded configuration file will log the output to "output.txt", this avoids requiring to keep the output on screen.
+1. Click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
+1. After confirmed working, you can add more options into `config.yaml` and review the automation/notification section below if you want to run it automatically a couple times a day!
+1. If you download a new version, you will need to do the `chmod` and "Click Open Anyway" steps again.
+
 ## Install (Recommended Option, any Operating System Windows/Linux/Mac, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
