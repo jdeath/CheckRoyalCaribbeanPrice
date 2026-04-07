@@ -42,16 +42,16 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Open a terminal (Command + Spacebar, type Terminal, and press Return)
 1. type `cd Downloads`
 1. type `chmod 755 CheckRoyalCaribbeanPrice_MacOS_intel` or `chmod 755 CheckRoyalCaribbeanPrice_MacOS_arm64` depending on your architecture
-1. Open Finder. Go to downloads
+1. Open Finder. Go to Downloads
 1. Click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
-1. A malware warning will pop up. Click Done
-1. Go to Settings->Privacy and Security . Under security you will see the Check Script was blocked. Click Open anyways. A menu will pop up, Click Open Anyway and put your computer password in
-1. Go back to finder and click CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
+1. A malware warning will pop up. Click "Done" (Not "Move to Trash")
+1. Go to Settings->Privacy and Security . Under security you will see the Check Script was blocked. Click "Open Anyways". A menu will pop up, Click "Open Anyway" and enter you computer password.
+1. Open Finder and click CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
    - Note: If no config file is found, code will ask to download a simple config file for you and name it correctly. type "y" and hit enter to download
-1. The file will be saved in the root of your home directory, not in current directory
+1. The file will be saved in the root of your home directory, not in the current directory
 1. Open Finder. Go To Menu Bar and click Go->Home
 1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. `#` means comment and everything to the right will be ignored
-1. The downloaded configuration file will log the output to "output.txt", this avoids requiring to keep the output on screen.
+1. The downloaded configuration file will log the output to "output.txt" in your Home folder, this avoids requiring to keep the output on screen.
 1. Click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
 1. After confirmed working, you can add more options into `config.yaml` and review the automation/notification section below if you want to run it automatically a couple times a day!
 1. If you download a new version, you will need to do the `chmod` and "Click Open Anyway" steps again.
@@ -449,7 +449,8 @@ This will browse any Royal Caribbean or Celebrity sailing and display current pu
 Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice.exe) 
 
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
-- `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe`. 
+- `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe` or `BrowseRoyalCaribbeanPrice_MacOS`
+-  MacOS users will need to disable the Malware warning as explained in above documentation
 
 Defaults to system defined currency. If you want a different currency, for example DKK:
 - `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
