@@ -38,10 +38,11 @@ If the code saved you money or correctly predicted your cabin number, star the r
 7. Optional: For advanced users, you can compile the .exe yourself (because you do not trust files from the internet) with: `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` 
 
 ## Install (MacOS Option) - Python Not Required!
-1. Download [CheckRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_arm64) or [CheckRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_intel) depending on your Mac hardware
+1. Download [CheckRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_arm64) or [CheckRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_intel) depending on your Mac hardware. arm64 = Silicon
+1. We must now disable MacOS security for downloaded executables that are not signed.
 1. Open a terminal (Command + Spacebar, type Terminal, and press Return)
-1. type `cd Downloads`
-1. type `chmod 755 CheckRoyalCaribbeanPrice_MacOS_intel` or `chmod 755 CheckRoyalCaribbeanPrice_MacOS_arm64` depending on your architecture
+1. Type `cd Downloads`
+1. Type `chmod 755 CheckRoyalCaribbeanPrice_MacOS_intel` or `chmod 755 CheckRoyalCaribbeanPrice_MacOS_arm64` depending on your architecture
 1. Open Finder. Go to Downloads
 1. Click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
 1. A malware warning will pop up. Click "Done" (Not "Move to Trash")
