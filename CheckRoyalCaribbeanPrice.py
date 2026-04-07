@@ -1075,10 +1075,10 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
     paidPrice = None
     if paidPriceStruct is not None:
         paidPrice = paidPriceStruct.get("paidPrice",None)
-        allIncluded = paidPriceStruct.get("allInUpgrade",False)
-        prepaidGrats = paidPriceStruct.get("gratuities",False)
-        travelInsurance = paidPriceStruct.get("tripInsurance",False)
-        refundable = paidPriceStruct.get("refundable",False)
+        allIncluded = paidPriceStruct.get("allInUpgrade",allIncluded)
+        prepaidGrats = paidPriceStruct.get("gratuities",prepaidGrats)
+        travelInsurance = paidPriceStruct.get("tripInsurance",travelInsurance)
+        refundable = paidPriceStruct.get("refundable",refundable)
         couponCode = paidPriceStruct.get("couponCode",couponCode)
         stateroomCategoryCode =  paidPriceStruct.get("catagoryOverride",stateroomCategoryCode)
         stateroomSubtype =  paidPriceStruct.get("stateroomSubtype",stateroomSubtype)
