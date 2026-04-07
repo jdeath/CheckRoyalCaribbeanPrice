@@ -17,10 +17,9 @@ RESET = '\033[0m' # Resets color to default
 
 appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
 appversion_mobile = '1.70.1'
-user_agent_mobile = 'okhttp/4.10.0'
+user_agent_mobile = 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0'
 
-user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0'
-appkey_web = 'trL6t38bpvA5p65XlCrhFKzug8NNkqCD'
+user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
 appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 
 # Too much output too quickly can overwhelm Python's output buffer, so use this to periodically flush out the buffer
@@ -345,7 +344,16 @@ def getSailingDetails(shipCode,sailDate):
     for port in portInfo:
         title = sanitizeString(port.get("title"))
         arrivalDateTime = port.get("arrivalDateTime")
-        arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
+        
+        arrivalDateDisplay = "None"
+        arrivalDateTime = "               "
+        
+        portType = port.get("portType")
+        day = port.get("day")
+        if arrivalDateTime is None:
+            print(f"Day {day}: {title}")
+            continue
+            
         departureDateTime = port.get("departureDateTime")
         portType = port.get("portType")
         day = port.get("day")
