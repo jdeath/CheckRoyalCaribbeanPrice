@@ -663,7 +663,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
-        print(f"\tCasino Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Points")
+        print(f"\tClub Royale: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Tier Credits")
 
     captainsClubId = loyalty.get("captainsClubId")
     if captainsClubId is not None:
@@ -679,7 +679,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
     if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
-        print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
+        print(f"\tBlue Chip: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Tier Credits")
 
     # Return the correct loyality number based on the account being used
     if cruiseLineName == "royalcaribbean":
