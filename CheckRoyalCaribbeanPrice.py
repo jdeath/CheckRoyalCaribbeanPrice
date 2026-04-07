@@ -1607,18 +1607,16 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
         headers=headers,
     )
 
-    # Extract json from html
-    if isRoyal:
-        start_var = "$L34\\\",null,"
-    else:
-        start_var = "$L33\\\",null,"
-        
+    # Extract json from html. 
+    # Replaced hardcoded L34 and also included data in search. This should make the search more robust and should work for both Royal and Celebrity
+    start_var = "\\\",null,{\\\"data"
     end_var = "]}]}]]"
-    pattern = rf"{re.escape(start_var)}(.*?){re.escape(end_var)}"
+    pattern = rf"L\d+{re.escape(start_var)}(.*?){re.escape(end_var)}"
     match = re.search(pattern, response.text)
     availableRooms = []
     if match:
-        result = match.group(1)
+        # Add back the {\"data here
+        result = "{\\\"data" + match.group(1)
         # Format text so will load as json. Needs to be done twice
         unescaped = json.loads(f'"{result}"')
         json_data = json.loads(unescaped)
