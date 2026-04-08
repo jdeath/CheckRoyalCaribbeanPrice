@@ -1,3 +1,2 @@
 Apprise
-bs4
 pyinstaller
