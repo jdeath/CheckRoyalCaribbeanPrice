@@ -238,6 +238,7 @@ reservationPricePaid:
     police: false # Optional, defaults to false
     state: "CA" # Optional, defaults to state in your account
     loyaltyNumber: 12345 # Optional, defaults to loyalty number in your account
+    couponCode: DP340 # Optional, defaults to none (unless your account says you are DP with 340 nights on a solo trip)
 ```
 <hr>
 
