@@ -212,7 +212,7 @@ reservationPricePaid:
 
 **Note: Old code will not allow this new format**
 
-If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked a special fare, you must set the corresponding keys. You only need to set what you need, will default to false. If you booked with a refundable deposit, set `refundable = true`. If you booked with included gratitues, set `gratuities=true`. If Celebrity with All-In price, set `allInUpgrade=true`. If you booked with trip insurance, set `tripInsurance=true`. All of the others keys are optional, if you do not set them they default to false or will use the information (state, loyalty number, etc) from your account. This will let the code to request the correct price from the API. Note some GTY rooms do not have the proper information set in your account. You may need to override the catagory codes, the code will print an error message if this applies to you. Post an issue if you need help.
+If you want to compare cabin prices for your **booked** cruise(s), include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. You must provide the price you paid as is not possible to look up via the API. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked a special fare, you must set the corresponding keys. You only need to set what you need, will default to false. If you booked with a refundable deposit, set `refundable = true`. If you booked with included gratitues, set `gratuities=true`. If Celebrity with All-In price, set `allInUpgrade=true`. If you booked with trip insurance, set `tripInsurance=true`. All of the others keys are optional, if you do not set them they default to false or will use the information (state, loyalty number, etc) from your account. This will let the code to request the correct price from the API. Note some GTY rooms do not have the proper information set in your account. You may need to override the category codes, the code will print an error message if this applies to you. Post an issue if you need help.
 
 If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. 
 ```yaml
@@ -230,8 +230,8 @@ reservationPricePaid:
     gratuities: false # Optional, defaults to false
     tripInsurance: true # Optional, defaults to false
     refundable: false # Optional, defaults to false
-    catagoryOverride: "XB" # Optional, defaults to not override if this line is not present
-    subcatagoryOverride : "XB" # Optional, defaults to not override if this line is not present
+    categoryOverride: "XB" # Optional, defaults to not override if this line is not present
+    subcategoryOverride : "XB" # Optional, defaults to not override if this line is not present
     senior: false # Optional, defaults to false
     military: false # Optional, defaults to false
     fire: false # Optional, defaults to false
@@ -445,7 +445,7 @@ Thanks to contributors:
 1. Double check you are cancelling the item for the correct cruise
 
 # Browse RoyalCaribbean Prices
-This will browse any Royal Caribbean or Celebrity sailing and display current public prices for **every** excursion/drink package/dinning package sold on a cruise. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean or Celebrity website which has the product prices for that cruise (be sure to be logged out of the website or link will not work). It will  print any scheduled activities for the cruise, such as trivia and gameshows and theme nights. It will also print the current price of cheapest room in each catagory (inside, oceanview, balcony, suite). It will print MDR menus. This program does **not** require a configuration file nor a Royal Caribbean/Celebrity account. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` website. 
+This will browse any Royal Caribbean or Celebrity sailing and display current public prices for **every** excursion/drink package/dinning package sold on a cruise. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean or Celebrity website which has the product prices for that cruise (be sure to be logged out of the website or link will not work). It will  print any scheduled activities for the cruise, such as trivia and gameshows and theme nights. It will also print the current price of cheapest room in each category (inside, oceanview, balcony, suite). It will print MDR menus. This program does **not** require a configuration file nor a Royal Caribbean/Celebrity account. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` website. 
 
 Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice.exe) 
 
