@@ -15,7 +15,7 @@ import time
 
 appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
 appversion_mobile = '1.70.1'
-user_agent_mobile = 'okhttp/4.10.0'
+user_agent_mobile = 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0'
 
 user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
 appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
@@ -663,7 +663,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
-        print(f"\tClub Royale: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Tier Credits")
+        print(f"\tCasino Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Points")
 
     captainsClubId = loyalty.get("captainsClubId")
     if captainsClubId is not None:
@@ -679,7 +679,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
     celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
     if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
-        print(f"\tBlue Chip: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Tier Credits")
+        print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
     # Return the correct loyality number based on the account being used
     if cruiseLineName == "royalcaribbean":
@@ -1080,7 +1080,7 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         refundable = paidPriceStruct.get("refundable",refundable)
         couponCode = paidPriceStruct.get("couponCode",couponCode)
         stateroomCategoryCode =  paidPriceStruct.get("catagoryOverride",stateroomCategoryCode)
-        stateroomSubtype =  paidPriceStruct.get("stateroomSubtype",stateroomSubtype)
+        stateroomSubtype =  paidPriceStruct.get("subcatagoryOverride",stateroomSubtype)
         senior = paidPriceStruct.get("senior",senior)
         military = paidPriceStruct.get("military",military)
         police = paidPriceStruct.get("police",police)
