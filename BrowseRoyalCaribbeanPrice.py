@@ -15,9 +15,10 @@ GREEN = '\033[1;32m'
 BLUE = '\033[94m'
 RESET = '\033[0m' # Resets color to default
 
-appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
-appversion_mobile = '1.70.1'
-user_agent_mobile = 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0'
+#appkey_mobile = '5pWJwSTvu30Dkw5GHLVQ5PsmoKRE1arh' # celeb
+appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc' # royal
+appversion_mobile = '1.73.4'
+user_agent_mobile = 'royal/1.73.4 (com.rccl.royalcaribbean; build:2528; android 16) okhttp/4.12.0'
 
 user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
 appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
@@ -346,17 +347,17 @@ def getSailingDetails(shipCode,sailDate):
         arrivalDateTime = port.get("arrivalDateTime")
         portType = port.get("portType","Unknown")
         day = port.get("day","Unknown")
+        
+        # Save port names for later
         ports[int(day)] = title
+        
+        # Sometimes fields are not filled, so we skip (like international date line changes)
         if arrivalDateTime is None:
             print(f"Day {day}: {title}")
             continue
         
         arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
-        departureDateTime = port.get("departureDateTime")
-        
-        # Save port names for later
-        
-        
+        departureDateTime = port.get("departureDateTime") 
         printString = f"Day {day} ({arrivalDateDisplay}): {title}"
         if portType == "EMBARK":
             printString += f" ↑ {departureDateTime[9:13]}"

@@ -14,8 +14,8 @@ import time
 
 
 appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
-appversion_mobile = '1.70.1'
-user_agent_mobile = 'royal/1.70.1 (com.rccl.royalcaribbean; build:2479; android 16) okhttp/4.10.0'
+appversion_mobile = '1.73.4'
+user_agent_mobile = 'royal/1.73.4 (com.rccl.royalcaribbean; build:2528; android 16) okhttp/4.12.0'
 
 user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
 appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
