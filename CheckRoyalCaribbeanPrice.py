@@ -9,6 +9,7 @@ import json
 import argparse
 import locale
 import sys
+import sys
 import traceback
 import time
 
@@ -663,7 +664,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
-        print(f"\tCasino Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Points")
+        print(f"\tCasino Royal Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Credits")
 
     captainsClubId = loyalty.get("captainsClubId")
     if captainsClubId is not None:
@@ -1140,10 +1141,15 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
             refundFareString = "allIncludedRefundableFare" 
             
         fareStruct = results.get(baseFareString)
-        price = fareStruct.get("fare")
-        grats = fareStruct.get("gratuities")
-        ins = fareStruct.get("insurance")
-        obc = fareStruct.get("obc")
+        if fareStruct is None:
+            #print(results)
+            print(f"{RED}All Included Fare is Not Available - Reverting to Non-refundable fare{RESET}")
+            fareStruct = results.get("baseFare")
+        else:
+            price = fareStruct.get("fare")
+            grats = fareStruct.get("gratuities")
+            ins = fareStruct.get("insurance")
+            obc = fareStruct.get("obc")
         
         # Save this for later
         basePrice = price
