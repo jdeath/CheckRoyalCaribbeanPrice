@@ -664,7 +664,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
     clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
     if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
         clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
-        print(f"\tCasino Royal Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Credits")
+        print(f"\tCasino Royale Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Credits")
 
     captainsClubId = loyalty.get("captainsClubId")
     if captainsClubId is not None:
