@@ -728,7 +728,6 @@ def getAllActivitiesWeb(shipCode, sailDate):
                     offeringDate = offer.get("offeringDate")
                     offeringTime = offer.get("offeringTime")
                     day = daysBetween(sailDate,offeringDate)
-                    print(productTitle)
                     products.append({'productTitle':productTitle,'location':location,'offeringDate':offeringDate,'offeringTime':offeringTime,'day':day})
                  
     return products
