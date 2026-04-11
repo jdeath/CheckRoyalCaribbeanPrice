@@ -129,7 +129,7 @@ def main(config_path=None):
                 print(YELLOW + f"Only alerting for savings >= {minimumSavingAlert}" + RESET)
 
             global shipDictionary
-            shipDictionary = getShipDictionary()
+            shipDictionary = getShipDictionaryWeb()
             
             # Load watch list configuration
             watchListItems = []
@@ -1277,18 +1277,11 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         print(tempString)
         
 
-# Unused Functions
-# For Future Capability
-
-# Get List of Ships From API
-def getShips():
-
+def getShipDictionaryWeb():
     headers = {
-        'appkey': appkey_mobile,
-        'accept': 'application/json',
-        'appversion': appversion_mobile,
-        'accept-language': 'en',
-        'user-agent': user_agent_mobile,
+        'User-Agent': user_agent_web,
+        'Accept': 'application/json',
+        'appkey': appkey_web,
     }
 
     params = {
@@ -1296,22 +1289,19 @@ def getShips():
     }
 
     try:
-        response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v2/ships', params=params, headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
-
-    shipCodes = []
+        exit(1)
     ships = response.json().get("payload").get("ships")
+    shipCodes = {}    
     for ship in ships:
         shipCode = ship.get("shipCode")
-        shipCodes.append(shipCode)
         name = ship.get("name")
-        classificationCode = ship.get("classificationCode")
-        brand = ship.get("brand")
-        print(f"{shipCode} {name}")
+        shipCodes[shipCode] = name
+    
     return shipCodes
-
+ 
 def getShipDictionary():
 
     headers = {

@@ -69,7 +69,7 @@ def main():
        sys.stdout = Logger(args.logfile)
        sys.stderr = sys.stdout
             
-    ships = getShips()
+    ships = getShipsWeb()
 
     if args.ship:
         # Find the matching ship
@@ -104,7 +104,7 @@ def main():
         shipname = ships[user_input]['name']
         shipcode = ships[user_input]['code']
         print(f"Getting sailings for {shipname}")
-        sailings = getSailings(shipcode)
+        sailings = getSailingsWeb(shipcode)
         
         numSailings = len(sailings)
         if args.saildate:
@@ -141,7 +141,7 @@ def main():
             print("")
             
             flush_print_buffer()
-            ports = getSailingDetails(shipcode,sailing['date'])
+            ports = getSailingDetailsWeb(shipcode,sailing['date'])
             print("")
             
             isRoyal = "of the Seas" in shipname
@@ -170,7 +170,7 @@ def main():
             print("")
             print("Gathering list of activities.  This may take a few minutes; please be patient.")
             flush_print_buffer()
-            activities = getAllActivities(shipcode,sailing['date'])
+            activities = getAllActivitiesWeb(shipcode,sailing['date'])
             printAllActivities(activities, args.activitysort)
             
             print("")
@@ -285,6 +285,36 @@ def getShips():
     
     return shipNames
 
+def getShipsWeb():
+    headers = {
+        'User-Agent': user_agent_web,
+        'Accept': 'application/json',
+        'appkey': appkey_web,
+    }
+
+    params = {
+        'sort': 'name',
+    }
+
+    try:
+        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v2/ships', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    shipNames = []
+    ships = response.json().get("payload").get("ships")
+    i = 0
+    for ship in ships:
+        shipCode = ship.get("shipCode")
+        name = ship.get("name")
+        print(name)
+        shipNames.append({'code': shipCode, 'name': name})
+        if shipCode == "HM":
+            #Force Hero until it is added to the API
+            shipNames.append({'code': 'HE', 'name': 'Hero of the Seas'})
+
+    return shipNames
 
 ###################
 # Get Sailings
@@ -319,6 +349,34 @@ def getSailings(shipCode):
         
     return sailings
 
+def getSailingsWeb(shipCode):
+    headers = {
+        'User-Agent': user_agent_web,
+        'Accept': 'application/json',
+        'appkey': appkey_web,
+    }
+
+    params = {
+        #'resultSet': '300',
+    }
+
+    try:
+        response = requests.get(f'https://aws-prd.api.rccl.com/en/royal/web/v3/ships/{shipCode}/voyages', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    voyages = response.json().get("payload").get("voyages")    
+    sailings = []
+    for voyage in voyages:
+        sailDate = voyage.get("sailDate")
+        duration = voyage.get("duration")
+        voyageCode = voyage.get("voyageCode")
+        voyageDescription = voyage.get("voyageDescription")
+        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
+        sailings.append({'date': sailDate, 'displayDate': sailDateDisplay,'description': voyageDescription,'duration':duration,'voyageCode':voyageCode})
+        
+    return sailings
 
 def getSailingDetails(shipCode,sailDate):
     
@@ -380,6 +438,61 @@ def getSailingDetails(shipCode,sailDate):
 
     return ports
 
+def getSailingDetailsWeb(shipCode,sailDate):
+    
+
+    headers = {
+        'User-Agent': user_agent_web,
+        'Accept': 'application/json',
+        'appkey': appkey_web,
+    }
+    
+    try:
+        response = requests.get(f'https://aws-prd.api.rccl.com/en/royal/web/v3/ships/{shipCode}/sailDate/{sailDate}', headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+    
+    ports = {}
+    
+    portInfo = response.json().get("payload").get("sailingInfo").get("itinerary").get("events")
+    
+    for port in portInfo:
+        title = sanitizeString(port.get("port").get("portName"))
+        arrivalDateTime = port.get("port").get("arrivalDateTime")
+        departureDateTime = port.get("port").get("departureDateTime")
+        
+        portType = port.get("port").get("portType","Unknown")
+        day = port.get("day","Unknown")
+        
+        # Save port names for later
+        ports[int(day)] = title
+        
+        # Sometimes fields are not filled, so we skip (like international date line changes)
+        if arrivalDateTime is None:
+            print(f"Day {day}: {title}")
+            continue
+        
+        arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
+        printString = f"Day {day} ({arrivalDateDisplay}): {title}"
+        if portType == "EMBARK":
+            printString += f" ↑ {departureDateTime[9:13]}"
+        elif portType == "DEBARK":
+            printString += f" ↓ {arrivalDateTime[9:13]}"
+        elif title != "Cruising":
+            printString += f" ↓ {arrivalDateTime[9:13]} ↑ {departureDateTime[9:13]}"
+        if portType == "TENDERED":
+            printString += f" (Tendered)"
+        
+        portString = sanitizeString(printString)
+        print(portString)
+
+    if has_terminal_issues:
+        print("(^ means gangway up; v means gangway down)")
+    else:
+        print("(↑ means gangway up; ↓ means gangway down)")
+
+    return ports
 
 def getWebCatagories(ship,saildate):
     headers = {
@@ -572,7 +685,54 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
 
         flush_print_buffer()
 
+def getAllActivitiesWeb(shipCode, sailDate):
+    headers = {
+        'User-Agent': user_agent_web,
+        'Accept': 'application/json',
+        'appkey': appkey_web,
+    }
 
+    params = {
+            'sailingID': shipCode + sailDate,
+            'limit': '200',
+            'offset': '0',
+            #'availableForSale': 'FALSE',
+        }
+    
+    products = []
+    for offset in range(0,10000,200):
+        params['offset'] = offset
+        
+        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v3/products', params=params, headers=headers)
+        
+        if response.json() is None or response.json().get("payload") is None:
+            return products
+            
+        tempProducts = response.json().get("payload").get("products")
+
+        for product in tempProducts:
+            productType = product.get("productType").get("productType")
+            
+            if productType != "NON_REVENUE_SCHEDULABLE":
+                continue
+                
+            productTitle = product.get("productTitle")
+            location = product.get("productLocation").get("locationTitle","")
+            
+            if location is None:
+                location = ""
+                
+            offering = product.get("offering")
+            for offer in offering:
+                if offer is not None:                    
+                    offeringDate = offer.get("offeringDate")
+                    offeringTime = offer.get("offeringTime")
+                    day = daysBetween(sailDate,offeringDate)
+                    print(productTitle)
+                    products.append({'productTitle':productTitle,'location':location,'offeringDate':offeringDate,'offeringTime':offeringTime,'day':day})
+                 
+    return products
+    
 def getAllActivities(shipCode, sailDate):
     headers = {
         'appkey': appkey_mobile,
