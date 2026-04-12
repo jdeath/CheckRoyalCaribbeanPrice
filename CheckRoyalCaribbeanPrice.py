@@ -661,9 +661,9 @@ def getProfile(access_token,accountId,cruiseLineName,session):
         if totalNights > 0:
             print(f"\tTotal Trips on Royal: {totalTrips} - Total Nights: {totalNights}")
     
-    clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
-    if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
-        clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
+    clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier","Unknown") 
+    if clubRoyaleLoyaltyTier != "Unknown":
+        clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
         print(f"\tCasino Royale Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Credits")
 
     captainsClubId = loyalty.get("captainsClubId")
@@ -677,9 +677,9 @@ def getProfile(access_token,accountId,cruiseLineName,session):
         if totalNights > 0:
             print(f"\tTotal Trips on Celebrity: {totalTrips} - Total Nights: {totalNights}")
 
-    celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
-    if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
-        clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
+    clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
+    if clubRoyaleLoyaltyTier != "Unknown":
+        celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints",0)
         print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Points")
 
     # Return the correct loyality number based on the account being used
@@ -769,10 +769,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                  if stateroomType == "I" and brandCode == "R":
                      stateroomCategoryCode = "ZI"
                      stateroomSubtype = "ZI"
-                
-                
-            
-                    
+                        
             numberOfPassengers = numberOfPassengers + 1
             firstName = guest.get("firstName").capitalize()
             birthDate = guest.get("birthdate")
@@ -1757,7 +1754,32 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
     
     results['availableRooms'] = availableRooms
     return results
+
+# For Future
+def getBoardingPass(access_token,accountId,bookingId,guestId):
     
+    headers = {
+        'access-token': access_token,
+        'AppKey': appkey_web,
+        'account-id': accountId,
+        'user-agent': user_agent_web,
+        'content-type': 'application/json',
+        'accept': 'application/json',
+    }
+    json_data = {
+        'guestReservationIds': [
+            {
+                'bookingId': bookingId,
+                'guestId': guestId,
+            },
+        ],
+    }
+    response = requests.post(
+       'https://aws-prd.api.rccl.com/en/royal/web/v2/guestCheckin/statuses/{accountId}',
+        headers=headers,
+        json=json_data,
+    )
+
 if __name__ == "__main__":
     config_path = get_config_path()
     apobj, notify_on_error = build_apprise_from_config(config_path)
