@@ -9,7 +9,6 @@ import json
 import argparse
 import locale
 import sys
-import sys
 import traceback
 import time
 
