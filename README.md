@@ -35,7 +35,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
  
 <img src="https://github.com/jdeath/CheckRoyalCaribbeanPrice/blob/main/images/Screenshot%202026-03-16%20071344.png" height="120"> <img src="https://github.com/jdeath/CheckRoyalCaribbeanPrice/blob/main/images/Screenshot%202026-03-16%20071642.png" height="120">
 
-7. Optional: For advanced users, you can compile the .exe yourself (because you do not trust files from the internet) with: `pyinstaller -F --collect-all apprise --collect-all bs4 CheckRoyalCaribbeanPrice.py` 
+7. Optional: For advanced users, you can compile the .exe yourself (because you do not trust files from the internet) with: `pyinstaller -F --collect-all apprise CheckRoyalCaribbeanPrice.py` 
 
 ## Install (MacOS Option) - Python Not Required!
 1. Download [CheckRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_arm64) or [CheckRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/CheckRoyalCaribbeanPrice_MacOS_intel) depending on your Mac hardware. arm64 = Silicon
