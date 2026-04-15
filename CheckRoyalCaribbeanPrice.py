@@ -406,7 +406,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
 
     payload = response.json().get("payload")
     if payload is None:
-        print(f"{prefix} not available for passenger")
+        print(f"{prefix} {product} not available for passenger")
         return
 
     title = payload.get("title")    
@@ -1554,10 +1554,12 @@ def GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,ship
     if isCheckinAvailable:
         print(f"{RED}Check In Available and Not Completed{RESET}")
     else:
-        dt = datetime.fromisoformat(checkWindowOpenStartDateTime)
-        local_dt = dt.astimezone().strftime(dateDisplayFormat + " %X %Z")
-        print(f"Check In opens on: {local_dt}")
-
+        try:
+            dt = datetime.fromisoformat(checkWindowOpenStartDateTime)
+            local_dt = dt.astimezone().strftime(dateDisplayFormat + " %X %Z")
+            print(f"Check In opens on: {local_dt}")
+        except:
+            pass
 
 def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount):
     
