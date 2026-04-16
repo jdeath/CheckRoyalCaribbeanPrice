@@ -308,7 +308,6 @@ def getShipsWeb():
     for ship in ships:
         shipCode = ship.get("shipCode")
         name = ship.get("name")
-        print(name)
         shipNames.append({'code': shipCode, 'name': name})
         if shipCode == "HM":
             #Force Hero until it is added to the API
@@ -677,7 +676,7 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
                 products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,day)
                 if products != []:
                     portTitle = ports.get(int(day),"")
-                    print(f"   Day {day} : {portTitle}")
+                    print(f"\tDay {day}: {portTitle}")
                     printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes)
         else:
             products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,"all")
