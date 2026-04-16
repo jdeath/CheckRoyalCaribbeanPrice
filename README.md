@@ -47,7 +47,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
 1. A malware warning will pop up. Click "Done" (Not "Move to Trash")
 1. Go to Settings->Privacy and Security . Under security you will see the Check Script was blocked. Click "Open Anyways". A menu will pop up, Click "Open Anyway" and enter you computer password.
-1. Open Finder and click CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
+1. Open Finder and click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
    - Note: If no config file is found, code will ask to download a simple config file for you and name it correctly. type "y" and hit enter to download
 1. The file will be saved in the root of your home directory, not in the current directory
 1. Open Finder. Go To Menu Bar and click Go->Home
