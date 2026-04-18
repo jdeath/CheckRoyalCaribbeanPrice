@@ -1,6 +1,5 @@
 import requests
 import yaml
-from apprise import Apprise
 from datetime import datetime,date, timedelta, timezone
 from urllib.parse import urlparse, parse_qs, quote
 import re
@@ -11,7 +10,8 @@ import locale
 import sys
 import traceback
 import time
-
+import os
+import platform
 
 appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
 appversion_mobile = '1.73.4'
@@ -60,16 +60,22 @@ def get_config_path():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
     parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
     args = parser.parse_args()
-    return args.config
+    if platform.system() != "iOS":
+        return args.config
+    else:
+        return os.path.expanduser('~/Documents') + "/" + args.config
 
 def build_apprise_from_config(config_path):
-    apobj = Apprise()
+    
+    apobj = None
     notify_on_error = False
     try:
         with open(config_path, 'r') as file:
             data = yaml.safe_load(file) or {}
             notify_on_error = bool(data.get('notifyOnError', False))
             if 'apprise' in data:
+                from apprise import Apprise
+                apobj = Apprise()
                 for apprise in data['apprise']:
                     url = apprise['url']
                     apobj.add(url)
@@ -87,16 +93,28 @@ def main(config_path=None):
     timestamp = datetime.now()
     print(" ")
     
-    apobj = Apprise()
+    #apobj = Apprise()
+    
+    if platform.system() == "iOS":
+        global GREEN
+        global RESET
+        global BLUE
+        global YELLOW
+        GREEN = ""
+        RESET = ""
+        BLUE = ""
+        YELLOW = ""
+        
     try:    
         with open(config_path, 'r') as file:
             data = yaml.safe_load(file)
             if 'dateDisplayFormat' in data:
                 global dateDisplayFormat
                 dateDisplayFormat = data['dateDisplayFormat']
-
             if 'logFile' in data:
                 logFile = data['logFile']
+                if platform.system() == "iOS":
+                    logFile = os.path.expanduser('~/Documents') + "/" + logFile
                 print(f"Logging run to file: {logFile}")
                 sys.stdout = Logger(logFile)
                 sys.stderr = sys.stdout
@@ -104,11 +122,15 @@ def main(config_path=None):
             print("Report generated " + timestamp.strftime(dateDisplayFormat + " %X"))
             
             if 'apprise' in data:
+                from apprise import Apprise
+                apobj = Apprise()
                 for apprise in data['apprise']:
                     url = apprise['url']
                     apobj.add(url)
-
-            if 'apprise_test' in data and data['apprise_test']:
+            else:
+                apobj = None
+            
+            if 'apprise' in data and 'apprise_test' in data and data['apprise_test']:
                 apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
                 print("Apprise Notification Sent...quitting")
                 quit()
@@ -201,8 +223,11 @@ def main(config_path=None):
         if user_input == "y":
             url = 'https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/SAMPLE-SIMPLE-config.yaml'
             response = requests.get(url)
-            response.raise_for_status() 
-            with open("config.yaml", "wb") as f:
+            response.raise_for_status()
+            localFileName = "config.yaml"
+            if platform.system() == "iOS":
+                localFileName = os.path.expanduser('~/Documents') + "/config.yaml"    
+            with open(localFileName, "wb") as f:
                 f.write(response.content)
             print("File in current directory. Edit Username/password then run tool again")
 
@@ -485,7 +510,8 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             print(YELLOW + text + RESET)
         else:
             print(RED + text + RESET)
-            apobj.notify(body=text, title='Cruise Addon Price Alert')
+            if apobj is not None:
+                apobj.notify(body=text, title='Cruise Addon Price Alert')
     else:
         if forWatch:
             tempString = GREEN + f"{passengerName.ljust(10)} {title} price "
@@ -1194,7 +1220,7 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         print(YELLOW + textString + RESET)
         
         # If you specified the URL, provide a notification to update the URL
-        if not automaticURL:
+        if not automaticURL and apobj is not None:
             apobj.notify(body=textString, title='Cruise Room Not Available')
         
         # If cruise room not available, print other room prices
@@ -1233,7 +1259,8 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
                 print(YELLOW + textString + RESET)
             else:
                 print(RED + textString + RESET)
-                apobj.notify(body=textString, title='Cruise Price Alert')
+                if apobj is not None:
+                    apobj.notify(body=textString, title='Cruise Price Alert')
 
         # Don't notify if rebooking not possible
         if  automaticURL and pastFinalPaymentDate:
@@ -1256,7 +1283,8 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
                 print(YELLOW + textString + RESET)
             else:
                 print(RED + textString + RESET)
-                apobj.notify(body=textString, title='Cruise Price Alert')
+                if apobj is not None:
+                    apobj.notify(body=textString, title='Cruise Price Alert')
     else:
         tempString = GREEN + f"{preString}: You have best price of {paidPrice} {currencyCode}" + RESET
         if price > paidPrice:
@@ -1793,6 +1821,7 @@ if __name__ == "__main__":
         traceback.print_exc()
         if notify_on_error and len(apobj) > 0:
             body = f"Script failed at {timestamp}\n{error_summary}"
-            apobj.notify(body=body, title='Cruise Price Script Error')
+            if apobj is not None:
+                apobj.notify(body=body, title='Cruise Price Script Error')
         sys.exit(1)
  
