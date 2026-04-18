@@ -61,14 +61,13 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise`
-     
-## Install (iOS / iPhone or Android)
+
+## Install (iOS / iPhone)
 This will run a stripped down version to work on the free Python iPhone app. As stripped down, it only supports excursion/drink packages etc. It does not support cruise fare price checks. It does not support apprise notifications, so you will have to watch the log to see any price drops. You need to edit the python file directly (directions below) because it does not use the config.yaml file. But allows you to check prices on the go. Works on the ship even *without* the internet package!
 
 1. Install Python on your Phone
    - iOS: Get Python From Appstore. `https://apps.apple.com/us/app/python-coding-editor-ide-app/id6444399635`
       - Free version is fine, no need to make inapp purchases.
-   - Android:  Get pydroid 3 : `https://play.google.com/store/apps/details?id=ru.iiec.pydroid3`
 3. Download `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
    -   Use a text editor to add your username and password between the "" a few lines down.
    -   If you are are using a Celebrity account, remove `#` before `#cruiseLineName = "celebritycruises"`
@@ -81,7 +80,47 @@ This will run a stripped down version to work on the free Python iPhone app. As 
    -    Select the PhonePriceCheck.py file you downloaded
    -    To run: tap the arrow icon at top right of screen (between a bug icon and a `...` icon)
 6. Look for any price drops in the output
+   
+## Install (Android)
+Android users have option of running stripped down version or full version.  Stripped down version only supports excursion/drink packages etc. You need to edit the python file directly (directions below) because it does not use the config.yaml file. Full version supports everything. Both options allow you to check prices on the go. Works on the ship even *without* the internet package!
 
+### Stripped Down Version
+
+1. Install Python on your Phone
+   - Android:  Get pydroid 3 : `https://play.google.com/store/apps/details?id=ru.iiec.pydroid3`
+      - Open Python App, and install required library
+      - Click menu, click PIP, type `requests`, click install.
+3. Download phone version `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/PhonePriceCheck.py` from the repo to your computer
+   -   Use a text editor to add your username and password between the "" a few lines down.
+   -   If you are are using a Celebrity account, remove `#` before `#cruiseLineName = "celebritycruises"`
+   -   Ignore the `Edit Config File` section below, that only pretains to computer installations
+4. Email yourself the edited `PhonePriceCheck.py`
+   -   On your phone, save the emailed `PhonePriceCheck.py` to your Downloads section. 
+5. Open Python App 
+   -    Tap the Folder icon in the top right
+   -    Tap Open and Navigate to downloaded file ("Storage Access Framework might be easiest")
+   -    Select the PhonePriceCheck.py file you downloaded
+   -    To run: tap the yellow arrow icon at bottom right of screen
+6. Look for any price drops in the output
+
+### Full Version
+
+1. Install Python on your Phone
+   - Android:  Get pydroid 3 : `https://play.google.com/store/apps/details?id=ru.iiec.pydroid3`
+      - Open Python App, and install required library
+      - Click menu, click PIP, type `requests`, click install. Repeat for `PyYAML` and `Apprise`
+3. Download full version `https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py` from the repo to your computer or direct to phone
+4. If downloaded to computer, email yourself the edited `CheckRoyalCaribbeanPrice`
+   -   On your phone, save the emailed `CheckRoyalCaribbeanPrice.py` to your Downloads section. 
+5. Open Python App 
+   -    Tap the Folder icon in the top right
+   -    Tap Open and Navigate to downloaded file ("Storage Access Framework might be easiest")
+   -    Select the CheckRoyalCaribbeanPrice.py file you downloaded
+   -    To run: tap the yellow arrow icon at bottom right of screen
+   -    Select Y to download a config file
+   -    The config.yaml file will probably be downloaded to root of your internal (not SD card) storage
+   -    Edit the config.yaml (see below directions) or replace with the one you use on your computer
+   -    Go back to Pydroid, Open CheckRoyalCaribbeanPrice.py, tap the yellow arrow icon at bottom right of screen
 ## Install (Home Assistant Addon/App Option)
 See directions at: https://github.com/jdeath/homeassistant-addons/tree/main/royalpricecheck
 
@@ -455,6 +494,7 @@ MacOS arm64/Silicon download [BrowseRoyalCaribbeanPrice_MacOS_arm64](https://git
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe` or `BrowseRoyalCaribbeanPrice_MacOS`
 -  MacOS users will need to disable the Malware warning as explained in above documentation
+-  iOS / Android users can also run the script as is. Download python script and basically follow above iOS/Andriod directions.
 
 Defaults to system defined currency. If you want a different currency, for example DKK:
 - `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
