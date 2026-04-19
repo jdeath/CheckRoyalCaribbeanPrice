@@ -11,9 +11,9 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
 - ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, supports discounts)  
 - ✅ Can display active sitewide promotions (flash sales, percentage-off deals) for each sailing
-- ✅ Runs on Windows, macOS, Linux, Docker, iOS, and Home Assistant.
+- ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant.
 - ✅ Completely open source, free to use or modify.
-- ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, onboard activity schedule, MDR menus, and dress codes. No setup/account required!
+- ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, onboard activity schedule, MDR menus, and dress codes. No setup/account required! Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also made a vibe-coded Android App
    
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available. The script simply automates what you can do on the Royal Caribbean website.
@@ -519,6 +519,8 @@ This will browse any Royal Caribbean or Celebrity sailing and display current pu
 Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice.exe) ,
 MacOS Intel download [BrowseRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_intel)  ,
 MacOS arm64/Silicon download [BrowseRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_arm64)  
+
+Vibe Coded (Claude) Android App [Android APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/BrowseRCPrices.apk) . This is nice because can search and change sorting on the fly. Super cool, wish I had an Android phone.
 
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe` or `BrowseRoyalCaribbeanPrice_MacOS`
