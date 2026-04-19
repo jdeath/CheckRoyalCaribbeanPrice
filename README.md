@@ -526,7 +526,8 @@ You simply run the script. It will prompt you to select the ship and sailing fro
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe` or `BrowseRoyalCaribbeanPrice_MacOS`
 -  MacOS users will need to disable the Malware warning as explained in above documentation
 -  iOS / Android users can also run the script as is. Download python script and basically follow above iOS/Andriod directions.
-
+-  Android users can also run a vibe-coded native android app: see above
+  
 Defaults to system defined currency. If you want a different currency, for example DKK:
 - `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
 
