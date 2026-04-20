@@ -114,7 +114,7 @@ This will run the standard python code. It does not support apprise notification
 Android users have option of running a stripped down vibe-coded native app, or stripped down python or full version python (python is not vibe-coded).  Stripped down version only supports excursion/drink packages etc. You need to edit the python file directly (directions below) because it does not use the config.yaml file. Full version supports everything. Both options allow you to check prices on the go. Works on the ship even *without* the internet package!
 
 ### Native Android App (Stripped Down & Vibe Coded with Claude to convert from python code)
-1. Install the [APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/CheckRoyalCaribbeanPrice.apk) on your android phone
+1. Install the [APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/CheckRoyalCaribbeanPrice.apk) on your Android phone or Fire Tablet.
 1. Start it, allow notifications.
 1. Click "Go to Settings" and enter you Royal Caribbean account credentials.
 1  Back out of settings, then click "Run Check" button at bottom right.
@@ -531,13 +531,13 @@ Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/Check
 MacOS Intel download [BrowseRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_intel)  ,
 MacOS arm64/Silicon download [BrowseRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_arm64)  
 
-Vibe Coded (Claude) Android App [Android APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/BrowseRCPrices.apk) . This is nice because can search and change sorting on the fly. Super cool, wish I had an Android phone. Vibe coding just to convert from hand-written python.
+Vibe Coded (Claude) Android (or Fire Tablet) App [Android APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/BrowseRCPrices.apk) . This is nice because can search and change sorting on the fly. Vibe coding just to convert from hand-written python.
 
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe` or `BrowseRoyalCaribbeanPrice_MacOS`
 -  MacOS users will need to disable the Malware warning as explained in above documentation
 -  iOS / Android users can also run the script as is. Download python script and basically follow above iOS/Andriod directions.
--  Android users can also run a vibe-coded native android app: see above
+-  Android or Amazon Fire Tablet users can also run a vibe-coded native android app: see above
   
 Defaults to system defined currency. If you want a different currency, for example DKK:
 - `python BrowseRoyalCaribbeanPrice.py -c DKK` or  `BrowseRoyalCaribbeanPrice.exe -c DKK`
