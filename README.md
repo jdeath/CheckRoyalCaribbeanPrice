@@ -117,7 +117,8 @@ Android users have option of running a stripped down vibe-coded native app, or s
 1. Install the [APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/CheckRoyalCaribbeanPrice.apk) on your android phone
 1. Start it and enter you Royal Caribbean account credentials.
 1  Check Prices
-1. As stripped down, it does not handle notifcations or check cabin prices (yet...and probably will not)
+1. As stripped down, it does not handle notifcations or automatic check cabin prices. It will do manual cabin price checks from a URL
+1. If you get the URL on your phone, you must request the Desktop site in the browser. The mobile site does not make the URL correctly. Not fully tested, so rely on python code, not this!
 1. May have problems with password with special characters (most of debugging was to fix this!)
 1. As vibe-coded, it will not be updated much
 1. The auto check feature has not been tested
