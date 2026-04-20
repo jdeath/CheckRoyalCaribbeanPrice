@@ -531,7 +531,7 @@ Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/Check
 MacOS Intel download [BrowseRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_intel)  ,
 MacOS arm64/Silicon download [BrowseRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_arm64)  
 
-Vibe Coded (Claude) Android (or Fire Tablet) App [Android APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/BrowseRCPrices.apk) . This is nice because can search and change sorting on the fly. Vibe coding just to convert from hand-written python.
+Vibe Coded (Claude) Android (or Fire Tablet) App [Android APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/BrowseRoyalCaribbeanPrice.apk) . This is nice because can search and change sorting on the fly. Vibe coding just to convert from hand-written python.
 
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe` or `BrowseRoyalCaribbeanPrice_MacOS`
