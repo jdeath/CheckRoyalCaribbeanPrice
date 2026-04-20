@@ -122,7 +122,8 @@ Android users have option of running a stripped down vibe-coded native app, or s
 1. If you get the URL on your phone, you must request the Desktop site in the browser. If you change an addon (like gratituies, insurance) do a reload of page from the menu to pull in new URL. Not fully tested, so rely on python code, not this!
 1. May have problems with password with special characters (most of debugging was to fix this!)
 1. As vibe-coded, it will not be updated much
-1. The "Enable Auto Check" feature has not been tested
+1. The "Enable Auto Check" feature has not been tested.
+1. If the app crashes after upgrading, delete the data and cache in your android settings menu for the app.
    
 ### Stripped Down Python Version
 
