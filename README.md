@@ -11,7 +11,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
 - ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, supports discounts)  
 - ✅ Can display active sitewide promotions (flash sales, percentage-off deals) for each sailing
-- ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant.
+- ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also a vibe-coded Android App
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, onboard activity schedule, MDR menus, and dress codes. No setup/account required! Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also made a vibe-coded Android App
    
@@ -111,8 +111,17 @@ This will run the standard python code. It does not support apprise notification
 6. Look for any price drops in the output
    
 ## Install (Android)
-Android users have option of running stripped down version or full version.  Stripped down version only supports excursion/drink packages etc. You need to edit the python file directly (directions below) because it does not use the config.yaml file. Full version supports everything. Both options allow you to check prices on the go. Works on the ship even *without* the internet package!
+Android users have option of running a stripped down vibe-coded native app, or stripped down python or full version python (python is not vibe-coded).  Stripped down version only supports excursion/drink packages etc. You need to edit the python file directly (directions below) because it does not use the config.yaml file. Full version supports everything. Both options allow you to check prices on the go. Works on the ship even *without* the internet package!
 
+### Native Android App (Stripped Down & Vibe Coded with Claude to convert from python code)
+1. Install the [APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/CheckRoyalCaribbeanPrice.apk) on your android phone
+1. Start it and enter you Royal Caribbean account credentials.
+1  Check Prices
+1. As stripped down, it does not handle notifcations or check cabin prices (yet...and probably will not)
+1. May have problems with password with special characters (most of debugging was to fix this!)
+1. As vibe-coded, it will not be updated much
+1. The auto check feature has not been tested
+   
 ### Stripped Down Version
 
 1. Install Python on your Phone
@@ -520,7 +529,7 @@ Windows download [BrowseRoyalCaribbeanPrice.exe](https://github.com/jdeath/Check
 MacOS Intel download [BrowseRoyalCaribbeanPrice_MacOS_intel](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_intel)  ,
 MacOS arm64/Silicon download [BrowseRoyalCaribbeanPrice_MacOS_arm64](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/latest/download/BrowseRoyalCaribbeanPrice_MacOS_arm64)  
 
-Vibe Coded (Claude) Android App [Android APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/BrowseRCPrices.apk) . This is nice because can search and change sorting on the fly. Super cool, wish I had an Android phone.
+Vibe Coded (Claude) Android App [Android APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/BrowseRCPrices.apk) . This is nice because can search and change sorting on the fly. Super cool, wish I had an Android phone. Vibe coding just to convert from hand-written python.
 
 You simply run the script. It will prompt you to select the ship and sailing from a menu.
 - `python BrowseRoyalCaribbeanPrice.py` or `BrowseRoyalCaribbeanPrice.exe` or `BrowseRoyalCaribbeanPrice_MacOS`
