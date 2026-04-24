@@ -54,7 +54,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Edit downloaded config.yaml with your user/password. Do not change the spacing before the `-` lines. `#` means comment and everything to the right will be ignored
 1. The downloaded configuration file will log the output to "output.txt" in your Home folder, this avoids requiring to keep the output on screen.
 1. Click `CheckRoyalCaribbeanPrice_MacOS_intel` or `CheckRoyalCaribbeanPrice_MacOS_arm64`
-1. After confirmed working, you can add more options into `config.yaml` and review the automation/notification section below if you want to run it automatically a couple times a day!
+1. After confirmed working, you can add more options into `config.yaml`! I do not know how to automatically run this every X hours on a Mac, maybe someone will post directions.
 1. If you download a new version, you will need to do the `chmod` and "Click Open Anyway" steps again.
 
 ## Install (Recommended Option, any Operating System Windows/Linux/Mac, and you can edit code to your liking)
