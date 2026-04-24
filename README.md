@@ -111,7 +111,7 @@ This will run the standard python code. It does not support apprise notification
 6. Look for any price drops in the output
    
 ## Install (Android)
-Android users have option of running a stripped down vibe-coded native app, or stripped down python or full version python (python is not vibe-coded).  Stripped down version only supports excursion/drink packages etc. You need to edit the python file directly (directions below) because it does not use the config.yaml file. Full version supports everything. Both options allow you to check prices on the go. Works on the ship even *without* the internet package!
+Android users have option of running a stripped down vibe-coded native app, or stripped down python or full version python (python is not vibe-coded).  Stripped down python version only supports excursion/drink packages etc. You need to edit the python file directly (directions below) because it does not use the config.yaml file. Full version supports everything. Both options allow you to check prices on the go. Works on the ship even *without* the internet package!
 
 ### Native Android App (Stripped Down & Vibe Coded with Claude to convert from python code)
 1. Install the [APK](https://github.com/jdeath/CheckRoyalCaribbeanPrice/releases/download/3.3.1/CheckRoyalCaribbeanPrice.apk) on your Android phone or Fire Tablet.
