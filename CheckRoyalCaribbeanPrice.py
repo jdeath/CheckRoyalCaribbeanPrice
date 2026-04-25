@@ -1243,6 +1243,7 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
         
     roomAvailable = results.get("roomAvailable")
+    
     numberOfNights = results.get("sailingNights")
     shipName = shipDictionary.get(shipCode)
 
@@ -1322,7 +1323,7 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
         # Strip last ,
         if addons != "":
             preString = preString + " (" + addons[:-2] + ")"  
- 
+        
     if finalPaymentDate is None:
         finalPaymentDate = getFinalPaymentDate(numberOfNights,sailDate.replace('-', ''))
         
@@ -1708,10 +1709,14 @@ def GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,ship
 
 def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount):
     
+    #Use a More Effecient RSC command. Reduces Data returned by 30%
+    #Allows easier json parsing 
     headers = {
         'user-agent': user_agent_web,
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'accept-language': 'en-US,en;q=0.9',
+        "Accept": "text/x-component",
+        "RSC": "1",
         }
 
     params = {
@@ -1746,40 +1751,40 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
         headers=headers,
     )
 
-    # Extract json from html. 
-    # Replaced hardcoded L34 and also included data in search. This should make the search more robust and should work for both Royal and Celebrity
-    start_var = "\\\",null,{\\\"data"
-    end_var = "]}]}]]"
-    pattern = rf"L\d+{re.escape(start_var)}(.*?){re.escape(end_var)}"
-    match = re.search(pattern, response.text)
     availableRooms = []
-    if match:
-        # Add back the {\"data here
-        result = "{\\\"data" + match.group(1)
-        # Format text so will load as json. Needs to be done twice
-        unescaped = json.loads(f'"{result}"')
-        json_data = json.loads(unescaped)
-        data = json_data.get("data")
-        # Loop through data to see if desired room is available
-        # This also has price information, but not at the required detail
-        stateroomTypes = (data.get("rooms")[0]).get("options").get("stateroomTypes")
+    
+    # Just extract json out of data
+    rooms = _extract_json_array(response.text, "rooms")
+    
+    # If no rooms, quit
+    if rooms is None:
+        return False, availableRooms
         
-        for stateroomType in stateroomTypes:
-            stateroomSubtypes = stateroomType.get("stateroomSubtypes")
-            for stateroomSubtype in stateroomSubtypes:
-                cur_subTypeCode = stateroomSubtype.get("code")
-                cur_categoryCode = stateroomSubtype.get("categoryCode")
-                #print("Desired: " + stateroomSubtypeCode + " " + categoryCode)
-                #print("Cur:     " + cur_subTypeCode + " " + categoryCode)
-                #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}") 
-                if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
-                    return True, []
-                    
-                # Here we add available rooms. I will only use it if sold out, so ok if exits if room found
-                price = stateroomSubtype.get("pricing").get("invoice").get("total")
-                roomsLeft = stateroomSubtype.get("roomsLeft")
-                availableRooms.append({"name":stateroomSubtype.get('name') + " " + cur_categoryCode + " " + cur_subTypeCode,"price":price,"roomsLeft":roomsLeft})
+    stateroomTypes = rooms[0].get("options").get("stateroomTypes")
+       
+    for stateroomType in stateroomTypes:
+        stateroomSubtypes = stateroomType.get("stateroomSubtypes")
+        for stateroomSubtype in stateroomSubtypes:
+            cur_subTypeCode = stateroomSubtype.get("code")
+            cur_categoryCode = stateroomSubtype.get("categoryCode")
+            #print("Desired: " + stateroomSubtypeCode + " " + categoryCode)
+            #print("Cur:     " + cur_subTypeCode + " " + categoryCode)
+            #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}") 
+            if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
+                # Need to check if rooms are left.
+                # This is not always provided, so cannot use it to check inventory
+                # roomsLeft = stateroomSubtype.get("roomsLeft",0)
+                # However, sometimes it is not filled and it means it is not available
+                # We just need to deal with that
                 
+                return True, []
+                
+            # Here we add available rooms. I will only use it if sold out, so ok if exits if room found
+            price = stateroomSubtype.get("pricing").get("invoice").get("total")
+            roomsLeft = stateroomSubtype.get("roomsLeft")
+            availableRooms.append({"name":stateroomSubtype.get('name') + " " + cur_categoryCode + " " + cur_subTypeCode,"price":price,"roomsLeft":roomsLeft})
+                
+    
     return False, availableRooms
 
 def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomTypeCode,stateroomSubtypeCode,categoryCode,roomNumber,loyaltyNumber,stateCode,fireFighter,military,police,senior,couponCode,adultCount,childCount):
@@ -1790,6 +1795,15 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
     sailingNights = 0
     results['sailingNights'] = sailingNights
     results['roomAvailable'] = roomAvailable
+    
+    # If Room is not Available, do not check the price
+    if roomAvailable is False:
+        # Print Error Message and set room available to false
+        #print("Room Not Found - Not Checking Price")
+        results['roomAvailable'] = False
+        results['availableRooms'] = availableRooms
+        return results
+    
     
     headers = {
     'user-agent': user_agent_web,
