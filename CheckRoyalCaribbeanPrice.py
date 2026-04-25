@@ -908,19 +908,50 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj)
         
         result = getDiningAndPrices(amendToken,bookingOfficeCountryCode)
+        #print(result) # comment if have all-in or refundable and tell @jdeath
+  
         diningSelection = result.get("diningSelection",[])
         for selection in diningSelection:
-            print("Dining: " + selection.get("sittingType","") + " " + selection.get("sittingTime","") + " Table Size: " + selection.get("tableSize",""))
+            if selection.get("sittingTime","") == "MY TIME":
+                print("Dining: My Time Open Sitting")
+            else:
+                print("Dining: " + selection.get("sittingType","") + " " + selection.get("sittingTime","") + " Table Size: " + selection.get("tableSize",""))
         
+        paymentString = ""
         gross_totals = None
+        prepaidGratsFlag = False
+        insuranceFlag = False
         cruisePaidPriceFromAPI = result.get("prices",[])
         for curPrice in cruisePaidPriceFromAPI:
-            if curPrice.get("priceTypeCode","") == "GROSS_TOTALS":
-                gross_totals = curPrice.get("amount",None)
-                break
+            priceTypeCode = curPrice.get("priceTypeCode","")
+            amount = curPrice.get("amount",None)
+            if amount == 0:
+                continue
                 
+            if priceTypeCode == "GROSS_TOTALS":
+                gross_totals = amount
+                #paymentString += f" Total: {amount} "
+            if priceTypeCode == "GRATUITIES":
+                prepaidGratsFlag = True
+                paymentString += f" Including: {amount} Gratituties"
+            if priceTypeCode == "TRIP_INSURANCE":
+                insuranceFlag = True
+                paymentString += f" Including: {amount} Insurance"
+            if priceTypeCode == "PAYMENTS_APPLIED":
+                paymentString += f" You Already Paid: {amount}"
+            if priceTypeCode == "BALANCE_DUE":
+                paymentString += f" You Still Owe: {amount}"    
+        
         if gross_totals is not None:
-            print("You appeared to have paid: " + str(gross_totals) + " for the cruise - Not Used Later")
+            # Force Total Shown First. Other order less important
+            paymentString = f"Cruise Fare - Total {gross_totals}{paymentString}" 
+            print(paymentString)
+ 
+        paidPriceStruct = {}
+        paidPriceStruct['reservation'] = reservationId
+        paidPriceStruct['paidPrice'] = gross_totals
+        paidPriceStruct['gratuities'] = prepaidGratsFlag
+        paidPriceStruct['tripInsurance'] = insuranceFlag
         
         finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
         finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
@@ -959,17 +990,24 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             if state is not None:
                 cruisePriceURL += f"&r0k={state}"
             
-            paidPriceStruct = None
             #print(cruisePriceURL)
             if isinstance(reservationPricePaid,dict) and reservationPricePaid:
                 print("Update Config To Use New Paid Price Structure - See Readme")
                 if str(reservationId) in reservationPricePaid:
-                    paidPrice = reservationPricePaid.get(str(reservationId))
-                    paidPriceStruct = {"paidPrice":float(paidPrice)} # For New structure
+                    paidPrice = reservationPricePaid.get(str(reservationId),None)
+                    if paidPrice is not None:
+                        print("Can remove paidPrice in config.yaml if above cruise price is correct")
+                        print("Overriding with config.yaml values")
+                        paidPriceStruct[paidPrice] = float(paidPrice) # Override Price
             elif isinstance(reservationPricePaid,list):        
                 for reservation in reservationPricePaid:
                     if int(reservationId) == int(reservation.get("reservation")):
-                        paidPriceStruct = reservation
+                        print("Can remove reservationPricePaid entry config.yaml if above cruise price is correct")
+                        print("Price/Gratuities/Insurance should handled")
+                        print("Need to keep (if needed) category Override, military, police, fire, coupon code")
+                        print("Overriding with config.yaml values")
+                        for item in reservation:
+                            paidPriceStruct[item] = reservation.get(item)
                 
             if stateroomType != "NONE":
                 get_cruise_price(cruisePriceURL, session, paidPriceStruct, apobj, True, finalPaymentDate, loyaltyNumber, state)
