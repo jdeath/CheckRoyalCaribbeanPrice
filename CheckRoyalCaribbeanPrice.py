@@ -231,6 +231,32 @@ def main(config_path=None):
                 f.write(response.content)
             print("File in current directory. Edit Username/password then run tool again")
 
+def _extract_json_array(text: str, key: str):
+    """Find "key": [ ... ] handling arbitrary nesting."""
+    m = re.search(rf'"{re.escape(key)}"\s*:\s*\[', text)
+    if not m:
+        return None
+    start = m.end() - 1  # position of opening [
+    depth, i = 0, start
+    in_string, escape = False, False
+    while i < len(text):
+        ch = text[i]
+        if escape:
+            escape = False
+        elif ch == "\\" and in_string:
+            escape = True
+        elif ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return json.loads(text[start:i + 1])
+        i += 1
+    return None
+    
 def string_to_float(s: str) -> float:
     s = s.strip()
 
@@ -278,6 +304,40 @@ def days_between(d1, d2):
     dt2 = datetime.strptime(d2, "%Y%m%d")
     return (dt2 - dt1).days
 
+def getDiningAndPrices(amendtoken, country: str = "USA") -> dict:
+
+    RSC_URL = "https://www.royalcaribbean.com/usa/en/booked/overview"
+
+    HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/x-component",
+        "RSC": "1",
+    }
+    
+    resp = requests.get(RSC_URL, params={"token": amendtoken, "country": country}, headers=HEADERS, timeout=30)
+    
+    text = resp.text
+    result = {}
+
+    dining = _extract_json_array(text, "diningSelection")
+    if dining is not None:
+        result["diningSelection"] = dining
+
+    prices = _extract_json_array(text, "prices")
+    if prices is not None:
+        result["prices"] = prices
+    
+    pricingAddOns = _extract_json_array(text, "pricingAddOns")
+    if pricingAddOns is not None:
+        result["pricingAddOns"] = pricingAddOns
+        
+    return result
+
+
 def getFinalPaymentDate(numberOfNights, sailDate):
     
     dateOfSailing = date(int(sailDate[0:4]), int(sailDate[4:6]), int(sailDate[6:8]))
@@ -300,8 +360,10 @@ def login(username,password,session,cruiseLineName):
     }
     
     urlSafePassword  = quote(password, safe='')
-    data = f'grant_type=password&username={username}&password={urlSafePassword}&scope=openid+profile+email+vdsid'
     
+    data = f'grant_type=password&username={username}&password={urlSafePassword}&scope=openid+profile+email+vdsid'
+    #print(data)
+    #quit()
     try:
         response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     except Exception as e:
@@ -745,6 +807,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         sys.exit(1)
 
     for booking in response.json().get("payload").get("profileBookings"):
+        
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
         sailDate = booking.get("sailDate")
@@ -757,6 +820,8 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         stateroomType = booking.get("stateroomType")
         stateroomNumber = booking.get("stateroomNumber")
         stateroomTypeName = "NONE"
+        
+        amendToken = booking.get("amendToken")
         
         if stateroomType == "I":
             stateroomTypeName = "INTERIOR"
@@ -842,6 +907,20 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         else:
             GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj)
         
+        result = getDiningAndPrices(amendToken,bookingOfficeCountryCode)
+        diningSelection = result.get("diningSelection",[])
+        for selection in diningSelection:
+            print("Dining: " + selection.get("sittingType","") + " " + selection.get("sittingTime","") + " Table Size: " + selection.get("tableSize",""))
+        
+        gross_totals = None
+        cruisePaidPriceFromAPI = result.get("prices",[])
+        for curPrice in cruisePaidPriceFromAPI:
+            if curPrice.get("priceTypeCode","") == "GROSS_TOTALS":
+                gross_totals = curPrice.get("amount",None)
+                break
+                
+        if gross_totals is not None:
+            print("You appeared to have paid: " + str(gross_totals) + " for the cruise - Not Used Later")
         
         finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
         finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
@@ -1006,7 +1085,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     
                     if guest.get("orderStatus") == "CANCELLED":
                         continue
-                    
+                        
                     paidPrice = guest.get("priceDetails").get("subtotal")
                     paidQuantity = guest.get("priceDetails").get("quantity")
                     
