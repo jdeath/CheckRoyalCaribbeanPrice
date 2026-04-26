@@ -566,3 +566,11 @@ There are no plans to add price checking/price history to this script. Use the `
 Cruise activity schedule, such as trivia and game shows, often only populated a few days before the cruise. Look at sailing 0) or 1) in the list to get an idea of current activities on the ship. This is much faster than changing your cruise in the App! Will print MDR menus if available. For Royal, look for the "Dress Code" activity and for Celebrity look for "Tonight's Attire" activity to see the theme nights.
 
 You can run this on the iPhone, following the iPhone install directions and download the [BrowseRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/BrowseRoyalCaribbeanPrice.py) to your phone, no need to edit as the Browse script does not need username/password.
+
+## 💰 Bounty Contribution
+
+- **Task:** CruiseURL check returning wrong price
+- **Reward:** $3255
+- **Source:** GitHub-Paid
+- **Date:** 2026-04-27
+
