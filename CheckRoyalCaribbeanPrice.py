@@ -304,16 +304,15 @@ def days_between(d1, d2):
     dt2 = datetime.strptime(d2, "%Y%m%d")
     return (dt2 - dt1).days
 
-def getDiningAndPrices(amendtoken, country: str = "USA") -> dict:
+def getDiningAndPrices(amendtoken, isRoyal: bool = True , country: str = "USA") -> dict:
 
-    RSC_URL = "https://www.royalcaribbean.com/usa/en/booked/overview"
-
+    if isRoyal:
+        RSC_URL = "https://www.royalcaribbean.com/usa/en/booked/overview"
+    else:
+        RSC_URL = "https://www.celebritycruises.com/usa/en/booked/overview"
+        
     HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": user_agent_web,
         "Accept": "text/x-component",
         "RSC": "1",
     }
@@ -907,7 +906,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         else:
             GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj)
         
-        result = getDiningAndPrices(amendToken,bookingOfficeCountryCode)
+        result = getDiningAndPrices(amendToken, brandCode == "R", bookingOfficeCountryCode)
         #print(result) # comment if have all-in or refundable and tell @jdeath
   
         diningSelection = result.get("diningSelection",[])
