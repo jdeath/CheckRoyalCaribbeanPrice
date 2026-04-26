@@ -907,19 +907,24 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj)
         
         result = getDiningAndPrices(amendToken, brandCode == "R", bookingOfficeCountryCode)
-        #print(result) # comment if have all-in or refundable and tell @jdeath
+        #print(result) # comment out if have all-in or refundable fare and create github issue
   
         diningSelection = result.get("diningSelection",[])
         for selection in diningSelection:
             if selection.get("sittingTime","") == "MY TIME":
                 print("Dining: My Time Open Sitting")
             else:
-                print("Dining: " + selection.get("sittingType","") + " " + selection.get("sittingTime","") + " Table Size: " + selection.get("tableSize",""))
+                diningString = "Dining: " + selection.get("sittingType","") + " " + selection.get("sittingTime","")
+                tableSize = selection.get("tableSize","")
+                if tableSize != "" and tableSize != "00":
+                    diningString += " Table Size: " + selection.get("tableSize","")
+                print(diningString)
         
         paymentString = ""
         gross_totals = None
         prepaidGratsFlag = False
         insuranceFlag = False
+        allIncludedFlag = False
         cruisePaidPriceFromAPI = result.get("prices",[])
         for curPrice in cruisePaidPriceFromAPI:
             priceTypeCode = curPrice.get("priceTypeCode","")
@@ -936,8 +941,13 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             if priceTypeCode == "TRIP_INSURANCE":
                 insuranceFlag = True
                 paymentString += f" Including: {amount} Insurance"
-            if priceTypeCode == "PAYMENTS_APPLIED":
-                paymentString += f" You Already Paid: {amount}"
+            if "ALL_INC" in priceTypeCode or "INCLUDED" in priceTypeCode:
+                allIncludedFlag = True
+                print("please post an issue with this info")
+                print(priceTypeCode)
+                paymentString += f" Including: {amount} All Included Drinks/WiFi"    
+            #if priceTypeCode == "PAYMENTS_APPLIED": # This may account for TA Take
+            #    paymentString += f" You Already Paid: {amount}"
             if priceTypeCode == "BALANCE_DUE":
                 paymentString += f" You Still Owe: {amount}"    
         
@@ -951,6 +961,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         paidPriceStruct['paidPrice'] = gross_totals
         paidPriceStruct['gratuities'] = prepaidGratsFlag
         paidPriceStruct['tripInsurance'] = insuranceFlag
+        paidPriceStruct['allInUpgrade'] = allIncludedFlag
         
         finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
         finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
@@ -1013,7 +1024,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             else:
                 print(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
                 
-        getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
+        #getOrders(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,numberOfNights,apobj,cruiseLineName)
         print(" ")
         
         if watchListItems:
