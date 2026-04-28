@@ -951,17 +951,20 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             if priceTypeCode == "BALANCE_DUE":
                 paymentString += f" You Still Owe: {amount}"    
         
+        paidPriceStruct = {}
+        
         if gross_totals is not None:
             # Force Total Shown First. Other order less important
-            paymentString = f"Cruise Fare - Total {gross_totals}{paymentString}" 
+            
+            paidPriceStruct['reservation'] = reservationId
+            paidPriceStruct['paidPrice'] = gross_totals
+            paidPriceStruct['gratuities'] = prepaidGratsFlag
+            paidPriceStruct['tripInsurance'] = insuranceFlag
+            paidPriceStruct['allInUpgrade'] = allIncludedFlag
+            paymentString = f"Cruise Fare - Total {gross_totals}{paymentString}"
             print(paymentString)
  
-        paidPriceStruct = {}
-        paidPriceStruct['reservation'] = reservationId
-        paidPriceStruct['paidPrice'] = gross_totals
-        paidPriceStruct['gratuities'] = prepaidGratsFlag
-        paidPriceStruct['tripInsurance'] = insuranceFlag
-        paidPriceStruct['allInUpgrade'] = allIncludedFlag
+        
         
         finalPaymentDate = getFinalPaymentDate(numberOfNights, sailDate)
         finalPaymentDateDisplay = finalPaymentDate.strftime(dateDisplayFormat)
@@ -1006,16 +1009,18 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                 if str(reservationId) in reservationPricePaid:
                     paidPrice = reservationPricePaid.get(str(reservationId),None)
                     if paidPrice is not None:
-                        print("Can remove paidPrice in config.yaml if above cruise price is correct")
-                        print("Overriding with config.yaml values")
+                        if paidPriceStruct:
+                            print("Can remove paidPrice in config.yaml if above cruise price is correct")
+                            print("Overriding with config.yaml values")
                         paidPriceStruct[paidPrice] = float(paidPrice) # Override Price
             elif isinstance(reservationPricePaid,list):        
                 for reservation in reservationPricePaid:
                     if int(reservationId) == int(reservation.get("reservation")):
-                        print("Can remove reservationPricePaid entry config.yaml if above cruise price is correct")
-                        print("Price/Gratuities/Insurance should handled")
-                        print("Need to keep (if needed) category Override, military, police, fire, coupon code")
-                        print("Overriding with config.yaml values")
+                        if paidPriceStruct:
+                            print("Can remove reservationPricePaid entry config.yaml if above cruise price is correct")
+                            print("Price/Gratuities/Insurance should handled")
+                            print("Need to keep (if needed) category Override, military, police, fire, coupon code, or a refundable fare")
+                            print("Overriding with config.yaml values")
                         for item in reservation:
                             paidPriceStruct[item] = reservation.get(item)
                 
