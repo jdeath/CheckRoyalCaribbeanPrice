@@ -40,6 +40,7 @@ if sys.platform == "win32":
 problem_envs = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]
 has_terminal_issues = any(k in os.environ for k in problem_envs)
 
+
 def main():
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
@@ -49,7 +50,7 @@ def main():
     parser.add_argument('-k', '--sortkey', choices=['price', 'alpha', 'default'], default="default", help='Set value to sort on')
     parser.add_argument('-w', '--watchlistcodes', action='store_true', help='Show Codes For Watchlist')
     parser.add_argument('-a', '--activitysort', choices=['date', 'alpha', 'default'], default="default", help='Show Codes For Watchlist')
-    parser.add_argument('-l', '--logfile', type=str, help='optional logfile, eg. output.txt')
+    parser.add_argument('-l', '--logfile', type=str, nargs='?', const='output.txt', help='optional logfile, eg. output.txt')
     args = parser.parse_args()
     
     currency = args.currency
@@ -204,6 +205,7 @@ class Logger(object):
         self.terminal.flush()
         self.log.flush()
 
+
 def daysBetween(sailDate,activityDate):
     d0 = date(int(sailDate[0:4]), int(sailDate[4:6]), int(sailDate[6:8]))
     d1 = date(int(activityDate[0:4]), int(activityDate[4:6]), int(activityDate[6:8]))
@@ -230,7 +232,6 @@ def getSystemCurrency():
     
     
 def sanitizeString(string_to_clean):
-
     # Some unicode characters don't properly print to ASCII terminals
     # Convert unicode non-printable punctuation characters
     tmp_string = string_to_clean.lstrip()
@@ -252,38 +253,6 @@ def sanitizeString(string_to_clean):
     tmp_string = normalize('NFKD', tmp_string)
     return ''.join([c for c in tmp_string if not combining(c)])
 
-
-def getShips():
-    headers = {
-        'appkey': appkey_mobile,
-        'accept': 'application/json',
-        'appversion': appversion_mobile,
-        'accept-language': 'en',
-        'user-agent': user_agent_mobile,
-    }
-
-    params = {
-        'sort': 'name',
-    }
-
-    try:
-        response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
-
-    shipNames = []
-    ships = response.json().get("payload").get("ships")
-    i = 0
-    for ship in ships:
-        shipCode = ship.get("shipCode")
-        name = ship.get("name")
-        shipNames.append({'code': shipCode, 'name': name})
-        if shipCode == "HM":
-            #Force Hero until it is added to the API
-            shipNames.append({'code': 'HE', 'name': 'Hero of the Seas'})
-    
-    return shipNames
 
 def getShipsWeb():
     headers = {
@@ -315,39 +284,6 @@ def getShipsWeb():
 
     return shipNames
 
-###################
-# Get Sailings
-def getSailings(shipCode):
-    headers = {
-        'appkey': appkey_mobile,
-        'accept': 'application/json',
-        'appversion': appversion_mobile,
-        'accept-language': 'en',
-        'user-agent': user_agent_mobile,
-    }
-
-    params = {
-        'resultSet': '300',
-    }
-
-    try:
-        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
-
-    voyages = response.json().get("payload").get("voyages")    
-    sailings = []
-    for voyage in voyages:
-        sailDate = voyage.get("sailDate")
-        duration = voyage.get("duration")
-        voyageCode = voyage.get("voyageCode")
-        voyageDescription = voyage.get("voyageDescription")
-        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
-        sailings.append({'date': sailDate, 'displayDate': sailDateDisplay,'description': voyageDescription,'duration':duration,'voyageCode':voyageCode})
-        
-    return sailings
-
 def getSailingsWeb(shipCode):
     headers = {
         'User-Agent': user_agent_web,
@@ -377,69 +313,7 @@ def getSailingsWeb(shipCode):
         
     return sailings
 
-def getSailingDetails(shipCode,sailDate):
-    
-
-    headers = {
-    'appkey': appkey_mobile,
-    'accept': 'application/json',
-    'user-agent': user_agent_mobile,
-    'appversion': appversion_mobile,
-    }
-    
-    try:
-        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/voyages/{shipCode}{sailDate}/enriched', headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
-    
-    ports = {}
-    
-    itinerary = response.json().get("payload").get("sailingInfo")[0].get("itinerary")
-    if itinerary is None:
-        return ports
-        
-    portInfo = itinerary.get("portInfo")
-    
-    for port in portInfo:
-        title = sanitizeString(port.get("title"))
-        arrivalDateTime = port.get("arrivalDateTime")
-        portType = port.get("portType","Unknown")
-        day = port.get("day","Unknown")
-        
-        # Save port names for later
-        ports[int(day)] = title
-        
-        # Sometimes fields are not filled, so we skip (like international date line changes)
-        if arrivalDateTime is None:
-            print(f"Day {day}: {title}")
-            continue
-        
-        arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
-        departureDateTime = port.get("departureDateTime") 
-        printString = f"Day {day} ({arrivalDateDisplay}): {title}"
-        if portType == "EMBARK":
-            printString += f" ↑ {departureDateTime[9:13]}"
-        elif portType == "DEBARK":
-            printString += f" ↓ {arrivalDateTime[9:13]}"
-        elif title != "Cruising":
-            printString += f" ↓ {arrivalDateTime[9:13]} ↑ {departureDateTime[9:13]}"
-        if portType == "TENDERED":
-            printString += f" (Tendered)"
-        
-        portString = sanitizeString(printString)
-        print(portString)
-
-    if has_terminal_issues:
-        print("(^ means gangway up; v means gangway down)")
-    else:
-        print("(↑ means gangway up; ↓ means gangway down)")
-
-    return ports
-
 def getSailingDetailsWeb(shipCode,sailDate):
-    
-
     headers = {
         'User-Agent': user_agent_web,
         'Accept': 'application/json',
@@ -453,7 +327,6 @@ def getSailingDetailsWeb(shipCode,sailDate):
         exit(1)
     
     ports = {}
-    
     portInfo = response.json().get("payload").get("sailingInfo").get("itinerary").get("events")
     
     for port in portInfo:
@@ -512,14 +385,12 @@ def getWebCatagories(ship,saildate):
     response = requests.post('https://aws-prd.api.rccl.com/en/royal/web/graphql', headers=headers, json=json_data)
     
     productMap = {}
-    
     catagories1 = response.json().get("data").get("categories")
     if catagories1 is None:
         print("No Items for Sale")
         return productMap
     
     catagories = catagories1.get("categories")
-
     productMap = {}
     if catagories is None:
         print("No Items for Sale")
@@ -676,7 +547,7 @@ def printAllProducts(shipCode,sailDate,duration,currency,sortkey,sortorder,showW
                 products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,day)
                 if products != []:
                     portTitle = ports.get(int(day),"")
-                    print(f"\tDay {day}: {portTitle}")
+                    print(f"\t{BLUE}Day {day}: {portTitle}{RESET}")
                     printAndSortProducts(products,sortkey,sortorder,currency,key,showWatchlistCodes)
         else:
             products = getProductsGraphAllPages(shipCode,sailDate,duration,currency,sortkey,sortorder,key,"all")
@@ -731,55 +602,6 @@ def getAllActivitiesWeb(shipCode, sailDate):
                  
     return products
     
-def getAllActivities(shipCode, sailDate):
-    headers = {
-        'appkey': appkey_mobile,
-        'accept': 'application/json',
-        'user-agent': user_agent_mobile,
-        'appversion': appversion_mobile,
-    }
-
-    params = {
-            'sailingID': shipCode + sailDate,
-            'limit': '200',
-            'offset': '0',
-            #'availableForSale': 'FALSE',
-        }
-    
-    products = []
-    for offset in range(0,10000,200):
-        params['offset'] = offset
-        
-        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
-
-        if response.json() is None or response.json().get("payload") is None:
-            return products
-            
-        tempProducts = response.json().get("payload").get("products")
-
-        for product in tempProducts:
-            productType = product.get("productType").get("productType")
-            
-            if productType != "NON_REVENUE_SCHEDULABLE":
-                continue
-                
-            productTitle = product.get("productTitle")
-            location = product.get("productLocation").get("locationTitle","")
-            
-            if location is None:
-                location = ""
-                
-            offering = product.get("offering")
-            for offer in offering:
-                if offer is not None:                    
-                    offeringDate = offer.get("offeringDate")
-                    offeringTime = offer.get("offeringTime")
-                    day = daysBetween(sailDate,offeringDate)
-                    products.append({'productTitle':productTitle,'location':location,'offeringDate':offeringDate,'offeringTime':offeringTime,'day':day})
-                    
-    return products
-
-
 def printAllActivities(activities, sortorder):
     if len(activities) == 0:
         print("No Activities Scheduled")
@@ -820,7 +642,6 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildre
     }
         
     formattedSailDate = sailDate[0:4] + "-" + sailDate[4:6] + "-" + sailDate[6:8]
-    
     filterString = f"id:{packageCode}|adults:{numAdults}|children:{numChildren}|startDate:{formattedSailDate}~{formattedSailDate}"
     
     json_data = {
@@ -867,54 +688,12 @@ def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildre
                 print(f"\t{GREEN}{cabinCostPerPerson} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
 
 
-# This is not needed, as dress code is in list of activities
-def printThemeNights(shipCode,sailDate,duration):
-    headers = {
-        'appkey': appkey_mobile,
-        'accept': 'application/json',
-        'user-agent': user_agent_mobile,
-        'appversion': appversion_mobile,
-    }
-
-    response = requests.get(f'https://api.rccl.com/en/royal/mobile/v1/ships/{shipCode}/sailDate/{sailDate}/needToKnow', headers=headers)
-
-    payload = response.json().get("payload")
-
-    word_list = ["dress", "attire", "theme","casual"]
-
-    foundTheme = 0
-    for needToKnowCard in payload.get("needToKnowCards"):
-        includedDayCards = needToKnowCard.get("includedDayCards")
-        date = needToKnowCard.get("cardIdentifier")[:8]
-        for card in includedDayCards:
-            title = card.get("cardTitle")
-            titleLower = card.get("cardTitle").lower()
-            #if date == '20260402': # I use this to find missing themes
-            #    print(title)
-                
-            if any(word.lower() in titleLower for word in word_list):
-                if "address" in titleLower:
-                    continue
-                foundTheme += 1
-                
-                day = daysBetween(sailDate,date)
-                subtitle = re.split(r'[.!]+', card.get("cardSubtitle"))[0].replace("<p>", "").replace("&nbsp;","")
-                offeringDate = datetime.strptime(date, "%Y%m%d").strftime("%B %d, %Y")
-                print(f"{GREEN}{offeringDate} (Day {day}){RESET} {title}: {subtitle}")
-    
-    if foundTheme == 0:
-        print("Themes Not Available")
-    elif foundTheme < duration:
-        print("Themes Not Fully Loaded")    
-    flush_print_buffer()
-
-
 def getMDRLocations(shipCode,sailDate,isRoyal):
     # This gets the main dinning room name to reduce API data request
     headers = {
-    'appkey': appkey_mobile_graph,
-    'content-type': 'application/json',
-    'user-agent': user_agent_mobile_graph,
+        'appkey': appkey_mobile_graph,
+        'content-type': 'application/json',
+        'user-agent': user_agent_mobile_graph,
     }
 
     json_data = {
@@ -943,7 +722,6 @@ def getMDRLocations(shipCode,sailDate,isRoyal):
         json_data['variables']['category'] = 'food'
         
     response = requests.post('https://api.rccl.com/en/royal/mobile/graphql', headers=headers, json=json_data)
-    
     venueIds = []
     
     productsByVenueCategories = response.json().get("data").get("productsByVenueCategories")
@@ -1039,6 +817,219 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
 
                     print(title)
                 print("")       
-  
+
+##################################
+# Dead/Obsolete functions
+##################################
+def getShips():
+    headers = {
+        'appkey': appkey_mobile,
+        'accept': 'application/json',
+        'appversion': appversion_mobile,
+        'accept-language': 'en',
+        'user-agent': user_agent_mobile,
+    }
+
+    params = {
+        'sort': 'name',
+    }
+
+    try:
+        response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    shipNames = []
+    ships = response.json().get("payload").get("ships")
+    i = 0
+    for ship in ships:
+        shipCode = ship.get("shipCode")
+        name = ship.get("name")
+        shipNames.append({'code': shipCode, 'name': name})
+        if shipCode == "HM":
+            #Force Hero until it is added to the API
+            shipNames.append({'code': 'HE', 'name': 'Hero of the Seas'})
+    
+    return shipNames
+
+def getSailings(shipCode):
+    headers = {
+        'appkey': appkey_mobile,
+        'accept': 'application/json',
+        'appversion': appversion_mobile,
+        'accept-language': 'en',
+        'user-agent': user_agent_mobile,
+    }
+
+    params = {
+        'resultSet': '300',
+    }
+
+    try:
+        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/{shipCode}/voyages', params=params, headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+
+    voyages = response.json().get("payload").get("voyages")    
+    sailings = []
+    for voyage in voyages:
+        sailDate = voyage.get("sailDate")
+        duration = voyage.get("duration")
+        voyageCode = voyage.get("voyageCode")
+        voyageDescription = voyage.get("voyageDescription")
+        sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
+        sailings.append({'date': sailDate, 'displayDate': sailDateDisplay,'description': voyageDescription,'duration':duration,'voyageCode':voyageCode})
+        
+    return sailings
+
+
+def getSailingDetails(shipCode,sailDate):
+    headers = {
+    'appkey': appkey_mobile,
+    'accept': 'application/json',
+    'user-agent': user_agent_mobile,
+    'appversion': appversion_mobile,
+    }
+    
+    try:
+        response = requests.get(f'https://api.rccl.com/en/royal/mobile/v3/ships/voyages/{shipCode}{sailDate}/enriched', headers=headers)
+    except Exception as e:
+        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
+        exit(1)
+    
+    ports = {}
+    
+    itinerary = response.json().get("payload").get("sailingInfo")[0].get("itinerary")
+    if itinerary is None:
+        return ports
+        
+    portInfo = itinerary.get("portInfo")
+    for port in portInfo:
+        title = sanitizeString(port.get("title"))
+        arrivalDateTime = port.get("arrivalDateTime")
+        portType = port.get("portType","Unknown")
+        day = port.get("day","Unknown")
+        
+        # Save port names for later
+        ports[int(day)] = title
+        
+        # Sometimes fields are not filled, so we skip (like international date line changes)
+        if arrivalDateTime is None:
+            print(f"Day {day}: {title}")
+            continue
+        
+        arrivalDateDisplay = datetime.strptime(arrivalDateTime[0:8], "%Y%m%d").strftime(dateDisplayFormat)
+        departureDateTime = port.get("departureDateTime") 
+        printString = f"Day {day} ({arrivalDateDisplay}): {title}"
+        if portType == "EMBARK":
+            printString += f" ↑ {departureDateTime[9:13]}"
+        elif portType == "DEBARK":
+            printString += f" ↓ {arrivalDateTime[9:13]}"
+        elif title != "Cruising":
+            printString += f" ↓ {arrivalDateTime[9:13]} ↑ {departureDateTime[9:13]}"
+        if portType == "TENDERED":
+            printString += f" (Tendered)"
+        
+        portString = sanitizeString(printString)
+        print(portString)
+
+    if has_terminal_issues:
+        print("(^ means gangway up; v means gangway down)")
+    else:
+        print("(↑ means gangway up; ↓ means gangway down)")
+
+    return ports
+
+def getAllActivities(shipCode, sailDate):
+    headers = {
+        'appkey': appkey_mobile,
+        'accept': 'application/json',
+        'user-agent': user_agent_mobile,
+        'appversion': appversion_mobile,
+    }
+
+    params = {
+            'sailingID': shipCode + sailDate,
+            'limit': '200',
+            'offset': '0',
+            #'availableForSale': 'FALSE',
+        }
+    
+    products = []
+    for offset in range(0,10000,200):
+        params['offset'] = offset
+        
+        response = requests.get('https://api.rccl.com/en/royal/mobile/v3/products', params=params, headers=headers)
+        if response.json() is None or response.json().get("payload") is None:
+            return products
+            
+        tempProducts = response.json().get("payload").get("products")
+        for product in tempProducts:
+            productType = product.get("productType").get("productType")
+            
+            if productType != "NON_REVENUE_SCHEDULABLE":
+                continue
+                
+            productTitle = product.get("productTitle")
+            location = product.get("productLocation").get("locationTitle","")
+            
+            if location is None:
+                location = ""
+                
+            offering = product.get("offering")
+            for offer in offering:
+                if offer is not None:                    
+                    offeringDate = offer.get("offeringDate")
+                    offeringTime = offer.get("offeringTime")
+                    day = daysBetween(sailDate,offeringDate)
+                    products.append({'productTitle':productTitle,'location':location,'offeringDate':offeringDate,'offeringTime':offeringTime,'day':day})
+                    
+    return products
+
+
+# This is not needed, as dress code is in list of activities
+def printThemeNights(shipCode,sailDate,duration):
+    headers = {
+        'appkey': appkey_mobile,
+        'accept': 'application/json',
+        'user-agent': user_agent_mobile,
+        'appversion': appversion_mobile,
+    }
+
+    response = requests.get(f'https://api.rccl.com/en/royal/mobile/v1/ships/{shipCode}/sailDate/{sailDate}/needToKnow', headers=headers)
+
+    payload = response.json().get("payload")
+
+    word_list = ["dress", "attire", "theme","casual"]
+
+    foundTheme = 0
+    for needToKnowCard in payload.get("needToKnowCards"):
+        includedDayCards = needToKnowCard.get("includedDayCards")
+        date = needToKnowCard.get("cardIdentifier")[:8]
+        for card in includedDayCards:
+            title = card.get("cardTitle")
+            titleLower = card.get("cardTitle").lower()
+            #if date == '20260402': # I use this to find missing themes
+            #    print(title)
+                
+            if any(word.lower() in titleLower for word in word_list):
+                if "address" in titleLower:
+                    continue
+                foundTheme += 1
+                
+                day = daysBetween(sailDate,date)
+                subtitle = re.split(r'[.!]+', card.get("cardSubtitle"))[0].replace("<p>", "").replace("&nbsp;","")
+                offeringDate = datetime.strptime(date, "%Y%m%d").strftime("%B %d, %Y")
+                print(f"{GREEN}{offeringDate} (Day {day}){RESET} {title}: {subtitle}")
+    
+    if foundTheme == 0:
+        print("Themes Not Available")
+    elif foundTheme < duration:
+        print("Themes Not Fully Loaded")    
+    flush_print_buffer()
+
+
 if __name__ == "__main__":
     main()
