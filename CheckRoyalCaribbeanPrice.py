@@ -47,6 +47,7 @@ class Logger(object):
 
     def write(self, message):
         self.terminal.write(message)
+
         # Remove ANSI color codes so the text file is readable, not filled with \033
         clean_message = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', message)
         self.log.write(clean_message)
@@ -511,12 +512,12 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     
     if newPricePayload is None:
         if not forWatch:
-            tempString = YELLOW + f"\t{passengerName.ljust(10)} ({room}) has best price " 
+            tempString = YELLOW + f"\t{passengerName.ljust(10)} (Cabin {room}) has best price " 
             if perDayPrice:
                 tempString += "per night "
             tempString += f"for {title} of: {paidPrice} {currency} (No Longer for Sale)" + RESET
         else:
-            tempString = YELLOW + f"\t{passengerName.ljust(10)} not available or already booked" + RESET
+            tempString = YELLOW + f"\t{title} not available or already booked for {passengerName.ljust(10)}" + RESET
             
         print(tempString)
         return
@@ -580,7 +581,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
                 tempString += "per night "
             tempString += f"is higher than watch price: {paidPrice} {currency}" + RESET
         else:
-            tempString = GREEN + f"{passengerName.ljust(10)} ({room}) has best price "
+            tempString = GREEN + f"{passengerName.ljust(10)} (Cabin {room}) has best price "
             if perDayPrice:
                 tempString += "per night "
             tempString += f"for {title} of: {paidPrice} {currency}" + RESET
@@ -619,10 +620,8 @@ def processWatchListForBooking(access_token, accountId, session, reservationId, 
             continue
             
         # Format: [WATCH] Item Name - Passenger (Room): Message
-        #watchDisplayName = f"[WATCH] {name} - {passengerName} ({room})"
-        
         # The real name is displayed, so no need to display user provided name
-        watchDisplayName = f"[WATCH] {passengerName} ({room})"
+        watchDisplayName = f"[WATCH] {passengerName} (Cabin {room})"
         
         # Set placeholder values for order-specific fields since these aren't actual orders
         getNewBeveragePrice(
@@ -1076,8 +1075,10 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         print(f"Error getting voyage information (returned error code {response.status_code}). Try again later.\nQuitting.")
         sys.exit(1)
 
+    payload = response.json().get("payload")
+    print(payload)
     # Check for my orders and orders others booked for me
-    for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
+    for order in payload.get("myOrders") + payload.get("ordersOthersHaveBookedForMe"):
         orderCode = order.get("orderCode")
 
         # Match Order Date with Website (assuming Website follows locale)
