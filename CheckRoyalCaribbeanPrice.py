@@ -57,6 +57,12 @@ class Logger(object):
         self.terminal.flush()
         self.log.flush()
 
+def print_response(response):
+    """ Debug function to easily output API returns """
+    json_resp = json.dumps(response, indent=2)
+    print("API returned output:")
+    print(json_resp)
+
 def get_config_path():
     parser = argparse.ArgumentParser(description="Check Royal Caribbean Price")
     parser.add_argument('-c', '--config', type=str, default='config.yaml', help='Path to configuration YAML file (default: config.yaml)')
@@ -509,7 +515,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     perDayPrice = salesUnit in [ 'PER_NIGHT', 'PER_DAY' ]
     
     newPricePayload = payload.get("startingFromPrice")
-    
+
     if newPricePayload is None:
         if not forWatch:
             tempString = YELLOW + f"\t{passengerName.ljust(10)} (Cabin {room}) has best price " 
@@ -925,6 +931,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         insuranceFlag = False
         allIncludedFlag = False
         cruisePaidPriceFromAPI = result.get("prices",[])
+
         for curPrice in cruisePaidPriceFromAPI:
             priceTypeCode = curPrice.get("priceTypeCode","")
             amount = curPrice.get("amount",None)
@@ -1081,7 +1088,6 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
         sys.exit(1)
 
     payload = response.json().get("payload")
-    print(payload)
     # Check for my orders and orders others booked for me
     for order in payload.get("myOrders") + payload.get("ordersOthersHaveBookedForMe"):
         orderCode = order.get("orderCode")
