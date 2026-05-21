@@ -13,7 +13,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Can display active sitewide promotions (flash sales, percentage-off deals) for each sailing
 - ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also a vibe-coded Android App
 - ✅ Completely open source, free to use or modify.
-- ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, onboard activity schedule, MDR menus, and dress codes. No setup/account required! Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also made a vibe-coded Android App
+- ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, onboard activity schedule, MDR menus, and dress codes. No setup/account required! Runs on Windows, macOS, Linux, Docker, iOS, Android. Also made a vibe-coded Android App and a Web-based version.
    
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available. The script simply automates what you can do on the Royal Caribbean website.
@@ -567,3 +567,5 @@ There are no plans to add price checking/price history to this script. Use the `
 Cruise activity schedule, such as trivia and game shows, often only populated a few days before the cruise. Look at sailing 0) or 1) in the list to get an idea of current activities on the ship. This is much faster than changing your cruise in the App! Will print MDR menus if available. For Royal, look for the "Dress Code" activity and for Celebrity look for "Tonight's Attire" activity to see the theme nights.
 
 You can run this on the iPhone, following the iPhone install directions and download the [BrowseRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/BrowseRoyalCaribbeanPrice.py) to your phone, no need to edit as the Browse script does not need username/password.
+
+There is also an EXPIRIMENTAL vibe-coded browser based version of the BrowseRoyalCaribbeanPrice available at `https://jdeath.github.io/` . You must disable CORS in your broweser for it to work.
