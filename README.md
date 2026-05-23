@@ -67,7 +67,8 @@ This only runs cruise addon price checking. But pretty simple.
 1. Install Greasemonkey/TamperMoney Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
 1. Install [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) userscript from this repo
 1. Log into Royal/Celebrity website
-1. Click "Price Button" that now appears at bottom of page
+1. Click "Price Button" that now appears at bottom of page.
+1. You need to watch the logs for any price drops
 1. You can disable in exention settings to script if want to remove the button
   
 ## Install (iOS / iPhone)
