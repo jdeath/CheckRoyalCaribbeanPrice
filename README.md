@@ -64,7 +64,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 
 ## Install (Greasemonkey script, Firefox/Chrome)
 This only runs cruise addon price checking. But pretty simple.
-1. Install Greasemonkey/TamperMoney Extension. Follow step 1 at: `https://greasyfork.org`
+1. Install Greasemonkey/TamperMoney Extension. Follow step 1 at: [https://greasyfork.org](https://greasyfork.org)
 1. Install [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) userscript from this repo
 1. Log into Royal/Celebrity website
 1. Click "Check Price Button" at bottom of page
