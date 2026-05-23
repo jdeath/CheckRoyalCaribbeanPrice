@@ -11,7 +11,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
 - ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, supports discounts)  
 - ✅ Can display active sitewide promotions (flash sales, percentage-off deals) for each sailing
-- ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also a vibe-coded Android App
+- ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also a vibe-coded Android App and Greasemonkey script
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, onboard activity schedule, MDR menus, and dress codes. No setup/account required! Runs on Windows, macOS, Linux, Docker, iOS, Android. Also made a vibe-coded Android App and a Web-based version.
    
@@ -62,6 +62,12 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise`
 
+## Install (Greasemonkey script, Firefox/Chrome)
+1. Install Greasemonkey/TamperMoney Extension. Follow step 1 at: `https://greasyfork.org`
+1. Install [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) userscript from this repo
+1. Log into Royal/Celebrity website
+1. Click "Check Price Button" at bottom of page
+  
 ## Install (iOS / iPhone)
 iOS can run a stripped down version or an almost full version that supports everything except apprise! Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
 
