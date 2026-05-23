@@ -62,12 +62,13 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise`
 
-## Install (Greasemonkey script, Firefox/Chrome)
+## Install (Greasemonkey script, runs in your browser, no Python needed)
 This only runs cruise addon price checking. But pretty simple.
-1. Install Greasemonkey/TamperMoney Extension. Follow step 1 at: [https://greasyfork.org](https://greasyfork.org)
+1. Install Greasemonkey/TamperMoney Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
 1. Install [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) userscript from this repo
 1. Log into Royal/Celebrity website
-1. Click "Check Price Button" at bottom of page
+1. Click "Price Button" that now appears at bottom of page
+1. You can disable in exention settings to script if want to remove the button
   
 ## Install (iOS / iPhone)
 iOS can run a stripped down version or an almost full version that supports everything except apprise! Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
