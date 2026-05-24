@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Check Royal Caribbean Price
 // @namespace    http://tampermonkey.net/
-// @version      1.0.4
+// @version      1.0.5
 // @description  Check cruise prices, add-on prices, and watch list directly in-browser
 // @author       jdeath / ported to Greasemonkey
 // @match        https://www.royalcaribbean.com/*
@@ -630,7 +630,7 @@
       btn.textContent = 'Close';
       panel.innerHTML = '<div style="color:#666;">Loading...</div>';
       runPriceCheck().catch(function(err) {
-        panel.innerHTML = '<div style="color:#c00;font-weight:bold;">Fatal error: ' + escapeAttr(err.message) + '</div><div style="font-size:11px;color:#888;white-space:pre-wrap;word-wrap:break-word;">' + escapeAttr(err.stack || '') + '</div>';
+        panel.innerHTML = '<div style="color:#c00;font-weight:bold;">Fatal error: ' + escapeAttr(err.message) + '</div>';
         console.error(err);
       });
     } else {
@@ -787,21 +787,7 @@
 
       var auth = await extractAuth();
       if (!auth) {
-        var debugInfo = '<div style="color:#c00;font-weight:bold;">Not authenticated. Please log in to the website first, then reload and try again.</div>';
-        debugInfo += '<details style="font-size:11px;color:#888;"><summary>Debug info</summary>';
-        debugInfo += '<div>User-Agent: ' + escapeAttr(navigator.userAgent) + '</div>';
-        debugInfo += '<div>Hostname: ' + escapeAttr(location.hostname) + '</div>';
-        debugInfo += '<div>localStorage keys: ' + localStorage.length + '</div>';
-        debugInfo += '<div>sessionStorage keys: ' + sessionStorage.length + '</div>';
-        debugInfo += '<div>cookies: ' + escapeAttr(document.cookie.substring(0, 200)) + '</div>';
-        if (indexedDB && indexedDB.databases) {
-          try {
-            var dbs = await indexedDB.databases();
-            debugInfo += '<div>IndexedDB databases: ' + dbs.map(function(d) { return d.name; }).join(', ') + '</div>';
-          } catch(_) {}
-        }
-        debugInfo += '</details>';
-        appendHTML(debugInfo);
+        appendHTML('<div style="color:#c00;font-weight:bold;">Not authenticated. Please log in to the website first, then reload and try again.</div>');
         return;
       }
 
@@ -814,7 +800,6 @@
       appendHTML('<div>Cruise Line: ' + friendlyCruiseLine + '</div>');
 
       await loadShipDictionary();
-      appendHTML('<div>Loading profile...</div>');
 
       var profile = await getProfile(auth.accountId, auth.accessToken);
       var loyalty = profile.loyaltyInformation;
@@ -856,7 +841,6 @@
       };
 
       appendHTML('<hr style="margin:8px 0;">');
-      appendHTML('<div>Loading bookings...</div>');
       var bookings = await getVoyages(auth.accountId, auth.accessToken, brandCode);
       if (!bookings.length) {
         appendHTML('<div>No bookings found.</div>');
@@ -867,8 +851,7 @@
         await processBooking(bookings[bi], auth, discountFlags, cruiseLineName, isRoyal);
       }
     } catch (err) {
-      appendHTML('<div style="color:#c00;font-weight:bold;">Error: ' + escapeAttr(err.message) + '</div>');
-      appendHTML('<details style="font-size:11px;color:#888;"><summary>Stack trace</summary><pre style="white-space:pre-wrap;word-wrap:break-word;">' + escapeAttr(err.stack || 'no stack') + '</pre></details>');
+      appendHTML('<div style="color:#c00;">Error: ' + err.message + '</div>');
       console.error(err);
     }
   }
