@@ -67,7 +67,7 @@ This only runs cruise addon price checking (no notifcation or cabin price checki
 1. Install Greasemonkey/TamperMoney Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
 1. Click [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) link to install userscript from this repo.
 1. Log into Royal/Celebrity website
-1. Click "Price Button" that now appears at bottom of page when logged into Royal Caribbean website.
+1. Click "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
 1. You need to watch the logs for any price drops
 1. You can disable in exention settings to script if want to remove the button
   
