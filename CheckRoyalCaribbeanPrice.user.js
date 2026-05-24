@@ -68,6 +68,7 @@
      Auth helpers
      ============================================================ */
   var cachedAuth = null;
+  var foundKeys = {};
 
   function decodeJwtPayload(token) {
     try {
@@ -133,7 +134,7 @@
       '    if (f) { _rcclTokenData.accessToken = f; _rcclTokenData.key = "__INITIAL_STATE__"; }\n' +
       '  }\n' +
       '  if (_rcclTokenData.accessToken) {\n' +
-      '    try { _rcclTokenData.accountId = JSON.parse(atob(_rcclTokenData.accessToken.split(".")[1] + "==")) .sub; } catch(e){}\n' +
+      '    try { var _p = JSON.parse(atob(_rcclTokenData.accessToken.split(".")[1] + "==")); _rcclTokenData.accountId = _p.sub; _rcclTokenData.email = _p.email || _p.preferred_username || ""; } catch(e){}\n' +
       '  }\n' +
       '})();\n';
     document.head.appendChild(script);
@@ -147,10 +148,10 @@
     // First try: read from page-injected data
     injectTokenReader();
     if (window._rcclTokenData && window._rcclTokenData.accessToken) {
-      console.log('[RCCL] Auth found via injected reader from ' + window._rcclTokenData.key);
       cachedAuth = {
         accessToken: window._rcclTokenData.accessToken,
-        accountId: window._rcclTokenData.accountId
+        accountId: window._rcclTokenData.accountId,
+        email: window._rcclTokenData.email || ''
       };
       return cachedAuth;
     }
@@ -179,7 +180,6 @@
       }
     }
 
-    console.warn('[RCCL] Auth not found');
     return null;
   }
 
@@ -384,19 +384,9 @@
       };
       var url = API_BASE + '/en/royal/web/commerce-api/catalog/v2/' + ship + '/categories/' + prefix + '/products/' + product + '?' + params;
       var resp = await httpGet(url, { headers: headers });
-      if (!resp.ok) {
-        console.log('[RCCL] getProductPrice HTTP ' + resp.status + ' for product=' + product + ' gPid=' + passengerId);
-        return null;
-      }
-      var payload = resp.data ? resp.data.payload : null;
-      if (!payload) {
-        console.log('[RCCL] getProductPrice null payload for product=' + product + ' gPid=' + passengerId);
-      }
-      return payload;
-    } catch (e) {
-      console.log('[RCCL] getProductPrice EXCEPTION for product=' + product + ' gPid=' + passengerId + ' err=' + e.message);
-      return null;
-    }
+      if (!resp.ok) return null;
+      return resp.data ? resp.data.payload || null : null;
+    } catch (e) { return null; }
   }
 
   /* ============================================================
@@ -518,7 +508,6 @@
   function createUI() {
     if (document.getElementById('rc-price-check-btn')) return;
     if (!document.body) return;
-    console.log('[RCCL] Creating UI button');
     var btn = document.createElement('div');
     btn.id = 'rc-price-check-btn';
     btn.textContent = 'Price Check';
@@ -541,7 +530,6 @@
       'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
       'font-size:13px;line-height:1.5;padding:16px;';
     document.body.appendChild(panel);
-    console.log('[RCCL] UI created successfully');
   }
 
   function togglePanel() {
@@ -697,6 +685,7 @@
      ============================================================ */
   async function runPriceCheck() {
     clearPanel();
+    foundKeys = {};
     renderSettings();
 
     var auth = extractAuth();
@@ -706,7 +695,8 @@
     }
 
     appendHTML('<div style="font-weight:bold;font-size:15px;margin-bottom:8px;">Price Check Report &mdash; ' + new Date().toLocaleString() + '</div>');
-    appendHTML('<div>Account ID: ' + auth.accountId + '</div>');
+    var email = auth.email || auth.accountId;
+    appendHTML('<div>Account: ' + email + '</div>');
 
     var isRoyal = location.hostname.indexOf('royal') !== -1;
     var cruiseLineName = isRoyal ? 'royalcaribbean' : 'celebritycruises';
@@ -982,8 +972,6 @@
 
     appendHTML('<div style="font-weight:bold;margin-top:8px;">Add-on Orders:</div>');
 
-    var foundKeys = {};
-
     for (var oi = 0; oi < allOrders.length; oi++) {
       var order = allOrders[oi];
       if (!order.orderTotals || order.orderTotals.total <= 0) continue;
@@ -1155,7 +1143,6 @@
   /* ============================================================
      Init
      ============================================================ */
-  console.log('[RCCL] Script loaded on ' + location.hostname);
   function tryCreateUI() {
     if (document.body) { createUI(); }
     else { setTimeout(tryCreateUI, 200); }
@@ -1167,7 +1154,6 @@
   }
   setTimeout(function() {
     if (!document.getElementById('rc-price-check-btn')) {
-      console.warn('[RCCL] Timeout fallback: forcing UI');
       tryCreateUI();
     }
   }, 3000);
