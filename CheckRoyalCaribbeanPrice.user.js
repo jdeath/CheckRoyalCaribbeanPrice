@@ -26,23 +26,36 @@
      ============================================================ */
   function httpGet(url, opts) {
     opts = opts || {};
-    var fetchOpts = {
-      method: opts.method || "GET",
-      headers: opts.headers || {},
-      credentials: "include",
-    };
-    if (opts.data) fetchOpts.body = opts.data;
-    return fetch(url, fetchOpts).then(function(resp) {
-      var parser = opts.responseType === "text" ? resp.text() : resp.json();
-      return parser.then(function(data) {
-        return { ok: resp.ok, status: resp.status, data: data };
-      }).catch(function(parseErr) {
-        return resp.text().then(function(body) {
-          throw new Error('Parse failed for ' + url + ' (HTTP ' + resp.status + '): ' + parseErr.message + '. Body preview: ' + body.substring(0, 200));
-        });
-      });
-    }).catch(function(err) {
-      throw new Error('Load failed for ' + url + ' (' + err.name + '): ' + err.message);
+    var method = opts.method || "GET";
+    var headers = opts.headers || {};
+    var body = opts.data || null;
+    var isText = opts.responseType === "text";
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open(method, url, true);
+      xhr.withCredentials = true;
+      for (var h in headers) {
+        if (headers.hasOwnProperty(h)) xhr.setRequestHeader(h, headers[h]);
+      }
+      if (isText) xhr.responseText = 'text';
+      xhr.onload = function() {
+        var data;
+        try {
+          data = isText ? xhr.responseText : JSON.parse(xhr.responseText);
+        } catch(e) {
+          reject(new Error('Parse failed for ' + url + ' (HTTP ' + xhr.status + '): ' + e.message + '. Body preview: ' + xhr.responseText.substring(0, 200)));
+          return;
+        }
+        resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data: data });
+      };
+      xhr.onerror = function() {
+        reject(new Error('Load failed for ' + url + ': XHR error (status ' + xhr.status + ')'));
+      };
+      xhr.ontimeout = function() {
+        reject(new Error('Load timed out for ' + url));
+      };
+      xhr.timeout = 30000;
+      xhr.send(body);
     });
   }
 
