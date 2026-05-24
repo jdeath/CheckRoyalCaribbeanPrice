@@ -63,11 +63,12 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. `pip install requests Apprise`
 
 ## Install (Greasemonkey script, runs in your browser, no Python needed)
-This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox. Currently does not work on iOS Userscripts extension or Gear Browsers.
+This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox and iOS using userscripts extension for Safari and Gear Browser. 
 
 1. Install Greasemonkey/TamperMonkey Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
-1. Click [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) link to install userscript from this repo.
-1. Log into Royal/Celebrity website
+   - For iOS, recommend installing the free Gear Browser option in link above. Much easier to get working than the userscripts extension. The paid TamperMonkey options have not been tested.
+1. Once browser or browser extension installed, click [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) link to install userscript from this repo. If using iOS Gear Browser, must click in that browser.
+1. Log into Royal/Celebrity website in browser with extension installed
 1. Click "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
 1. You need to watch the logs for any price drops
 1. You can disable in exention settings to script if want to remove the button
