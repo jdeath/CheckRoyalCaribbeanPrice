@@ -63,7 +63,8 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. `pip install requests Apprise`
 
 ## Install (Greasemonkey script, runs in your browser, no Python needed)
-This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned.
+This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox. Currently does not work on iOS Userscripts extension or Gear Browsers.
+
 1. Install Greasemonkey/TamperMonkey Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
 1. Click [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) link to install userscript from this repo.
 1. Log into Royal/Celebrity website
