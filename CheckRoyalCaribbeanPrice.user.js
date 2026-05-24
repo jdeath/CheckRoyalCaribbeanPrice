@@ -36,7 +36,13 @@
       var parser = opts.responseType === "text" ? resp.text() : resp.json();
       return parser.then(function(data) {
         return { ok: resp.ok, status: resp.status, data: data };
+      }).catch(function(parseErr) {
+        return resp.text().then(function(body) {
+          throw new Error('Parse failed for ' + url.substring(0, 120) + ' (HTTP ' + resp.status + '): ' + parseErr.message + '. Body preview: ' + body.substring(0, 200));
+        });
       });
+    }).catch(function(err) {
+      throw new Error('Load failed for ' + url.substring(0, 120) + ': ' + err.message);
     });
   }
 
@@ -613,7 +619,7 @@
       btn.textContent = 'Close';
       panel.innerHTML = '<div style="color:#666;">Loading...</div>';
       runPriceCheck().catch(function(err) {
-        panel.innerHTML = '<div style="color:#c00;font-weight:bold;">Fatal error: ' + escapeAttr(err.message) + '</div>';
+        panel.innerHTML = '<div style="color:#c00;font-weight:bold;">Fatal error: ' + escapeAttr(err.message) + '</div><div style="font-size:11px;color:#888;white-space:pre-wrap;word-wrap:break-word;">' + escapeAttr(err.stack || '') + '</div>';
         console.error(err);
       });
     } else {
@@ -797,6 +803,7 @@
       appendHTML('<div>Cruise Line: ' + friendlyCruiseLine + '</div>');
 
       await loadShipDictionary();
+      appendHTML('<div>Loading profile...</div>');
 
       var profile = await getProfile(auth.accountId, auth.accessToken);
       var loyalty = profile.loyaltyInformation;
@@ -838,6 +845,7 @@
       };
 
       appendHTML('<hr style="margin:8px 0;">');
+      appendHTML('<div>Loading bookings...</div>');
       var bookings = await getVoyages(auth.accountId, auth.accessToken, brandCode);
       if (!bookings.length) {
         appendHTML('<div>No bookings found.</div>');
@@ -848,7 +856,8 @@
         await processBooking(bookings[bi], auth, discountFlags, cruiseLineName, isRoyal);
       }
     } catch (err) {
-      appendHTML('<div style="color:#c00;">Error: ' + err.message + '</div>');
+      appendHTML('<div style="color:#c00;font-weight:bold;">Error: ' + escapeAttr(err.message) + '</div>');
+      appendHTML('<details style="font-size:11px;color:#888;"><summary>Stack trace</summary><pre style="white-space:pre-wrap;word-wrap:break-word;">' + escapeAttr(err.stack || 'no stack') + '</pre></details>');
       console.error(err);
     }
   }
