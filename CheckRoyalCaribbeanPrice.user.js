@@ -630,11 +630,15 @@
 
   function clearPanel() {
     var panel = document.getElementById('rc-price-check-panel');
+    if (!panel) createUI();
+    panel = document.getElementById('rc-price-check-panel');
     panel.innerHTML = '';
   }
 
   function appendHTML(html) {
     var panel = document.getElementById('rc-price-check-panel');
+    if (!panel) createUI();
+    panel = document.getElementById('rc-price-check-panel');
     var div = document.createElement('div');
     div.innerHTML = html;
     panel.appendChild(div);
@@ -755,27 +759,41 @@
      Main price check flow
      ============================================================ */
   async function runPriceCheck() {
-    clearPanel();
-    foundKeys = {};
-    renderSettings();
-
-    var auth = await extractAuth();
-    if (!auth) {
-      appendHTML('<div style="color:#c00;font-weight:bold;">Not authenticated. Please log in to the website first, then reload and try again.</div>');
-      return;
-    }
-
-    appendHTML('<div style="font-weight:bold;font-size:15px;margin-bottom:8px;">Price Check Report &mdash; ' + new Date().toLocaleString() + '</div>');
-
-    var isRoyal = location.hostname.indexOf('royal') !== -1;
-    var cruiseLineName = isRoyal ? 'royalcaribbean' : 'celebritycruises';
-    var friendlyCruiseLine = isRoyal ? 'Royal Caribbean' : 'Celebrity Cruises';
-    var brandCode = isRoyal ? 'R' : 'C';
-    appendHTML('<div>Cruise Line: ' + friendlyCruiseLine + '</div>');
-
-    await loadShipDictionary();
-
     try {
+      clearPanel();
+      foundKeys = {};
+      renderSettings();
+
+      var auth = await extractAuth();
+      if (!auth) {
+        var debugInfo = '<div style="color:#c00;font-weight:bold;">Not authenticated. Please log in to the website first, then reload and try again.</div>';
+        debugInfo += '<details style="font-size:11px;color:#888;"><summary>Debug info</summary>';
+        debugInfo += '<div>User-Agent: ' + escapeAttr(navigator.userAgent) + '</div>';
+        debugInfo += '<div>Hostname: ' + escapeAttr(location.hostname) + '</div>';
+        debugInfo += '<div>localStorage keys: ' + localStorage.length + '</div>';
+        debugInfo += '<div>sessionStorage keys: ' + sessionStorage.length + '</div>';
+        debugInfo += '<div>cookies: ' + escapeAttr(document.cookie.substring(0, 200)) + '</div>';
+        if (indexedDB && indexedDB.databases) {
+          try {
+            var dbs = await indexedDB.databases();
+            debugInfo += '<div>IndexedDB databases: ' + dbs.map(function(d) { return d.name; }).join(', ') + '</div>';
+          } catch(_) {}
+        }
+        debugInfo += '</details>';
+        appendHTML(debugInfo);
+        return;
+      }
+
+      appendHTML('<div style="font-weight:bold;font-size:15px;margin-bottom:8px;">Price Check Report &mdash; ' + new Date().toLocaleString() + '</div>');
+
+      var isRoyal = location.hostname.indexOf('royal') !== -1;
+      var cruiseLineName = isRoyal ? 'royalcaribbean' : 'celebritycruises';
+      var friendlyCruiseLine = isRoyal ? 'Royal Caribbean' : 'Celebrity Cruises';
+      var brandCode = isRoyal ? 'R' : 'C';
+      appendHTML('<div>Cruise Line: ' + friendlyCruiseLine + '</div>');
+
+      await loadShipDictionary();
+
       var profile = await getProfile(auth.accountId, auth.accessToken);
       var loyalty = profile.loyaltyInformation;
       if (loyalty) {
