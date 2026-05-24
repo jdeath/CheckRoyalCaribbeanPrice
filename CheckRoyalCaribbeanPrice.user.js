@@ -593,13 +593,13 @@
 
     var panel = document.createElement('div');
     panel.id = 'rc-price-check-panel';
-    panel.style.cssText =
-      'display:none;position:fixed;bottom:70px;right:20px;z-index:2147483647;' +
-      'width:720px;max-height:80vh;overflow-y:auto;overflow-x:hidden;' +
-      'background:#fff;color:#222;border-radius:10px;' +
-      'box-shadow:0 4px 24px rgba(0,0,0,0.25);' +
-      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
-      'font-size:13px;line-height:1.5;padding:16px;';
+   panel.style.cssText =
+       'display:none;position:fixed;bottom:70px;right:20px;left:20px;z-index:2147483647;' +
+       'max-width:720px;margin-right:0;margin-left:auto;max-height:80vh;overflow-y:auto;overflow-x:hidden;' +
+       'background:#fff;color:#222;border-radius:10px;' +
+       'box-shadow:0 4px 24px rgba(0,0,0,0.25);' +
+       'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+       'font-size:13px;line-height:1.5;padding:16px;word-wrap:break-word;';
     document.body.appendChild(panel);
   }
 
