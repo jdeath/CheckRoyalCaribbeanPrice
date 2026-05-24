@@ -17,7 +17,7 @@
      Constants
      ============================================================ */
   const APPKEY_WEB = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm';
-  const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0';
+  const USER_AGENT = navigator.userAgent;
   const API_BASE = 'https://aws-prd.api.rccl.com';
   const DATE_FMT_OPTIONS = { year: 'numeric', month: 'short', day: 'numeric' };
 
@@ -142,7 +142,77 @@
     setTimeout(function() { if (script.parentNode) script.parentNode.removeChild(script); }, 100);
   }
 
-  function extractAuth() {
+  async function _scanIndexedDB() {
+    try {
+      if (!indexedDB || !indexedDB.databases) return null;
+      var dbs = await indexedDB.databases();
+      for (var di = 0; di < dbs.length; di++) {
+        try {
+          var db = await new Promise(function (resolve) {
+            var req = indexedDB.open(dbs[di].name);
+            req.onsuccess = function () { resolve(req.result); };
+            req.onerror = function () { resolve(null); };
+            req.onupgradeneeded = function () { req.transaction && req.transaction.abort(); resolve(null); };
+          });
+          if (!db) continue;
+          var stores = db.objectStoreNames;
+          for (var si = 0; si < stores.length; si++) {
+            try {
+              var tx = db.transaction(stores[si], 'readonly');
+              var store = tx.objectStore(stores[si]);
+              var cursor = await new Promise(function (resolve) {
+                var req = store.openCursor();
+                req.onsuccess = function () { resolve(req.result); };
+                req.onerror = function () { resolve(null); };
+              });
+              while (cursor) {
+                var val = cursor.value;
+                var found = null;
+                if (typeof val === 'string' && isJwt(val)) {
+                  var pl = decodeJwtPayload(val);
+                  if (pl && pl.sub) found = val;
+                } else if (typeof val === 'object' && val !== null) {
+                  var nested = findJwtSync(val);
+                  if (nested) {
+                    var pl2 = decodeJwtPayload(nested);
+                    if (pl2 && pl2.sub) found = nested;
+                  }
+                }
+                if (found) {
+                  var payload = decodeJwtPayload(found);
+                  cachedAuth = { accessToken: found, accountId: payload.sub, email: payload.email || payload.preferred_username || '' };
+                  db.close();
+                  return cachedAuth;
+                }
+                var nextCursor = await new Promise(function (resolve) {
+                  var req = cursor.continue();
+                  req.onsuccess = function () { resolve(req.result); };
+                  req.onerror = function () { resolve(null); };
+                });
+                cursor = nextCursor;
+              }
+            } catch (_) {}
+          }
+          db.close();
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function findJwtSync(obj, depth) {
+    depth = depth || 0;
+    if (depth > 10 || !obj || typeof obj !== 'object') return null;
+    if (typeof obj === 'string' && isJwt(obj)) return obj;
+    var keys = Object.keys(obj);
+    for (var i = 0; i < keys.length; i++) {
+      var f = findJwtSync(obj[keys[i]], depth + 1);
+      if (f) return f;
+    }
+    return null;
+  }
+
+  async function extractAuth() {
     if (cachedAuth) return cachedAuth;
 
     // First try: read from page-injected data
@@ -180,7 +250,8 @@
       }
     }
 
-    return null;
+    // Fourth try: IndexedDB (iOS Safari may store tokens here)
+    return await _scanIndexedDB();
   }
 
   /* ============================================================
@@ -188,7 +259,7 @@
      ============================================================ */
   async function apiCall(url, options) {
     options = options || {};
-    var auth = extractAuth();
+    var auth = await extractAuth();
     if (!auth) throw new Error('Not authenticated. Please log in to the website first.');
     var headers = Object.assign({}, options.headers || {}, {
       'Access-Token': auth.accessToken,
@@ -369,7 +440,7 @@
      ============================================================ */
   async function getProductPrice(ship, prefix, product, reservationId, sailDate, passengerId, currency) {
     try {
-      var auth = extractAuth();
+      var auth = await extractAuth();
       if (!auth) return null;
       var params = new URLSearchParams({
         reservationId: reservationId,
@@ -688,7 +759,7 @@
     foundKeys = {};
     renderSettings();
 
-    var auth = extractAuth();
+    var auth = await extractAuth();
     if (!auth) {
       appendHTML('<div style="color:#c00;font-weight:bold;">Not authenticated. Please log in to the website first, then reload and try again.</div>');
       return;
