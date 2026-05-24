@@ -695,8 +695,6 @@
     }
 
     appendHTML('<div style="font-weight:bold;font-size:15px;margin-bottom:8px;">Price Check Report &mdash; ' + new Date().toLocaleString() + '</div>');
-    var email = auth.email || auth.accountId;
-    appendHTML('<div>Account: ' + email + '</div>');
 
     var isRoyal = location.hostname.indexOf('royal') !== -1;
     var cruiseLineName = isRoyal ? 'royalcaribbean' : 'celebritycruises';
@@ -723,9 +721,11 @@
         }
       }
 
-      var contact = profile.contactInformation;
-      var state = null;
-      if (contact && contact.address) {
+     var contact = profile.contactInformation;
+       var email = (contact && contact.email) ? contact.email : auth.accountId;
+       appendHTML('<div>Account: ' + email + '</div>');
+       var state = null;
+       if (contact && contact.address) {
         var addr = contact.address;
         if (addr.residencyCountryCode === 'USA' || addr.residencyCountryCode === 'CAN') {
           state = addr.state;
