@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Check Royal Caribbean Price
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Check cruise prices, add-on prices, and watch list directly in-browser
 // @author       jdeath / ported to Greasemonkey
 // @match        https://www.royalcaribbean.com/*
@@ -611,7 +611,11 @@
     if (panelOpen) {
       panel.style.display = 'block';
       btn.textContent = 'Close';
-      runPriceCheck();
+      panel.innerHTML = '<div style="color:#666;">Loading...</div>';
+      runPriceCheck().catch(function(err) {
+        panel.innerHTML = '<div style="color:#c00;font-weight:bold;">Fatal error: ' + escapeAttr(err.message) + '</div>';
+        console.error(err);
+      });
     } else {
       panel.style.display = 'none';
       btn.textContent = 'Price Check';
