@@ -38,11 +38,11 @@
         return { ok: resp.ok, status: resp.status, data: data };
       }).catch(function(parseErr) {
         return resp.text().then(function(body) {
-          throw new Error('Parse failed for ' + url.substring(0, 120) + ' (HTTP ' + resp.status + '): ' + parseErr.message + '. Body preview: ' + body.substring(0, 200));
+          throw new Error('Parse failed for ' + url + ' (HTTP ' + resp.status + '): ' + parseErr.message + '. Body preview: ' + body.substring(0, 200));
         });
       });
     }).catch(function(err) {
-      throw new Error('Load failed for ' + url.substring(0, 120) + ': ' + err.message);
+      throw new Error('Load failed for ' + url + ' (' + err.name + '): ' + err.message);
     });
   }
 
