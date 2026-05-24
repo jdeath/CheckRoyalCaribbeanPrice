@@ -819,7 +819,7 @@ def printMDRMenus(shipCode, sailDate, venueIds,ports):
                 print("")       
 
 ##################################
-# Dead/Obsolete functions
+# Dead/Obsolete/Unused functions
 ##################################
 def getShips():
     headers = {
@@ -1030,6 +1030,9 @@ def printThemeNights(shipCode,sailDate,duration):
         print("Themes Not Fully Loaded")    
     flush_print_buffer()
 
+##################################
+# End Dead/Obsolete/Unused functions
+##################################
 
 if __name__ == "__main__":
     main()
