@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Check Royal Caribbean Price
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @description  Check cruise prices, add-on prices, and watch list directly in-browser
 // @author       jdeath / ported to Greasemonkey
 // @match        https://www.royalcaribbean.com/*
 // @match        https://www.celebritycruises.com/*
-// @grant        GM_xmlhttpRequest
+// @grant        none
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -31,24 +31,29 @@
     var body = opts.data || null;
     var isText = opts.responseType === "text";
     return new Promise(function(resolve, reject) {
-      GM_xmlhttpRequest({
-        method: method,
-        url: url,
-        headers: headers,
-        data: body,
-        responseType: isText ? 'text' : 'json',
-        timeout: 30000,
-        onload: function(resp) {
-          var data = isText ? resp.responseText : resp.response;
-          resolve({ ok: resp.status >= 200 && resp.status < 300, status: resp.status, data: data });
-        },
-        onerror: function(resp) {
-          reject(new Error('Load failed for ' + url + ': GM error (status ' + resp.status + ') - ' + resp.error));
-        },
-        ontimeout: function() {
-          reject(new Error('Load timed out for ' + url));
-        },
-      });
+      var xhr = new XMLHttpRequest();
+      xhr.open(method, url, true);
+      for (var h in headers) {
+        if (headers.hasOwnProperty(h)) xhr.setRequestHeader(h, headers[h]);
+      }
+      xhr.onload = function() {
+        var data;
+        try {
+          data = isText ? xhr.responseText : JSON.parse(xhr.responseText);
+        } catch(e) {
+          reject(new Error('Parse failed for ' + url + ' (HTTP ' + xhr.status + '): ' + e.message + '. Body: ' + xhr.responseText.substring(0, 200)));
+          return;
+        }
+        resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data: data });
+      };
+      xhr.onerror = function() {
+        reject(new Error('Load failed for ' + url + ': XHR error (status ' + xhr.status + ')'));
+      };
+      xhr.ontimeout = function() {
+        reject(new Error('Load timed out for ' + url));
+      };
+      xhr.timeout = 30000;
+      xhr.send(body);
     });
   }
 
