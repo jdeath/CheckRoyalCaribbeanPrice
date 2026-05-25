@@ -71,7 +71,6 @@ This only runs cruise addon price checking (no notifcation or cabin price checki
 1. Log into Royal/Celebrity website in browser with extension installed
 1. Click "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
 1. You need to watch the logs for any price drops
-1. You can disable in exention settings to script if want to remove the button
   
 ## Install (iOS / iPhone)
 iOS can run a stripped down version or an almost full version that supports everything except apprise! Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
