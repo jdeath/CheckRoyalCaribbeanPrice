@@ -516,7 +516,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
                 tempString += "per night "
             tempString += f"for {title} of: {paidPrice} {currency} (No Longer for Sale)" + RESET
         else:
-            tempString = YELLOW + f"\t{passengerName.ljust(10)} not available or already booked" + RESET
+            tempString = YELLOW + f"\t{passengerName.ljust(10)} {title} not available or already booked" + RESET
             
         print(tempString)
         return
