@@ -11,7 +11,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 - ✅ Can create a "watchlist" to check prices of items you have not purchased (thanks @jhedlund)  
 - ✅ Can also watchlist **cabin prices** with just a booking URL (no login required, supports discounts)  
 - ✅ Can display active sitewide promotions (flash sales, percentage-off deals) for each sailing
-- ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also a vibe-coded Android App
+- ✅ Runs on Windows, macOS, Linux, Docker, iOS, Android, and Home Assistant. Also a vibe-coded Android App and Greasemonkey script
 - ✅ Completely open source, free to use or modify.
 - ✅ Separate `BrowseRoyalCaribbeanPrice.py` script lets you look up any cruise's addon prices, cabin prices, onboard activity schedule, MDR menus, and dress codes. No setup/account required! Runs on Windows, macOS, Linux, Docker, iOS, Android. Also made a vibe-coded Android App and a Web-based version.
    
@@ -62,6 +62,16 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
 1. `pip install requests Apprise`
 
+## Install (Greasemonkey script, runs in your browser, no Python needed)
+This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox and iOS using userscripts extension for Safari and Gear Browser. 
+
+1. Install Greasemonkey/TamperMonkey Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
+   - For iOS, recommend installing the free Gear Browser option in link above. Much easier to get working than the userscripts extension. The paid TamperMonkey options have not been tested.
+1. Once browser or browser extension installed, click [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) link to install userscript from this repo. If using iOS Gear Browser, must click in that browser.
+1. Log into Royal/Celebrity website in browser with extension installed
+1. Click "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
+1. You need to watch the logs for any price drops
+  
 ## Install (iOS / iPhone)
 iOS can run a stripped down version or an almost full version that supports everything except apprise! Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
 
