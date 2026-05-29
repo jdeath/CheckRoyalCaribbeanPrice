@@ -607,8 +607,6 @@ def main() -> None:
 
         if config.minimum_saving_alert is not None:
             log(YELLOW + f"Only alerting for savings >= {config.minimum_saving_alert}" + RESET)
-        else:
-            log("config.minimum_saving_alert was NONE")
 
         if config.currency_override:
             log(YELLOW + f"Overriding Current Price Currency to {config.currency_override}" + RESET)
@@ -644,8 +642,9 @@ def main() -> None:
 
             # Close the account session and prepare for the next one
             account_info.access.session.close()
-            log("Sleeping for 5 seconds to allow API to cool down between accounts")
-            time.sleep(5)
+            if len(config.accounts) > 1:
+                log("Sleeping for 5 seconds to allow API to cool down between accounts")
+                time.sleep(5)
 
         # Process the anonymous prospective cruise watchlist using the config dataclass property
         if getattr(config, 'prospective_cruises', None):
@@ -2152,7 +2151,8 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
     sailing_ID = f"{ship}{start_date}"
 
     all_promos = fetch_promos('homepage')
-    if not all_promos:
+    if not all_promos and config.show_promos:
+#    if not all_promos:
         log("No active promos to display")
         return
 
