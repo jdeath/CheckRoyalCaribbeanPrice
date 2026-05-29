@@ -1,3 +1,4 @@
+from __future__ import annotations
 import argparse
 import base64
 import json
@@ -311,7 +312,7 @@ class ShipRegistry:
 
     def get_ship(self, code: str) -> Ship:
         # Returns the ship if found, otherwise a new 'Unknown' ship object
-        return self.ships.get(code, Ship(code=code))
+        return self.ships.get(code, Ship(code=code)).name
 
 @dataclass
 class CruiseURLParams:
@@ -2175,25 +2176,25 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
 
         banner = banner_by_id.get(promo_ID)
         if banner:
-            promoLine = f"[PROMO] {banner.get('heading3', '')} {banner.get('heading4', '')} - {banner.get('heading1', '')} {date_range}"
+            promo_line = f"[PROMO] {banner.get('heading3', '')} {banner.get('heading4', '')} - {banner.get('heading1', '')} {date_range}"
         else:
             template = next((t for t in promo.get("templates", []) if t.get("type") == "HOME_HERO_LOCKUP"), None)
             if not template:
                 continue
 
             description = ""
-            lockupMedia = template.get("lockupMedia")
-            if lockupMedia and lockupMedia.get("source"):
-                filename = lockupMedia["source"].get("path", "").split("/")[-1]
+            lockup_media = template.get("lockupMedia")
+            if lockup_media and lockup_media.get("source"):
+                filename = lockup_media["source"].get("path", "").split("/")[-1]
                 match = re.search(r'lockup-(.+?)_[A-Z]{2}\.', filename)
                 if match:
                     description = match.group(1).replace("-", " ").upper()
 
             category_code = template.get("categoryCode", "")
-            promo_line = f"[PROMO] {description or promoId}"
+            promo_line = f"[PROMO] {description or promo_ID}"
             if category_code:
                 promo_line += f" ({category_code})"
-            promoLine += f" {dateRange}"
+            promo_line += f" {date_range}"
 
         log(YELLOW + promo_line + RESET)
 
