@@ -26,16 +26,26 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 user_agent_web = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
 appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 
-# TO ASK: Which to use
-#RED = '\033[91m'
-#GREEN = '\033[92m'
-#YELLOW = '\033[93m'
-#BLUE = '\033[94m'
-RED = '\033[1;31;40m'
-GREEN = '\033[1;32;40m'
-YELLOW = '\033[1;33;40m'
-BLUE = '\033[1;34;40m'
+# ANSI color codes
 RESET = '\033[0m' # Resets color to default
+
+# Original values
+RED = '\033[1;31;40m'    # Standard red text, black background, bold weight
+GREEN = '\033[1;32m'     # Standard green text, default background, bold weight
+YELLOW = '\033[33m'      # Standard yellow text, default background, normal weight
+BLUE = '\033[94m'        # Bright blue text, default background, normal weight
+
+# May not work on older/legacy terminals
+#RED = '\033[91m'         # Bright red text, default background, normal weight
+#GREEN = '\033[92m'       # Bright green text, default background, normal weight
+#YELLOW = '\033[93m'      # Bright yellow text, default background, normal weight
+#BLUE = '\033[94m'        # Bright blue text, default background, normal weight
+
+# Supported by everything
+#RED = '\033[1;31;40m'    # Standard red text, black background, bold weight
+#GREEN = '\033[1;32;40m'  # Standard green text, black background, bold weight
+#YELLOW = '\033[1;33;40m' # Standard yellow text, black background, bold weight
+#BLUE = '\033[1;34;40m'   # Standard dark blue text, black background, bold weight
 
 # Global storage of user config read from YAML
 config: CruiseAppConfig = None
@@ -352,9 +362,7 @@ class CruiseURLParams:
 
     @property
     def api_brand(self) -> str:
-        # TO ASK: Should this endpoint utilize accountInfo.api_brand to dynamically construct the path for Celebrity Cruises?
-        return "royal"
-#        return "celebrity" if self.is_celebrity else "royal"
+        return "celebrity" if self.is_celebrity else "royal"
 
     @property
     def url_brand(self) -> str:
@@ -483,9 +491,7 @@ class AccountInfo:
 
     @property
     def api_brand(self) -> str:
-        # TO ASK: Should this endpoint utilize accountInfo.api_brand to dynamically construct the path for Celebrity Cruises?
-        return "royal"
-#        return "celebrity" if self.is_celebrity else "royal"
+        return "celebrity" if self.is_celebrity else "royal"
 
     @property
     def url_brand(self) -> str:
@@ -769,6 +775,9 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         for a in data.get("accountInfo", [])
     ]
 
+    # DESIGN NOTE:  YAML keys will remain camel_case instead of snake_case
+    # to not interfere with config files already created by existing script users
+
     # Parse prospective cruises
     prospective_cruises = [
         ProspectiveCruise(
@@ -981,8 +990,7 @@ def get_final_payment_date(number_of_nights: int, sail_date: Union[str, date, da
     return date_of_sailing - timedelta(days=final_payment_deadline)
 
 
-# TO ASK:  Doesn't this apply to more than beverages?  Should it be renamed?
-def get_new_beverage_price(
+def get_new_order_price(
     account_info: AccountInfo,
     booking: Dict[str, Any],
     apobj: Optional[Apprise],
@@ -1204,7 +1212,7 @@ def process_watch_list_for_booking(
         )
 
         # Check the item's current price
-        get_new_beverage_price(account_info, booking, apobj, ctx)
+        get_new_order_price(account_info, booking, apobj, ctx)
 
 
 def get_number_of_nights(account_info: AccountInfo, loyalty_number: str) -> Tuple[int, int]:
@@ -1269,11 +1277,10 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
         if total_nights > 0:
             log(f"\tTotal Trips on Royal: {total_trips} - Total Nights: {total_nights}")
 
-    # TO ASK: Can one have a Club Royal id w/o a C&A id?  Move under if?
-    club_royale_loyalty_tier = loyalty.get("club_royale_loyalty_tier","Unknown")
-    if club_royale_loyalty_tier != "Unknown":
-        casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
-        log(f"\tCasino Royale Tier: {club_royale_loyalty_tier} - {casino_points} Credits")
+        club_royale_loyalty_tier = loyalty.get("club_royale_loyalty_tier","Unknown")
+        if club_royale_loyalty_tier != "Unknown":
+            casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
+            log(f"\tCasino Royale Tier: {club_royale_loyalty_tier} - {casino_points} Credits")
 
     # Get and display Celebrity (Captain's Club and Blue Chip) information
     if captains_club_ID:
@@ -1286,11 +1293,10 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
         if total_nights > 0:
             log(f"\tTotal Trips on Celebrity: {total_trips} - Total Nights: {total_nights}")
 
-    # TO ASK: Can one have a Blue Chip id w/o a Captain's Club id?
-    celebrity_blue_chip_loyalty_tier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
-    if celebrity_blue_chip_loyalty_tier != "Unknown":
-        celebrity_blue_chip_loyalty_individual_points = loyalty.get("celebrity_blue_chip_loyalty_individual_points",0)
-        log(f"\tBlue Chip Tier: {celebrity_blue_chip_loyalty_tier} - {celebrity_blue_chip_loyalty_individual_points} Points")
+        celebrity_blue_chip_loyalty_tier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
+        if celebrity_blue_chip_loyalty_tier != "Unknown":
+            celebrity_blue_chip_loyalty_individual_points = loyalty.get("celebrity_blue_chip_loyalty_individual_points",0)
+            log(f"\tBlue Chip Tier: {celebrity_blue_chip_loyalty_tier} - {celebrity_blue_chip_loyalty_individual_points} Points")
 
     # Return the correct loyality number based on the account being used
     loyalty_number_to_use = captains_club_ID if account_info.is_celebrity else c_and_a_number
@@ -1348,7 +1354,6 @@ def _calculate_passenger_metrics(
                 log(YELLOW + "Data is missing from API. Code is taking a guess to fixing" + RESET)
                 log(YELLOW + "Add category override in config.yaml if wrong category" + RESET)
 
-            # TO ASK: Is it intentional that these stateroom_* variables apply to all guests?
             if stateroom_type == "B" and brand_code == "C":
                 stateroom_category_code = "XC"
                 stateroom_subtype = "XC"
@@ -1634,7 +1639,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                         continue
 
                     guest_passenger_ID = guest.get("id")
-                    firstName = guest.get("firstName", "").capitalize()
+                    first_name = guest.get("firstName", "").capitalize()
                     guestreservation_ID = guest.get("reservation_ID")
                     guest_age_string = guest.get("guestType", "").lower()
 
@@ -1642,7 +1647,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                     new_key = f"{guest_passenger_ID}{guestreservation_ID}{prefix}{product}"
                     if new_key in account_info.found_items:
                         continue
-                    account_info.found_items.append(newKey)
+                    account_info.found_items.append(new_key)
 
                     # Compute specialized per-day or per-night calculations
                     if sales_unit in ['PER_NIGHT', 'PER_DAY'] and number_of_nights > 0:
@@ -1659,20 +1664,20 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                         prefix=prefix,
                         product=product,
                         passenger_ID=guest_passenger_ID,
-                        passengerName=firstName,
+                        passengerName=first_name,
                         room=room,
                         paid_price=paid_price,
                         currency=currency,
                         guest_age_string=guest_age_string,
                         sales_unit=sales_unit,
-                        forWatch=False,
+                        for_watch=False,
                         order_code=order_code,
                         order_date=order_date,
                         owner=owner,
-                        reservations=getattr(watchItem, 'reservations', [])
+                        reservations=getattr(watch_item, 'reservations', [])
                     )
 
-                    get_new_beverage_price(account_info, booking, apobj, ctx)
+                    get_new_order_price(account_info, booking, apobj, ctx)
 
 
 def parse_provided_URL(url: str) -> CruiseURLParams:
@@ -1746,7 +1751,7 @@ def _build_checkout_url(
     and senior or military indicators into url parameters. Provides users with a direct
     browser link to confirm or purchase the rate.
     """
-    brandCode = "R" if account_info.is_royal else "C"
+    brand_code = "R" if account_info.is_royal else "C"
 
     # Map the boolean flags from the discounts dataclass to web-URL strings ('y'/'n')
     # and safely apply the 'senior' override locally
@@ -1780,7 +1785,7 @@ def _build_checkout_url(
     }
 
     # Handle optional properties from the dataclass
-    if discounts.dp340 and brandCode == "R" and metrics['num_adults'] == 1 and metrics['num_children'] == 0:
+    if discounts.dp340 and brand_code == "R" and metrics['num_adults'] == 1 and metrics['num_children'] == 0:
         params['r0i'] = 'DP340'
 
     if discounts.loyalty_number is not None:
@@ -1824,7 +1829,6 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
         # FAIL-SAFE PATCH: If the URL parser missed ship/package codes,
         # extract them directly from the tracking URL string parameters
         if not url_params.ship_code or not url_params.package_code:
-            from urllib.parse import urlparse, parse_qs
             try:
                 parsed_query = parse_qs(urlparse(provided_url).query)
                 if not url_params.ship_code:
@@ -2018,7 +2022,7 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
 
         # Sub-branch 1: Actionable booked drop before final lock dates
         if automatic_URL and not past_final_payment_date:
-            text_string = f"Rebook! {pre_string} New price of {price} {url_params.currencyCode}"
+            text_string = f"Rebook! {pre_string} New price of {price} {url_params.currency_code}"
             if obc_value > 0:
                 text_string += f" not including {obc_string} USD OBC"
             text_string += f" is lower than {paid_price}"
@@ -2055,19 +2059,19 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
                     apobj.notify(body=text_string, title='Cruise Price Alert')
     else:
         # Current catalog price is equal to or higher than target price thresholds
-        tempString = GREEN + f"{pre_string}: You have best price of {paid_price} {url_params.currency_code}" + RESET
+        temp_string = GREEN + f"{pre_string}: You have best price of {paid_price} {url_params.currency_code}" + RESET
         if price > paid_price:
-            tempString += GREEN + f" (now {price} {url_params.currency_code}"
+            temp_string += GREEN + f" (now {price} {url_params.currency_code}"
             if obc_value > 0:
-                tempString += f" not including {obc_string} OBC"
-            tempString += ")" + RESET
+                temp_string += f" not including {obc_string} OBC"
+            temp_string += ")" + RESET
 
         if desire_refund_price and paid_price > base_price:
-            tempString += f"{YELLOW} Non-Refundable price {base_price} {url_params.currency_code} is lower than you paid{RESET}"
+            temp_string += f"{YELLOW} Non-Refundable price {base_price} {url_params.currency_code} is lower than you paid{RESET}"
         elif desire_refund_price:
-            tempString += f" Non-refundable price is {base_price} {url_params.currencyCode}"
+            temp_string += f" Non-refundable price is {base_price} {url_params.currency_code}"
 
-        log(tempString)
+        log(temp_string)
 
 
 def get_ship_dictionary_web(registry: ShipRegistry) -> None:
@@ -2152,7 +2156,6 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
 
     all_promos = fetch_promos('homepage')
     if not all_promos and config.show_promos:
-#    if not all_promos:
         log("No active promos to display")
         return
 
@@ -2287,15 +2290,15 @@ def get_cruise_price_from_API(
             else:
                 post_string = ""
 
-            cabinType = stateroom_class.get("name", "Unknown Type") if stateroom_class else "Unknown Type"
+            cabin_type = stateroom_class.get("name", "Unknown Type") if stateroom_class else "Unknown Type"
             price_data = price.get("price")
 
             if price_data is None:
-                log(f"\t\t{cabinType} sold out")
+                log(f"\t\t{cabin_type} sold out")
             else:
                 num_passengers = int(num_adults) + int(num_children)
-                totalCabinCost = float(price_data.get("value", 0.0)) * num_passengers
-                log(f"\t\t{totalCabinCost} {currency}: Cheapest {cabinType} Price for {numPassengers}" + post_string)
+                total_cabin_cost = float(price_data.get("value", 0.0)) * num_passengers
+                log(f"\t\t{total_cabin_cost} {currency}: Cheapest {cabin_type} Price for {num_passengers}" + post_string)
 
 
 def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
@@ -2397,12 +2400,11 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
         'r0c': params.number_of_children,
         'r0b': 'n',
 
-        # TO ASK: Why were passenger qualifiers hardcoded to 'n' in availability check?
         'r0l': params.loyalty_number if params.loyalty_number else None,
-        'r0r': 'n', # 'y' if params.police else 'n',
-        'r0s': 'n', # 'y' if params.fire else 'n',
-        'r0q': 'n', # 'y' if params.military else 'n',
-        'r0t': 'n', # 'y' if params.senior else 'n',
+        'r0r': 'y' if params.police else 'n',
+        'r0s': 'y' if params.fire else 'n',
+        'r0q': 'y' if params.military else 'n',
+        'r0t': 'y' if params.senior else 'n',
 
         'r0d': params.cabin_class_string or 'INTERIOR',
         'r0D': 'y',
@@ -2590,7 +2592,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
     return results
 
 
-def get_boarding_pass(access_info, booking, guest_ID: str) -> dict:
+def get_boarding_pass(account_info: AccountInfo, booking: Dict[str, Any], guest_ID: str) -> dict:
     """
     [FUTURE USE}
     Retrieves digital check-in boarding passes or luggage tag documentation assets.
@@ -2611,7 +2613,7 @@ def get_boarding_pass(access_info, booking, guest_ID: str) -> dict:
         'guestReservationIds': [
             {
                 'bookingId': booking_ID,
-                'guestId': guestID,
+                'guestId': guest_ID,
             },
         ],
     }
@@ -2627,13 +2629,16 @@ def get_boarding_pass(access_info, booking, guest_ID: str) -> dict:
             exit_on_fail=False
     )
 
-    ret_val = {} if resonse is None else response.json()
+    ret_val = {} if response is None else response.json()
     return ret_val
 
 
-##################################
+#####################################################
 # Dead/Obsolete/Unused functions
-##################################
+# WARNING: These were NOT refactored to use snake_case
+# or renamed functions; these will need to be updated
+# if resurrected
+#####################################################
 appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
 appversion_mobile = '1.73.4'
 user_agent_mobile = 'royal/1.73.4 (com.rccl.royalcaribbean; build:2528; android 16) okhttp/4.12.0'
