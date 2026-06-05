@@ -792,7 +792,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
     params = {
         'brand': brandCode,
-        'includeCheckin': 'false',
+        'includeCheckin': 'true',
     }
 
     try:
