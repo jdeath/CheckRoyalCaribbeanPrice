@@ -73,7 +73,7 @@ This only runs cruise addon price checking (no notifcation or cabin price checki
 1. You need to watch the logs for any price drops
   
 ## Install (iOS / iPhone)
-iOS can run a stripped down version or an almost full version that supports everything except apprise! Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
+iOS can run a stripped down version or an almost full version that supports everything except apprise! You can also run the GreaseMonker version above. Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
 
 ### Stripped down version
 This will run a stripped down version to work on the free Python iPhone app. It is a little easier to setup, but need to repeat setup if a new version comes out.
