@@ -1085,7 +1085,6 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
 
             if booking.get("stateroomType") != "NONE":
                 get_cruise_price(account_info, booking, ship_dictionary, automatic_URL=True)
-#                get_cruise_price(account_info, booking, ship_dictionary, automatic_URL=False)
             else:
                 log(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
