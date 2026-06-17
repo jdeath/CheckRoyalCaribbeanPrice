@@ -735,9 +735,7 @@ def getProfile(access_token,accountId,cruiseLineName,session):
             if residencyCountryCode == "USA" or residencyCountryCode == "CAN":
                 state = address.get("state",None)    
     
-    
     loyalty = payload.get("loyaltyInformation")
-    print(loyalty)
     cAndANumber = loyalty.get("crownAndAnchorId")
     cAndALevel = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
     cAndAPoints = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints")
