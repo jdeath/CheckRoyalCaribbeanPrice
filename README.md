@@ -67,14 +67,14 @@ This only runs cruise addon price checking (no notifcation or cabin price checki
 
 1. Install Greasemonkey/TamperMonkey Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
    - For iOS, recommend installing the free Gear Browser option in link above. Much easier to get working than the userscripts extension. The paid TamperMonkey options have not been tested.
-   - Firefox is recommended. Chrome requires you to right click Tampermonkey icon, click manage, and turn on "Allow User Scripts"
+   - For Computer, Firefox is recommended. Chrome requires extra steps. You must right click Tampermonkey icon, click manage, and turn on "Allow User Scripts"
 1. Once browser or browser extension installed, click [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) link to install userscript from this repo. If using iOS Gear Browser, must click in that browser.
 1. Log into Royal/Celebrity website in browser with extension installed
-1. Click "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
-1. You need to watch the logs for any price drops
+1. Click blue "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
+1. You need to watch the logs for any price drops.
   
 ## Install (iOS / iPhone)
-iOS can run a stripped down version or an almost full version that supports everything except apprise! You can also run the GreaseMonker version above. Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
+iOS can run a stripped down version or an almost full version that supports everything except apprise! You can also run the GreaseMonkey version above. Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
 
 ### Stripped down version
 This will run a stripped down version to work on the free Python iPhone app. It is a little easier to setup, but need to repeat setup if a new version comes out.
