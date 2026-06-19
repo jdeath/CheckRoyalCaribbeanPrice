@@ -63,7 +63,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 1. `pip install requests Apprise`
 
 ## Install (Greasemonkey script, runs in your browser, no Python needed)
-This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox and iOS using userscripts extension for Safari and Gear Browser. 
+This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox and iOS using userscripts extension for Safari and Gear Browser. Chrome not working currently.
 
 1. Install Greasemonkey/TamperMonkey Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
    - For iOS, recommend installing the free Gear Browser option in link above. Much easier to get working than the userscripts extension. The paid TamperMonkey options have not been tested.
