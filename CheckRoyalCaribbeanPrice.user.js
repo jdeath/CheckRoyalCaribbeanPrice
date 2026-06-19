@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Check Royal Caribbean Price
 // @namespace    http://tampermonkey.net/
-// @version      1.0.5
+// @version      1.0.6
 // @description  Check cruise prices, add-on prices, and watch list directly in-browser
 // @author       jdeath / ported to Greasemonkey
 // @match        https://www.royalcaribbean.com/*
 // @match        https://www.celebritycruises.com/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -31,29 +31,58 @@
     var body = opts.data || null;
     var isText = opts.responseType === "text";
     return new Promise(function(resolve, reject) {
-      var xhr = new XMLHttpRequest();
-      xhr.open(method, url, true);
-      for (var h in headers) {
-        if (headers.hasOwnProperty(h)) xhr.setRequestHeader(h, headers[h]);
-      }
-      xhr.onload = function() {
-        var data;
-        try {
-          data = isText ? xhr.responseText : JSON.parse(xhr.responseText);
-        } catch(e) {
-          reject(new Error('Parse failed for ' + url + ' (HTTP ' + xhr.status + '): ' + e.message + '. Body: ' + xhr.responseText.substring(0, 200)));
-          return;
+      // Use GM_xmlhttpRequest if available (Tampermonkey/Violentmonkey),
+      // otherwise fall back to native XHR (Greasemonkey Firefox, etc.)
+      if (typeof GM_xmlhttpRequest === 'function') {
+        GM_xmlhttpRequest({
+          method: method,
+          url: url,
+          headers: headers,
+          data: body,
+          timeout: 30000,
+          onload: function(response) {
+            var data;
+            try {
+              data = isText ? response.responseText : JSON.parse(response.responseText);
+            } catch(e) {
+              reject(new Error('Parse failed for ' + url + ' (HTTP ' + response.status + '): ' + e.message + '. Body: ' + response.responseText.substring(0, 200)));
+              return;
+            }
+            resolve({ ok: response.status >= 200 && response.status < 300, status: response.status, data: data });
+          },
+          onerror: function(response) {
+            reject(new Error('Load failed for ' + url + ': XHR error (status ' + response.status + ')'));
+          },
+          ontimeout: function() {
+            reject(new Error('Load timed out for ' + url));
+          }
+        });
+      } else {
+        // Native XHR fallback for Greasemonkey / environments without GM_xmlhttpRequest
+        var xhr = new XMLHttpRequest();
+        xhr.open(method, url, true);
+        for (var h in headers) {
+          if (headers.hasOwnProperty(h)) xhr.setRequestHeader(h, headers[h]);
         }
-        resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data: data });
-      };
-      xhr.onerror = function() {
-        reject(new Error('Load failed for ' + url + ': XHR error (status ' + xhr.status + ')'));
-      };
-      xhr.ontimeout = function() {
-        reject(new Error('Load timed out for ' + url));
-      };
-      xhr.timeout = 30000;
-      xhr.send(body);
+        xhr.onload = function() {
+          var data;
+          try {
+            data = isText ? xhr.responseText : JSON.parse(xhr.responseText);
+          } catch(e) {
+            reject(new Error('Parse failed for ' + url + ' (HTTP ' + xhr.status + '): ' + e.message + '. Body: ' + xhr.responseText.substring(0, 200)));
+            return;
+          }
+          resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data: data });
+        };
+        xhr.onerror = function() {
+          reject(new Error('Load failed for ' + url + ': XHR error (status ' + xhr.status + ')'));
+        };
+        xhr.ontimeout = function() {
+          reject(new Error('Load timed out for ' + url));
+        };
+        xhr.timeout = 30000;
+        xhr.send(body);
+      }
     });
   }
 
