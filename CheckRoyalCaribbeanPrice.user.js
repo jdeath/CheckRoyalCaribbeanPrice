@@ -355,7 +355,7 @@
      ============================================================ */
   async function getVoyages(accountId, accessToken, brandCode) {
     var data = await apiCall(
-      API_BASE + '/v1/profileBookings/enriched/' + accountId + '?brand=' + brandCode + '&includeCheckin=false'
+      API_BASE + '/v1/profileBookings/enriched/' + accountId + '?brand=' + brandCode + '&includeCheckin=true'
     );
     return data.payload ? data.payload.profileBookings : [];
   }
