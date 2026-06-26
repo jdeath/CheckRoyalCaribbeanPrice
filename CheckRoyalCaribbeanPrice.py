@@ -1008,13 +1008,16 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         result = get_dining_and_prices(account_info, booking)
         dining_selection = result.get("dining_selection", [])
         for selection in dining_selection:
-            if selection.get("sittingTime", "") == "MY TIME":
+            if selection.get("sittingTime", "") == "MY TIME" or selection.get("sittingType", "") == "MY TIME":
                 log("Dining: My Time Open Sitting")
             else:
-                dining_string = f"Dining: {selection.get('sittingType', '')} {selection.get('sitting_time', '')}"
-                table_size = selection.get("table_size", "")
-                if table_size and table_size != "00":
-                    dining_string += f" Table Size: {table_size}"
+                sitting_type = selection.get('sittingType', '')# or selection.get('sitting_type', '')
+                sitting_time = selection.get('sittingTime', '')# or selection.get('sitting_time', '')
+                dining_string = f"Dining: {sitting_type} {sitting_time}"
+                raw_table_size = selection.get("table_size", "")
+                if raw_table_size and str(raw_table_size) != "00":
+                    padded_table = str(raw_table_size).zfill(2)
+                    dining_string += f" Table Size: {padded_table}"
                 log(dining_string)
 
         # Unpack Ledger Pricing Matrix
@@ -1026,7 +1029,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         cruise_paid_price_from_API = result.get("prices", [])
 
         for cur_price in cruise_paid_price_from_API:
-            price_type_code = cur_price.get("price_type_code", "")
+            price_type_code = cur_price.get("priceTypeCode", "")
             amount = cur_price.get("amount")
             if not amount:
                 continue
@@ -1049,7 +1052,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         # Store the parsed information into a dictionary for easy passing around
         paid_price_struct = {}
         if gross_totals is not None:
-            paid_price_struct['reservation'] = reservation_ID
+            paid_price_struct['reservation'] = current_res_id
             paid_price_struct['paid_price'] = gross_totals
             paid_price_struct['gratuities'] = prepaid_grats_flag
             paid_price_struct['trip_insurance'] = insurance_flag
@@ -1096,9 +1099,9 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         if watch_list_items:
             for guest in guests:
                 passenger_info = {
-                   "passenger_ID": guest.get("passenger_ID"),
-                   "passenger_name": guest.get("first_name", "").capitalize(),
-                   "room": guest.get("stateroom_number") or stateroom_number
+                   "passenger_ID": guest.get("passengerId"),
+                   "passenger_name": guest.get("firstName", "").capitalize(),
+                   "room": guest.get("stateroomNumber") or stateroom_number
                 }
 
                 # Handle any watch list items for this guest's booking
@@ -1982,8 +1985,6 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
     # Extract voyage characteristics from booking payload
     ship = booking.get("shipCode", "")
     start_date = booking.get("sailDate", "")
-    passenger_ID = booking.get("passengerId")
-    reservation_ID = booking.get("bookingId")
     number_of_nights = int(booking.get("numberOfNights", 0))
 
     # Handle global currency overrides cleanly
@@ -1992,105 +1993,146 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
     else:
         currency = booking.get("booking_currency", "USD")
 
-    params = {
-        'passengerId': passenger_ID,
-        'reservationId': reservation_ID,
-        'sailingId': f"{ship}{start_date}",
-        'currencyIso': currency,
-        'includeMedia': 'false',
-    }
+    # Build dynamic guest/reservation lookups
+    guest_registry = {}
+    unique_reservations = set()
 
-    url_history = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory'
-    response = _execute_api_request(account_info, "GET", url_history, params=params, timeout=15)
-    payload = response.json().get("payload")
-    if not payload:
-        return
+    # Register primary guests
+    primary_res_id = booking.get("bookingId") or booking.get("reservationId")
+    if primary_res_id:
+        unique_reservations.add(primary_res_id)
+    for guest in booking.get("guests", []):
+        pid = guest.get("passengerId")
+        if pid:
+            guest_registry[pid] = {
+                "cabin": guest.get("cabinNumber", "None"),
+                "res_id": primary_res_id
+            }
 
-    # Merge my orders and orders booked on my behalf
-    all_orders = (payload.get("myOrders") or []) + (payload.get("ordersOthersHaveBookedForMe") or [])
+    # Register linked guests
+    for linked in booking.get("linkedReservations", []):
+        linked_res_id = linked.get("bookingId") or linked.get("reservationId")
+        if linked_res_id:
+            unique_reservations.add(linked_res_id)
+        for guest in linked.get("guests", []):
+            pid = guest.get("passengerId")
+            if pid:
+                guest_registry[pid] = {
+                    "cabin": guest.get("cabinNumber", "None"),
+                    "res_id": linked_res_id
+                }
 
-    for order in all_orders:
-        order_code = order.get("orderCode")
+    # Loop over each unique reservation to grab order history
+    for current_res_id in unique_reservations:
+        # Find a passenger ID associated with this specific reservation to use for the payload
+        # (The API just needs a valid passenger container attached to that reservation)
+        current_passenger_id = next(
+            (pid for pid, data in guest_registry.items() if data["res_id"] == current_res_id),
+            booking.get("passengerId")
+        )
 
-        # Reference global date format cleanly
-        date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
-        order_date = date_obj.strftime(config.date_display_format)
-        owner = order.get("owner")
+        params = {
+            'passengerId': current_passenger_id,
+            'reservationId': current_res_id,
+            'sailingId': f"{ship}{start_date}",
+            'currencyIso': currency,
+           'includeMedia': 'false',
+        }
 
-        # Only process valid paid orders
-        if order.get("orderTotals", {}).get("total", 0) > 0:
-            url_detail = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory/{order_code}'
-            response = _execute_api_request(account_info, "GET", url_detail, params=params, timeout=15)
-            order_data = response.json()
-            if not order_data or not order_data.get("payload"):
-                continue
+        url_history = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory'
+        response = _execute_api_request(account_info, "GET", url_history, params=params, timeout=15)
 
-            for order_detail in order_data.get("payload", {}).get("orderHistoryDetailItems", []):
-                quantity = order_detail.get("priceDetails", {}).get("quantity", 0)
-                order_title = order_detail.get("productSummary", {}).get("title")
+        # If this particular reservation has no orders, skip to the next room
+        if not response or not response.json().get("payload"):
+            continue
 
-                # Pre-6 Feb 2026 API structure safety hook
-                try:
-                    product = order_detail.get("productSummary", {}).get("baseOptions")[0].get("selected", {}).get("code")
-                except Exception:
-                    product = order_detail.get("productSummary", {}).get("defaultVariantId")
+        payload = response.json().get("payload")
+        if not payload:
+            return
 
-                prefix = order_detail.get("productSummary", {}).get("productTypeCategory", {}).get("id", "")
-                sales_unit = order_detail.get("productSummary", {}).get("salesUnit")
-                guests = order_detail.get("guests", [])
+        # Merge my orders and orders booked on my behalf
+        all_orders = (payload.get("myOrders") or []) + (payload.get("ordersOthersHaveBookedForMe") or [])
 
-                for guest in guests:
-                    if guest.get("orderStatus") == "CANCELLED":
-                        continue
+        for order in all_orders:
+            order_code = order.get("orderCode")
+            date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
+            order_date = date_obj.strftime(config.date_display_format)
+            owner = order.get("owner")
 
-                    paid_price = guest.get("priceDetails", {}).get("subtotal", 0)
-                    paid_quantity = guest.get("priceDetails", {}).get("quantity", 0)
+            # Only process valid paid orders
+            if order.get("orderTotals", {}).get("total", 0) > 0:
+                url_detail = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory/{order_code}'
+                response = _execute_api_request(account_info, "GET", url_detail, params=params, timeout=15)
+                order_data = response.json()
+                if not order_data or not order_data.get("payload"):
+                    continue
 
-                    if paid_price == 0:
-                        continue
+                for order_detail in order_data.get("payload", {}).get("orderHistoryDetailItems", []):
+                    quantity = order_detail.get("priceDetails", {}).get("quantity", 0)
+                    order_title = order_detail.get("productSummary", {}).get("title")
 
-                    guest_passenger_ID = guest.get("id")
-                    first_name = guest.get("firstName", "").capitalize()
-                    guestreservation_ID = guest.get("reservation_ID")
-                    guest_age_string = guest.get("guestType", "").lower()
+                    # Pre-6 Feb 2026 API structure safety hook
+                    try:
+                        product = order_detail.get("productSummary", {}).get("baseOptions")[0].get("selected", {}).get("code")
+                    except Exception:
+                        product = order_detail.get("productSummary", {}).get("defaultVariantId")
 
-                    # Deduplication filtering
-                    new_key = f"{guest_passenger_ID}{guestreservation_ID}{prefix}{product}"
-                    if new_key in account_info.found_items:
-                        continue
-                    account_info.found_items.append(new_key)
+                    prefix = order_detail.get("productSummary", {}).get("productTypeCategory", {}).get("id", "")
+                    sales_unit = order_detail.get("productSummary", {}).get("salesUnit")
+                    guests = order_detail.get("guests", [])
 
-                    # Compute specialized per-day or per-night calculations
-                    if sales_unit in ['PER_NIGHT', 'PER_DAY'] and number_of_nights > 0:
-                        paid_price = round(paid_price / number_of_nights, 2)
+                    for guest in guests:
+                        if guest.get("orderStatus") == "CANCELLED":
+                            continue
 
-                    if paid_quantity > 0:
-                        paid_price = round(paid_price / paid_quantity, 2)
+                        paid_price = guest.get("priceDetails", {}).get("subtotal", 0)
+                        paid_quantity = guest.get("priceDetails", {}).get("quantity", 0)
 
-                    currency = guest.get("priceDetails", {}).get("currency")
-                    room = guest.get("stateroom_number")
+                        if paid_price == 0:
+                            continue
 
-                    # Pack up the transient items into a context object
-                    ctx = WatchItemContext(
-                        prefix=prefix,
-                        product=product,
-                        passenger_ID=guest_passenger_ID,
-                        passenger_name=first_name,
-                        room=room,
-                        paid_price=paid_price,
-                        currency=currency,
-                        guest_age_string=guest_age_string,
-                        sales_unit=sales_unit,
-                        for_watch=False,
-                        order_code=order_code,
-                        order_date=order_date,
-                        owner=owner,
-                        reservations=[]
-#                        reservations=getattr(watch_item, 'reservations', [])  # FIX: This becomes just []
-                    )
+                        guest_passenger_ID = guest.get("id")
+                        first_name = guest.get("firstName", "").capitalize()
+                        guestreservation_ID = current_res_id
+                        guest_age_string = guest.get("guestType", "").lower()
 
-                    get_new_order_price(account_info, booking, config.apobj, ctx)
-#                    get_new_order_price(account_info, booking, apobj, ctx)
+                        # Deduplication filtering
+                        new_key = f"{guest_passenger_ID}{guestreservation_ID}{prefix}{product}"
+                        if new_key in account_info.found_items:
+                            continue
+                        account_info.found_items.append(new_key)
+
+                        # Compute specialized per-day or per-night calculations
+                        if sales_unit in ['PER_NIGHT', 'PER_DAY'] and number_of_nights > 0:
+                            paid_price = round(paid_price / number_of_nights, 2)
+
+                        if paid_quantity > 0:
+                            paid_price = round(paid_price / paid_quantity, 2)
+
+                        currency = guest.get("priceDetails", {}).get("currency")
+                        room = guest_registry.get(guest_passenger_ID, {}).get("cabin")
+                        if not room or room == "None":
+                            room = guest.get("stateroom_number")
+
+                        # Pack up the transient items into a context object
+                        ctx = WatchItemContext(
+                            prefix=prefix,
+                            product=product,
+                            passenger_ID=guest_passenger_ID,
+                            passenger_name=first_name,
+                            room=room,
+                            paid_price=paid_price,
+                            currency=currency,
+                            guest_age_string=guest_age_string,
+                            sales_unit=sales_unit,
+                            for_watch=False,
+                            order_code=order_code,
+                            order_date=order_date,
+                            owner=owner,
+                            reservations=[]
+                        )
+
+                        get_new_order_price(account_info, booking, config.apobj, ctx)
 
 
 def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> None:

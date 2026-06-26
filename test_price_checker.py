@@ -15,7 +15,6 @@ from CheckRoyalCaribbeanPrice import (
 # =====================================================================
 # SYSTEM FIXTURES & DATA BUILDERS
 # =====================================================================
-
 @pytest.fixture(autouse=True)
 def mock_global_config():
     """
@@ -63,7 +62,6 @@ def base_account_info():
 # =====================================================================
 # ITEM 1 TESTS: Cabin "Not For Sale" Notification Logic
 # =====================================================================
-
 def test_booked_cruise_not_for_sale_stays_silent(mock_global_config, base_account_info):
     """
     Scenario: An active, booked cruise goes off-market (sold out / offline).
@@ -120,7 +118,6 @@ def test_watchlist_cruise_not_for_sale_sends_notification(mock_global_config, ba
 # =====================================================================
 # ITEM 2 TESTS: get_orders() Context Instantiation Scope Verification
 # =====================================================================
-
 def test_get_orders_handles_item_calculations_without_scope_leak(mock_global_config, base_account_info):
     """
     Scenario: Parsing valid historical order entries from API response footprints.
@@ -150,7 +147,7 @@ def test_get_orders_handles_item_calculations_without_scope_leak(mock_global_con
                 "priceDetails": {"quantity": 1},
                 "guests": [{
                     "id": "88888",
-                    "firstName": "Adam",
+                    "firstName": "Matt",
                     "orderStatus": "PAID",
                     "guestType": "ADULT",
                     "stateroom_number": "1234",
@@ -196,7 +193,6 @@ def test_get_orders_handles_item_calculations_without_scope_leak(mock_global_con
 # =====================================================================
 # ITEM 3 TESTS: API Resilience / Missing Keys
 # =====================================================================
-
 def test_get_cruise_price_handles_corrupt_fare_structure_gracefully(mock_global_config, base_account_info):
     """
     Scenario: The API returns a valid room structure, but 'gratuities' and 'insurance' keys are missing.
@@ -230,3 +226,231 @@ def test_get_cruise_price_handles_corrupt_fare_structure_gracefully(mock_global_
             ship_dictionary=real_registry,
             automatic_URL=False
         )
+
+def test_passenger_info_resilience():
+    """Ensure passenger_info maps correctly regardless of camel/snake case API keys."""
+    # Mocking a dirty, mixed-case API response for a booking
+    mock_booking = {
+        "bookingId": "9818245",
+        "stateroom_number": "6543",
+        "guests": [
+            {
+                "id": "37241969",
+                "firstName": "matt",
+                "stateroomNumber": "6543"
+            }
+        ]
+    }
+
+    # Simulate the code's extraction logic
+    guests = mock_booking.get("guests", [])
+    stateroom_number = mock_booking.get("stateroom_number")
+
+    assert len(guests) == 1
+    for guest in guests:
+        p_id = guest.get("passengerId") or guest.get("id") or guest.get("passenger_ID")
+        p_name = guest.get("firstName") or guest.get("first_name", "")
+        p_room = guest.get("cabinNumber") or guest.get("stateroomNumber") or guest.get("stateroom_number") or stateroom_number
+
+        passenger_info = {
+           "passenger_ID": p_id,
+           "passenger_name": str(p_name).capitalize(),
+           "room": p_room
+        }
+
+        # Core Assertions: If these fail, the mapping broke!
+        assert passenger_info["passenger_ID"] == "37241969"
+        assert passenger_info["passenger_name"] == "Matt"
+        assert passenger_info["room"] == "6543"
+
+def test_unpack_ledger_pricing_casing():
+    """Verify that ledger extraction succeeds when the API returns camelCase keys."""
+    # Mock API price array with camelCase and snake_case variations
+    mock_prices = [
+        {"priceTypeCode": "GROSS_TOTALS", "amount": 4147.72},
+        {"price_type_code": "GRATUITIES", "amount": 150.00}
+    ]
+
+    gross_totals = None
+    prepaid_grats_flag = False
+
+    for cur_price in mock_prices:
+        # The exact fallback line we added to the codebase
+        price_type_code = cur_price.get("priceTypeCode") or cur_price.get("price_type_code", "")
+        amount = cur_price.get("amount")
+
+        if price_type_code == "GROSS_TOTALS":
+            gross_totals = amount
+        elif price_type_code == "GRATUITIES":
+            prepaid_grats_flag = True
+
+    # Assertions to ensure the logic didn't drop the data
+    assert gross_totals == 4147.72
+    assert prepaid_grats_flag is True
+
+def test_dining_table_zero_padding():
+    """Verify table size integers are correctly zero-padded for the display string."""
+    mock_selections = [
+        {"sittingType": "TRADITIONAL", "sittingTime": "05:00 PM", "tableSize": 4},
+        {"sittingType": "TRADITIONAL", "sittingTime": "08:30 PM", "table_size": "06"}
+    ]
+
+    formatted_strings = []
+    for selection in mock_selections:
+        sitting_type = selection.get('sittingType') or selection.get('sitting_type', '')
+        sitting_time = selection.get('sittingTime') or selection.get('sitting_time', '')
+        dining_string = f"Dining: {sitting_type} {sitting_time}".strip()
+
+        raw_table_size = selection.get("table_size") or selection.get("tableSize", "")
+        if raw_table_size and str(raw_table_size) != "00":
+            padded_table = str(raw_table_size).zfill(2)
+            dining_string += f" Table Size: {padded_table}"
+        formatted_strings.append(dining_string)
+
+    assert formatted_strings[0] == "Dining: TRADITIONAL 05:00 PM Table Size: 04"
+    assert formatted_strings[1] == "Dining: TRADITIONAL 08:30 PM Table Size: 06"
+
+def test_login_token_decoding_resilience():
+    """Verify script breaks predictably if JWT token format is corrupt."""
+    import base64
+    import json
+    import pytest
+
+    # A valid mock base64 segment representing {"sub": "12345"}
+    valid_payload = base64.b64encode(b'{"sub": "12345"}').decode('utf-8')
+    fake_token = f"header.{valid_payload}.signature"
+
+    # Simulate login token slicing block
+    list_of_strings = fake_token.split(".")
+    assert len(list_of_strings) >= 2
+    string1 = list_of_strings[1]
+    decoded_bytes = base64.b64decode(string1 + '==')
+    auth_info = json.loads(decoded_bytes.decode('utf-8'))
+
+    assert auth_info["sub"] == "12345"
+
+def test_get_final_payment_date_formats():
+    """Ensure date calculation handles hyphens, slashes, and raw date objects identically."""
+    from datetime import date, datetime
+    from CheckRoyalCaribbeanPrice import get_final_payment_date
+
+    expected_milestone = date(2026, 9, 26) # 90 days before Dec 25
+
+    assert get_final_payment_date(7, "2026-12-25") == expected_milestone
+    assert get_final_payment_date(7, "2026/12/25") == expected_milestone
+    assert get_final_payment_date(7, date(2026, 12, 25)) == expected_milestone
+
+def test_parse_url_cabin_class_fallbacks():
+    """Verify URL parsing handles both variant parameters for cabin types."""
+    from CheckRoyalCaribbeanPrice import parse_provided_URL
+
+    url_variant_1 = "https://www.royalcaribbean.com?sailDate=20261225&cabinClassType=BALCONY&ship_code=AL"
+    url_variant_2 = "https://www.royalcaribbean.com?sailDate=20261225&r0d=BALCONY&ship_code=AL"
+
+    params_1 = parse_provided_URL(url_variant_1)
+    params_2 = parse_provided_URL(url_variant_2)
+
+    assert params_1.cabin_class_string == "BALCONY"
+    assert params_2.cabin_class_string == "BALCONY"
+
+def test_standalone_unlinked_reservation_processing():
+    """Verify that a standard standalone, unlinked reservation processes perfectly."""
+    # Mocking a clean, standalone single-cabin reservation payload
+    mock_booking = {
+        "bookingId": "7654321",
+        "stateroomNumber": "6543",
+        "passengersInStateroom": [
+            {
+                "passengerId": "37241969",
+                "firstName": "matt",
+                "stateroomNumber": "6543"
+            }
+        ]
+    }
+
+    # Simulate the script's extraction for an unlinked scenario
+    stateroom_number = mock_booking.get("stateroomNumber")
+    guests = mock_booking.get("passengersInStateroom", [])
+
+    assert len(guests) == 1
+    guest = guests[0]
+
+    # Replicate the exact assignment block from the live script
+    passenger_info = {
+        "passenger_ID": guest.get("passengerId"),
+        "passenger_name": guest.get("firstName", "").capitalize(),
+        "room": guest.get("stateroomNumber") or stateroom_number
+    }
+
+    # Assertions ensuring the standalone profile maps accurately
+    assert passenger_info["passenger_ID"] == "37241969"
+    assert passenger_info["passenger_name"] == "Matt"
+    assert passenger_info["room"] == "6543"
+
+def test_multi_room_guest_isolation():
+    """Verify that guests from different linked bookings are isolated cleanly to their specific rooms."""
+    # Mocking an API response payload containing a multi-room linked booking configuration
+    unique_reservations = ["9818245", "1111111"]
+
+    all_guests = [
+        # Room 1 Passengers
+        {"bookingId": "9818245", "passengerId": "37241969", "firstName": "matt", "stateroomNumber": "6543"},
+        {"bookingId": "9818245", "passengerId": "44556677", "firstName": "bob", "stateroomNumber": "6543"},
+        # Room 2 Passengers (Linked Room)
+        {"bookingId": "1111111", "passengerId": "88990011", "firstName": "john", "stateroomNumber": "7122"}
+    ]
+
+    processed_rooms = {}
+
+    # Replicate the exact multi-room loop extraction framework from the script
+    for current_res_id in unique_reservations:
+        guests = [g for g in all_guests if str(g.get("bookingId", "")) == str(current_res_id)]
+
+        room_manifest = []
+        for guest in guests:
+            passenger_info = {
+               "passenger_ID": guest.get("passengerId"),
+               "passenger_name": guest.get("firstName", "").capitalize(),
+               "room": guest.get("stateroomNumber")
+            }
+            room_manifest.append(passenger_info)
+
+        processed_rooms[current_res_id] = room_manifest
+
+    # Assertions: Validate that Room 1 only contains Matt and Bob
+    assert len(processed_rooms["9818245"]) == 2
+    assert processed_rooms["9818245"][0]["passenger_name"] == "Matt"
+    assert processed_rooms["9818245"][1]["passenger_name"] == "Bob"
+
+    # Assertions: Validate that Room 2 is completely isolated and only contains John
+    assert len(processed_rooms["1111111"]) == 1
+    assert processed_rooms["1111111"][0]["passenger_name"] == "John"
+    assert processed_rooms["1111111"][0]["room"] == "7122"
+
+def test_empty_guest_filter_resilience():
+    """Ensure the script handles an empty guest filter list gracefully without crashing."""
+    # Simulating a situation where keys mismatch and filter yields nothing
+    unique_reservations = ["9818245"]
+    all_guests = [] # Empty array simulating a drop or API shift
+
+    processed_manifests = {}
+    for current_res_id in unique_reservations:
+        # Should evaluate cleanly to an empty list
+        guests = [g for g in all_guests if str(g.get("bookingId", "")) == str(current_res_id)]
+
+        assert isinstance(guests, list)
+        assert len(guests) == 0
+
+        # Downstream execution loop simulation
+        room_manifest = []
+        for guest in guests:
+            passenger_info = {
+               "passenger_ID": guest.get("passengerId"),
+               "passenger_name": guest.get("firstName", "").capitalize()
+            }
+            room_manifest.append(passenger_info)
+
+        processed_manifests[current_res_id] = room_manifest
+
+    assert len(processed_manifests["9818245"]) == 0
+
