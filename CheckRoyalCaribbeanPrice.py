@@ -1052,7 +1052,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         # Store the parsed information into a dictionary for easy passing around
         paid_price_struct = {}
         if gross_totals is not None:
-            paid_price_struct['reservation'] = current_res_id
+            paid_price_struct['reservation'] = reservation_ID
             paid_price_struct['paid_price'] = gross_totals
             paid_price_struct['gratuities'] = prepaid_grats_flag
             paid_price_struct['trip_insurance'] = insurance_flag
@@ -2187,6 +2187,10 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
 
     banner_by_id = {}
     for promo in fetch_promos('pdp'):
+        # Defensive check: skip if the API returned a flat string instead of a dictionary
+        if not isinstance(promo, dict):
+            continue
+
         for template in promo.get("templates", []):
             if template.get("type") == "SITEWIDE_BANNER":
                 banner_by_id[promo.get("id")] = template

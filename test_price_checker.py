@@ -1,15 +1,19 @@
 import pytest
-from unittest.mock import MagicMock, patch
 import requests
+
+from unittest.mock import MagicMock, patch
 
 # Import the specific entities and orchestration engines from your script
 from CheckRoyalCaribbeanPrice import (
+    AccountInfo,
+    CruiseAppConfig,
+    CruiseURLParams,
+    ShipRegistry,
+    WatchItemContext,
+    config,
     get_cruise_price,
     get_orders,
-    WatchItemContext,
-    AccountInfo,
-    ShipRegistry,
-    config
+    get_voyages,
 )
 
 # =====================================================================
@@ -231,11 +235,11 @@ def test_passenger_info_resilience():
     """Ensure passenger_info maps correctly regardless of camel/snake case API keys."""
     # Mocking a dirty, mixed-case API response for a booking
     mock_booking = {
-        "bookingId": "9818245",
+        "bookingId": "9999999",
         "stateroom_number": "6543",
         "guests": [
             {
-                "id": "37241969",
+                "id": "33333333",
                 "firstName": "matt",
                 "stateroomNumber": "6543"
             }
@@ -259,7 +263,7 @@ def test_passenger_info_resilience():
         }
 
         # Core Assertions: If these fail, the mapping broke!
-        assert passenger_info["passenger_ID"] == "37241969"
+        assert passenger_info["passenger_ID"] == "33333333"
         assert passenger_info["passenger_name"] == "Matt"
         assert passenger_info["room"] == "6543"
 
@@ -361,7 +365,7 @@ def test_standalone_unlinked_reservation_processing():
         "stateroomNumber": "6543",
         "passengersInStateroom": [
             {
-                "passengerId": "37241969",
+                "passengerId": "33333333",
                 "firstName": "matt",
                 "stateroomNumber": "6543"
             }
@@ -383,19 +387,19 @@ def test_standalone_unlinked_reservation_processing():
     }
 
     # Assertions ensuring the standalone profile maps accurately
-    assert passenger_info["passenger_ID"] == "37241969"
+    assert passenger_info["passenger_ID"] == "33333333"
     assert passenger_info["passenger_name"] == "Matt"
     assert passenger_info["room"] == "6543"
 
 def test_multi_room_guest_isolation():
     """Verify that guests from different linked bookings are isolated cleanly to their specific rooms."""
     # Mocking an API response payload containing a multi-room linked booking configuration
-    unique_reservations = ["9818245", "1111111"]
+    unique_reservations = ["9999999", "1111111"]
 
     all_guests = [
         # Room 1 Passengers
-        {"bookingId": "9818245", "passengerId": "37241969", "firstName": "matt", "stateroomNumber": "6543"},
-        {"bookingId": "9818245", "passengerId": "44556677", "firstName": "bob", "stateroomNumber": "6543"},
+        {"bookingId": "9999999", "passengerId": "33333333", "firstName": "matt", "stateroomNumber": "6543"},
+        {"bookingId": "9999999", "passengerId": "44556677", "firstName": "bob", "stateroomNumber": "6543"},
         # Room 2 Passengers (Linked Room)
         {"bookingId": "1111111", "passengerId": "88990011", "firstName": "john", "stateroomNumber": "7122"}
     ]
@@ -418,9 +422,9 @@ def test_multi_room_guest_isolation():
         processed_rooms[current_res_id] = room_manifest
 
     # Assertions: Validate that Room 1 only contains Matt and Bob
-    assert len(processed_rooms["9818245"]) == 2
-    assert processed_rooms["9818245"][0]["passenger_name"] == "Matt"
-    assert processed_rooms["9818245"][1]["passenger_name"] == "Bob"
+    assert len(processed_rooms["9999999"]) == 2
+    assert processed_rooms["9999999"][0]["passenger_name"] == "Matt"
+    assert processed_rooms["9999999"][1]["passenger_name"] == "Bob"
 
     # Assertions: Validate that Room 2 is completely isolated and only contains John
     assert len(processed_rooms["1111111"]) == 1
@@ -430,7 +434,7 @@ def test_multi_room_guest_isolation():
 def test_empty_guest_filter_resilience():
     """Ensure the script handles an empty guest filter list gracefully without crashing."""
     # Simulating a situation where keys mismatch and filter yields nothing
-    unique_reservations = ["9818245"]
+    unique_reservations = ["9999999"]
     all_guests = [] # Empty array simulating a drop or API shift
 
     processed_manifests = {}
@@ -452,5 +456,155 @@ def test_empty_guest_filter_resilience():
 
         processed_manifests[current_res_id] = room_manifest
 
-    assert len(processed_manifests["9818245"]) == 0
+    assert len(processed_manifests["9999999"]) == 0
+
+
+
+# =====================================================================
+# ITEM 4 TESTS: Full Branch Execution Integration Coverage
+# =====================================================================
+# Setup a dummy minimal global config to satisfy formatting calls
+#@pytest.fixture(autouse=True)
+@pytest.fixture()
+def setup_global_config_mock():
+    with patch('CheckRoyalCaribbeanPrice.config') as mock_global_config:
+        mock_global_config.date_display_format = "%m/%d/%Y"
+        mock_global_config.watch_list = []
+        mock_global_config.display_cruise_prices = True
+        mock_global_config.reservation_prices = {}
+        mock_global_config.reservation_names = {}
+        mock_global_config.show_promos = True
+        mock_global_config.apobj = None
+        yield mock_global_config
+
+def test_get_voyages_complete_execution_path():
+    """Exercise all logical branches inside get_voyages loop to ensure no undefined scoping or variable errors."""
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+    account_info.access.token = "fake_token"
+    account_info.access.id = "fake_id"
+
+    discounts = CruiseURLParams(loyalty_number="123456", state="MD")
+    ship_registry = ShipRegistry()
+
+    # Mock full corporate server structure response for profileBookings
+    mock_bookings_response = MagicMock()
+    mock_bookings_response.json.return_value = {
+        "payload": {
+            "profileBookings": [{
+                "bookingId": "1234567",
+                "passengerId": "33333333",
+                "sailDate": "20261225",
+                "numberOfNights": 7,
+                "shipCode": "AL",
+                "stateroomNumber": "6543",
+                "stateroomType": "B",
+                "passengersInStateroom": [{"firstName": "Matt", "lastName": "Smith", "bookingId": "1234567"}]
+            }]
+        }
+    }
+
+    def mock_api_router(account_info, method, url, *args, **kwargs):
+        mock_resp = MagicMock()
+        if "profileBookings" in url:
+            mock_resp.json.return_value = {
+                "payload": {
+                    "profileBookings": [{
+                        "bookingId": "1234567",
+                        "passengerId": "33333333",
+                        "sailDate": "20261225",
+                        "numberOfNights": 7,
+                        "shipCode": "AL",
+                        "stateroomNumber": "6543",
+                        "stateroomType": "B",
+                        "passengersInStateroom": [{"firstName": "Matt", "lastName": "Smith", "bookingId": "9999999"}]
+                    }]
+                }
+            }
+        elif "promotions/list" in url:
+            mock_resp.json.return_value = {
+                "payload": [
+                    {
+                        "promoCode": "BESTRATE",
+                        "templates": [{"templateId": "BANNER_1"}]
+                    }
+                ]
+            }
+        else:
+            mock_resp.json.return_value = {"payload": []}
+        return mock_resp
+
+    # Mock secondary call handlers internal to get_voyages loop execution path
+    mock_metrics = {"passenger_names": "Matt Smith", "checkin_string": "Boarding Time 11:00"}
+    mock_dining_and_prices = {
+        "dining_selection": [{"sittingType": "TRADITIONAL", "sittingTime": "08:30 PM", "table_size": "4"}],
+        "prices": [{"priceTypeCode": "GROSS_TOTALS", "amount": 4147.72}]
+    }
+
+    # Force full code path tracking
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=mock_api_router), \
+         patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value=mock_metrics), \
+         patch('CheckRoyalCaribbeanPrice.get_dining_and_prices', return_value=mock_dining_and_prices), \
+         patch('CheckRoyalCaribbeanPrice.get_checkin_info'), \
+         patch('CheckRoyalCaribbeanPrice.log') as mock_log:
+
+        # Execute the entire function branch
+        get_voyages(account_info, discounts, ship_registry)
+
+        # Verify the logs captured the correct execution metrics without encountering a NameError
+        log_outputs = [call[0][0] for call in mock_log.call_args_list]
+        assert any("Reservation #1234567" in s for s in log_outputs)
+        assert any("Cruise Fare - Total 4147.72" in s for s in log_outputs)
+
+
+def test_get_orders_complete_execution_path():
+    """Exercise all loop iterations inside get_orders to guarantee execution path coverage."""
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+
+    # Mock complete order details response matrix
+    mock_orders_response = MagicMock()
+    mock_orders_response.json.return_value = {
+        "payload": {
+            "orderDetail": [{
+                "orderCode": "ORD12345",
+                "creationDate": "2026-05-12",
+                "categories": [{
+                    "categoryCode": "ShoreExcursions",
+                    "products": [{
+                        "productCode": "TOUR_A",
+                        "productName": "Island Jet Ski Tour",
+                        "passengerPriceDetails": [{
+                            "passengerId": "1234567",
+                            "netPrice": 100.99,
+                            "currencyIsoCode": "USD"
+                        }]
+                    }]
+                }]
+            }]
+        }
+    }
+
+    # 1. Match the exact dictionary structure expected by your real script's `booking` argument
+    mock_booking = {
+        "bookingId": "1234567",
+        "stateroomNumber": "6543"
+    }
+
+    # 2. Match the exact structure expected by your real script's `metrics` argument
+    mock_metrics = {
+        "passenger_names": "Matt Smith",
+        "checkin_string": "Boarding Time 11:00"
+    }
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_orders_response), \
+         patch('CheckRoyalCaribbeanPrice.config') as mock_config:
+
+        mock_config.watch_list = []
+
+        try:
+            # Call the function with exactly 3 parameters matching its signature
+            get_orders(account_info, mock_booking, mock_metrics)
+        except Exception as exc:
+            pytest.fail(f"Execution path loop threw unexpected tracking exception: {exc}")
 
