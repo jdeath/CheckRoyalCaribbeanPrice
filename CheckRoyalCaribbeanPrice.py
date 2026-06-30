@@ -1969,8 +1969,8 @@ def process_watch_list_for_booking(
             order_code="WATCH-LIST",
             order_date="Watch List",
             owner=True,
-            reservations=getattr(watch_item, 'reservations', [],
-            reservation_id=reservation_ID or "")
+            reservations=getattr(watch_item, 'reservations', []),
+            reservation_id=reservation_ID or ""
         )
 
         # Check the item's current price
