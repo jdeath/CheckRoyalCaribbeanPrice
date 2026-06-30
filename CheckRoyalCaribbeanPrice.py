@@ -303,6 +303,7 @@ class WatchItemContext:
     order_date: str = "Watch List"
     owner: bool = True
     reservations: List[str] = field(default_factory=list)
+    reservation_id: str = ""
 
 
 @dataclass
@@ -463,7 +464,7 @@ def _execute_api_request(
     params: Optional[dict] = None,
     data: Optional[Union[str, dict]] = None,
     headers: Optional[dict] = None,
-    timeout: int = 15,
+    timeout: int = 30,
     exit_on_fail: bool = True
 ) -> Optional[requests.Response]:
     """
@@ -1764,7 +1765,8 @@ def get_new_order_price(
     """
     # --- RESERVATIONS SAFETY FILTER ---
     # Explicit check: If this context item targets specific bookings, enforce isolation
-    reservation_ID = booking.get("bookingId")
+    # Fall back to using extracting the ID from booking if not listed in the ctx structure
+    reservation_ID = ctx.reservation_id or booking.get("bookingId")
     if ctx.reservations and reservation_ID not in ctx.reservations:
         return
 
@@ -1798,7 +1800,7 @@ def get_new_order_price(
 
     # Get the information on the watched item from the server
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/catalog/v2/{ship}/categories/{prefix}/products/{product}'
-    response = _execute_api_request(account_info, "GET", url, params=params, timeout=15)
+    response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
     payload = response.json().get("payload")
     if payload is None:
         log(f"{prefix} {product} not available for passenger")
@@ -1967,7 +1969,8 @@ def process_watch_list_for_booking(
             order_code="WATCH-LIST",
             order_date="Watch List",
             owner=True,
-            reservations=getattr(watch_item, 'reservations', [])
+            reservations=getattr(watch_item, 'reservations', [],
+            reservation_id=reservation_ID or "")
         )
 
         # Check the item's current price
@@ -2040,7 +2043,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
         }
 
         url_history = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory'
-        response = _execute_api_request(account_info, "GET", url_history, params=params, timeout=15)
+        response = _execute_api_request(account_info, "GET", url_history, params=params, timeout=30)
 
         # If this particular reservation has no orders, skip to the next room
         if not response or not response.json().get("payload"):
@@ -2062,7 +2065,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
             # Only process valid paid orders
             if order.get("orderTotals", {}).get("total", 0) > 0:
                 url_detail = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory/{order_code}'
-                response = _execute_api_request(account_info, "GET", url_detail, params=params, timeout=15)
+                response = _execute_api_request(account_info, "GET", url_detail, params=params, timeout=30)
                 order_data = response.json()
                 if not order_data or not order_data.get("payload"):
                     continue
@@ -2129,7 +2132,8 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             order_code=order_code,
                             order_date=order_date,
                             owner=owner,
-                            reservations=[]
+                            reservations=[],
+                            reservation_id=current_res_id
                         )
 
                         get_new_order_price(account_info, booking, config.apobj, ctx)
@@ -2257,7 +2261,7 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
     }
 
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/cart/v1/obc/reservations/{reservation_ID}'
-    response = _execute_api_request(account_info, "GET", url, params=params, timeout=15)
+    response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
     payload = response.json().get("payload")
     if not payload:
         return

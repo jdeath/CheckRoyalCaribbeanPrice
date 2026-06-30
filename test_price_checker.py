@@ -194,6 +194,133 @@ def test_get_orders_handles_item_calculations_without_scope_leak(mock_global_con
         assert passed_ctx.reservations == []
 
 
+@patch('CheckRoyalCaribbeanPrice._execute_api_request')
+@patch('CheckRoyalCaribbeanPrice.config')
+def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
+    """
+    Validates that get_orders successfully routes unique reservation IDs
+    for linked accounts without corrupting the primary booking dictionary,
+    and correctly handles cabin/room tracking parameters.
+    """
+    from CheckRoyalCaribbeanPrice import AccountInfo, get_orders, WatchItemContext
+
+    # 1. Setup our mock inputs
+    account_info = AccountInfo(username="dummy_user", password="dummy_password")
+    account_info.cruise_line = "royal"
+    account_info.found_items = []
+
+    mock_config.currency_override = None
+    mock_config.date_display_format = "%Y-%m-%d"
+    mock_config.watch_list = []
+
+    # A mock booking payload mirroring a primary account with a linked room
+    mock_booking = {
+        "bookingId": "PRIMARY_11111",
+        "shipCode": "AL",
+        "sailDate": "2026-12-01",
+        "numberOfNights": 7,
+        "booking_currency": "USD",
+        "guests": [
+            {"passengerId": "99901", "cabinNumber": "8202"}
+        ],
+        "linkedReservations": [
+            {
+                "bookingId": "LINKED_22222", # Different room reservation number
+                "guests": [
+                    {"passengerId": "99902", "cabinNumber": "8204"} # Target room for bug 2
+                ]
+            }
+        ]
+    }
+
+    mock_metrics = {}
+
+    # 2. Setup the API responses mocked sequentially
+    # First response: order history query payload
+    mock_history_payload = {
+        "payload": {
+            "myOrders": [
+                {
+                    "orderCode": "ORD_123",
+                    "orderDate": "2026-06-01",
+                    "orderTotals": {"total": 150.0},
+                    "owner": True
+                }
+            ]
+        }
+    }
+
+    # Second response: order detail query payload
+    mock_detail_payload = {
+        "payload": {
+            "orderHistoryDetailItems": [
+                {
+                    "productSummary": {
+                        "title": "Deluxe Beverage Package",
+                        "defaultVariantId": "BEV_PKG_01",
+                        "productTypeCategory": {"id": "pt_beverage"},
+                        "salesUnit": "PER_DAY"
+                    },
+                    "guests": [
+                        {
+                            "id": "99902", # Belongs to the linked reservation
+                            "firstName": "John",
+                            "guestType": "adult",
+                            "orderStatus": "PAID",
+                            "priceDetails": {
+                                "subtotal": 700.0,
+                                "quantity": 1,
+                                "currency": "USD"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    # Third response: product catalog lookup payload (called inside get_new_order_price)
+    mock_catalog_payload = {
+        "payload": {
+            "title": "Deluxe Beverage Package",
+            "startingFromPrice": {
+                "adultPromotionalPrice": 85.0
+            }
+        }
+    }
+
+    # Assign side-effects to match the sequence of requests executed inside the loops
+    mock_execute.side_effect = [
+        MagicMock(json=lambda: mock_history_payload), # Pass 1: History call for PRIMARY_11111
+        MagicMock(json=lambda: mock_detail_payload),  # Pass 1: Detail call (skips engine due to passenger ID mismatch)
+
+        MagicMock(json=lambda: mock_history_payload), # Pass 2: History call for LINKED_22222
+        MagicMock(json=lambda: mock_detail_payload),  # Pass 2: Detail call (matches passenger 99902!)
+        MagicMock(json=lambda: mock_catalog_payload)  # Pass 2: Pricing engine catalog call
+    ]
+
+    # 3. Capture the instantiated context objects by patching WatchItemContext or tracking the pricing execution
+    with patch('CheckRoyalCaribbeanPrice.get_new_order_price') as mock_pricing_call:
+
+        get_orders(account_info, mock_booking, mock_metrics)
+
+        # 4. Assertions to confirm your code fixes are operational
+        assert mock_pricing_call.called, "Pricing engine was never invoked for the linked passenger!"
+
+        # Extract the context object passed to get_new_order_price
+        called_ctx = mock_pricing_call.call_args[0][3]
+
+        # Assert Bug 1 Fix: The context carries the correct LINKED reservation ID, not the primary account's ID
+        assert called_ctx.reservation_id == "LINKED_22222", f"Expected LINKED_22222, but got {called_ctx.reservation_id}"
+
+        # Assert Bug 2 State Check: Did the cabin map cleanly or drop to 'None'?
+        assert called_ctx.room != "None", "Cabin was parsed as 'None'. The key structure layout is breaking."
+        assert called_ctx.room == "8204", f"Expected Cabin 8204, but got {called_ctx.room}"
+
+        # Assert Data Immutability: Ensure the shared booking dictionary's top-level layout was never modified
+        assert mock_booking["bookingId"] == "PRIMARY_11111", "The primary booking dictionary state was corrupted!"
+
+
 # =====================================================================
 # ITEM 3 TESTS: API Resilience / Missing Keys
 # =====================================================================
@@ -464,7 +591,6 @@ def test_empty_guest_filter_resilience():
 # ITEM 4 TESTS: Full Branch Execution Integration Coverage
 # =====================================================================
 # Setup a dummy minimal global config to satisfy formatting calls
-#@pytest.fixture(autouse=True)
 @pytest.fixture()
 def setup_global_config_mock():
     with patch('CheckRoyalCaribbeanPrice.config') as mock_global_config:
