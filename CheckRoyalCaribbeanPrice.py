@@ -1242,6 +1242,7 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
         # 4. Fix the parser/override omissions immediately while we are safely inside Path B scope
         url_params.package_code = booking.get("packageCode")
         url_params.ship_code = booking.get("shipCode")
+        url_params.loyalty_number = booking.get("loyaltyNumber")
         if have_a_senior:
             url_params.senior = True
 
@@ -2039,7 +2040,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
             'reservationId': current_res_id,
             'sailingId': f"{ship}{start_date}",
             'currencyIso': currency,
-           'includeMedia': 'false',
+            'includeMedia': 'false',
         }
 
         url_history = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory'
@@ -2096,8 +2097,15 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
 
                         guest_passenger_ID = guest.get("id")
                         first_name = guest.get("firstName", "").capitalize()
-                        guestreservation_ID = current_res_id
                         guest_age_string = guest.get("guestType", "").lower()
+
+                        # Check the nested guest dictionary first (either reservation or booking ID),
+                        # then the value scraped from the primary booking, finally the one passed to the
+                        # server to get all the orders
+                        guestreservation_ID = guest.get("reservationId") or                               \
+                                              guest.get("bookingId") or                                   \
+                                              guest_registry.get(guest_passenger_ID, {}).get("res_id") or \
+                                              current_res_id
 
                         # Deduplication filtering
                         new_key = f"{guest_passenger_ID}{guestreservation_ID}{prefix}{product}"
@@ -2115,7 +2123,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                         currency = guest.get("priceDetails", {}).get("currency")
                         room = guest_registry.get(guest_passenger_ID, {}).get("cabin")
                         if not room or room == "None":
-                            room = guest.get("stateroom_number")
+                            room = guest.get("stateroomNumber") or None
 
                         # Pack up the transient items into a context object
                         ctx = WatchItemContext(
@@ -2133,7 +2141,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             order_date=order_date,
                             owner=owner,
                             reservations=[],
-                            reservation_id=current_res_id
+                            reservation_id=guestreservation_ID
                         )
 
                         get_new_order_price(account_info, booking, config.apobj, ctx)

@@ -267,6 +267,8 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
                             "firstName": "John",
                             "guestType": "adult",
                             "orderStatus": "PAID",
+                            "reservationId": "LINKED_22222",
+                            "cabinNumber": "8204",
                             "priceDetails": {
                                 "subtotal": 700.0,
                                 "quantity": 1,
