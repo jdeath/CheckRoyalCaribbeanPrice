@@ -654,6 +654,19 @@ def get_config_path() -> str:
     else:
         return os.path.expanduser('~/Documents') + "/" + args.config
 
+
+def get_club_royale_tier(points: int) -> str | None:
+    """Computes Club Royale Tier name based on individual tier credits."""
+    if points is None or points <= 0:
+        return None
+    elif points < 2500:
+        return "CHOICE"
+    elif points < 25000:
+        return "ICON"
+    elif points < 100000:
+        return "PRIME"
+    else:
+        return "MASTERS"
 #####################################
 # Criuse Domain and Pricing Functions
 #####################################
@@ -876,8 +889,13 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
         if total_nights > 0:
             log(f"\tTotal Trips on Royal: {total_trips} - Total Nights: {total_nights}")
 
-        club_royale_loyalty_tier = loyalty.get("club_royale_loyalty_tier","Unknown")
-        if club_royale_loyalty_tier != "Unknown":
+        # Club Royale tier currently is not part of the loyalty payload; use a helper to compute it
+        # but keep the payload check in case it ever comes back (key name may need to change)
+        casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
+        club_royale_loyalty_tier = loyalty.get("clubRoyaleLoyaltyTier") or get_club_royale_tier(casino_points)
+#        club_royale_loyalty_tier = loyalty.get("clubRoyaleLoyaltyTier")
+#        if club_royale_loyalty_tier != "Unknown":
+        if club_royale_loyalty_tier:
             casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
             log(f"\tCasino Royale Tier: {club_royale_loyalty_tier} - {casino_points} Credits")
 
@@ -894,7 +912,7 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
 
         celebrity_blue_chip_loyalty_tier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
         if celebrity_blue_chip_loyalty_tier != "Unknown":
-            celebrity_blue_chip_loyalty_individual_points = loyalty.get("celebrity_blue_chip_loyalty_individual_points",0)
+            celebrity_blue_chip_loyalty_individual_points = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints",0)
             log(f"\tBlue Chip Tier: {celebrity_blue_chip_loyalty_tier} - {celebrity_blue_chip_loyalty_individual_points} Points")
 
     # Return the correct loyality number based on the account being used
@@ -1012,10 +1030,10 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             if selection.get("sittingTime", "") == "MY TIME" or selection.get("sittingType", "") == "MY TIME":
                 log("Dining: My Time Open Sitting")
             else:
-                sitting_type = selection.get('sittingType', '')# or selection.get('sitting_type', '')
-                sitting_time = selection.get('sittingTime', '')# or selection.get('sitting_time', '')
+                sitting_type = selection.get('sittingType', '')
+                sitting_time = selection.get('sittingTime', '')
                 dining_string = f"Dining: {sitting_type} {sitting_time}"
-                raw_table_size = selection.get("table_size", "")
+                raw_table_size = selection.get("tableSize", "")
                 if raw_table_size and str(raw_table_size) != "00":
                     padded_table = str(raw_table_size).zfill(2)
                     dining_string += f" Table Size: {padded_table}"
@@ -1290,13 +1308,13 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
     refund_not_found = False
 
     if room_available:
-        base_fare_string = "allIncludedFare" if url_params.all_included else "baseFare"
-        refund_fare_string = "allIncludedRefundableFare" if url_params.all_included else "baseRefundableFare"
+        base_fare_string = "all_included_fare" if url_params.all_included else "base_fare"
+        refund_fare_string = "all_included_refundable_fare" if url_params.all_included else "base_refundable_fare"
 
         fare_struct = results.get(base_fare_string)
         if fare_struct is None:
             log(f"{RED}All Included Fare is Not Available - Reverting to Non-refundable fare{RESET}")
-            fare_struct = results.get("baseFare")
+            fare_struct = results.get("base_fare")
 
         if fare_struct is not None:
             price = fare_struct.get("fare", 0.0)
@@ -1356,10 +1374,10 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
 
         if url_params.package_code and not automatic_URL:
             log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
-            for availableRoom in results.get("availableRooms", []):
-                roomsLeft = availableRoom.get('roomsLeft')
-                if roomsLeft is not None and roomsLeft > 0:
-                    log(f"\t{availableRoom.get('name')} {availableRoom.get('price')} - Rooms Left {roomsLeft}")
+            for available_room in results.get("available_rooms", []):
+                rooms_left = available_room.get('roomsLeft')
+                if rooms_left is not None and rooms_left > 0:
+                    log(f"\t{available_room.get('name')} {available_room.get('price')} - Rooms Left {rooms_left}")
         return
 
     # Path 2: Standard Pricing Evaluation
@@ -1500,7 +1518,7 @@ def get_cruise_price_from_API(
 
     for sailing in sailings:
         # Standardize matching criteria format
-        current_sail_date: str = sailing.get("sail_date", "")
+        current_sail_date: str = sailing.get("sailDate", "")
         if current_sail_date.replace("-", "") != sail_date and current_sail_date != sail_date:
             continue
 
@@ -1637,10 +1655,10 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
 
     # Extract pricing structures with bulletproof inner-dict fallbacks
     fare_mappings = {
-        'baseFare': 'baseFare',
-        'baseRefundableFare': 'baseRefundableFare',
-        'allIncludedFare': 'allIncludedFare',
-        'allIncludedRefundableFare': 'allIncludedRefundableFare'
+        'base_fare': 'baseFare',
+        'base_refundable_fare': 'baseRefundableFare',
+        'all_included_fare': 'allIncludedFare',
+        'all_included_refundable_fare': 'allIncludedRefundableFare'
     }
 
     for result_key, api_key in fare_mappings.items():
@@ -1726,7 +1744,10 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
             cur_subtype_code = stateroom_subtype.get("code")
             cur_category_code = stateroom_subtype.get("categoryCode")
 
-            # Exact structural target match found
+            # --- INVENTORY GATE SHORT-CIRCUIT ---
+            # If our exact target cabin style is found, return True immediately.
+            # An alternative room array [] isn't needed because the caller function
+            # will proceed to execute a heavy POST request for this specific room's pricing.
             if cur_subtype_code == params.stateroom_subtype and cur_category_code == params.stateroom_category_code:
                 return True, []
 
@@ -1745,6 +1766,8 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
                 "rooms_left": rooms_left
             })
 
+    # Fall-through state: The loops completed without finding our exact cabin style.
+    # The room is sold out, so we return False along with the collected alternative options.
     return False, available_rooms
 
 
@@ -1774,7 +1797,7 @@ def get_new_order_price(
     # Unpack voyage identifiers from the booking entity
     ship = booking.get("shipCode", "")
     start_date = booking.get("sailDate", "")
-    number_of_nights = int(booking.get("number_of_nights", 0))
+    number_of_nights = int(booking.get("numberOfNights", 0))
 
     currency = config.currency_override if config.currency_override else ctx.currency
     prefix = ctx.prefix or ""
@@ -1868,7 +1891,7 @@ def get_new_order_price(
         if config.minimum_saving_alert is not None:
             text += f" ({saving_label})"
 
-        promo_description = payload.get("promo_description")
+        promo_description = payload.get("promoDescription")
         if promo_description:
             promotion_title = promo_description.get("displayName")
             text += f'\n\t\tPromotion:{promotion_title}'
@@ -1995,7 +2018,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
     if config.currency_override:
         currency = config.currency_override
     else:
-        currency = booking.get("booking_currency", "USD")
+        currency = booking.get("bookingCurrency", "USD")
 
     # Build dynamic guest/reservation lookups
     guest_registry = {}
@@ -2215,7 +2238,7 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
             continue
         seen_IDs.add(promo_ID)
 
-        promo_start = promo.get("start_date", "")[:10]
+        promo_start = promo.get("startDate", "")[:10]
         promo_end = promo.get("endDate", "")[:10]
         date_range = f"(Valid {promo_start} to {promo_end})"
 
@@ -2265,7 +2288,7 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
     params = {
         'passengerId': booking.get("passengerId"),
         'sailingId': f"{ship_code}{sail_date}",
-        'currencyIso': booking.get("booking_currency"),
+        'currencyIso': booking.get("bookingCurrency"),
     }
 
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/cart/v1/obc/reservations/{reservation_ID}'
