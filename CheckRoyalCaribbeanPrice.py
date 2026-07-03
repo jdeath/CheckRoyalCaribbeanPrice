@@ -943,15 +943,16 @@ def get_checkin_info(account_info: AccountInfo, reservationId: str, passenger_ID
     check_window_open_start_date_time = sailing_info[0].get("checkWindowOpenStartDateTime")
 
     if is_checkin_available:
-        log(f"{RED}Check In Available and Not Completed{RESET}")
-    else:
-        try:
-            dt = datetime.fromisoformat(check_window_open_start_date_time)
-            # Reaching out to the global 'config' object directly
-            local_dt = dt.astimezone().strftime(config.date_display_format + " %X %Z")
-            log(f"Check In opens on: {local_dt}")
-        except Exception:
-            pass
+        log(f"{RED}Check In Available! Fetching boarding documentation data...{RESET}")
+
+        checkin_statuses = get_checkin_statuses(account_info, reservationId, passenger_ID)
+
+        for guest in checkin_statuses:
+            if str(guest.get("guestId")) == str(passenger_ID):
+                arrival_time = guest.get("appointmentTime") or guest.get("appointmentDepartureTime") or "Not Selected"
+                status = guest.get("onlineCheckinStatus", "NOT_STARTED")
+                log(f"\tPassenger Check-In Status: {status}")
+                log(f"\tAssigned Boarding Window: {arrival_time}")
 
 
 #
@@ -1106,7 +1107,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                             paid_price_struct[item] = reservation.get(item)
 
             if booking.get("stateroomType") != "NONE":
-                get_cruise_price(account_info, booking, ship_dictionary, automatic_URL=True)
+                get_cruise_price(account_info, booking, ship_dictionary, automatic_URL=True, paid_price_struct=paid_price_struct)
             else:
                 log(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -1176,7 +1177,7 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
     return result
 
 
-def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_dictionary: ShipDictionary, automatic_URL: bool = True) -> None:
+def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_dictionary: ShipDictionary, automatic_URL: bool = True, paid_price_struct: Dict[str, Any] = None) -> None:
     """
     Performs dynamic live web-pricing evaluations for a specific stateroom or prospective cruise.
 
@@ -1186,8 +1187,9 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
     """
     # Pull properties from the foundational domain entities
     session = account_info.access.session
-    paid_price_struct = booking.get("paidPriceStruct")  # Dict containing target metrics
     apobj = config.apobj
+    if paid_price_struct is None:
+        paid_price_struct = booking.get("paidPriceStruct")  # Dict containing target metrics
 
     provided_url = booking.get("url", "")
     if provided_url:
@@ -2373,10 +2375,49 @@ def _build_checkout_url(
     return f"{base_url}?{urlencode(params)}"
 
 
+def get_checkin_statuses(account_info: AccountInfo, reservation_id: str, guest_ID: str) -> dict:
+    """
+    Retrieves digital check-in boarding passes or luggage tag documentation assets.
+    """
+    account_ID = account_info.access.id if account_info.access else ""
+
+    headers = {
+        'content-type': 'application/json',
+        'accept': 'application/json',
+    }
+
+    payload = {
+        'guestReservationIds': [
+            {
+                'bookingId': reservation_id,
+                'guestId': guest_ID,
+            },
+        ],
+    }
+
+    api_url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v2/guestCheckin/statuses/{account_ID}'
+    response = _execute_api_request(
+            account_info=account_info,
+            method="POST",
+            url=api_url,
+            data=json.dumps(payload),
+            headers=headers,
+            timeout=10,
+            exit_on_fail=False
+    )
+
+    if response is None:
+        return []
+
+    # Safely extract the payload, defaulting to {} if it's missing or explicitly None
+    data = response.json().get("payload") or {}
+    return data.get("checkinStatuses") or []
+
+
 def get_boarding_pass(account_info: AccountInfo, booking: Dict[str, Any], guest_ID: str) -> dict:
     """
     [FUTURE USE}
-    Retrieves digital check-in boarding passes or luggage tag documentation assets.
+   Retrieves digital check-in boarding passes or luggage tag documentation assets.
 
     Pulls technical verification receipts and barcode metadata maps showing if a booking is
     cleared to print standard pier entry documentation or if profile records require active
@@ -3012,7 +3053,8 @@ def main() -> None:
                 # STRATEGY NOTE: 'automaticURL=False' forces the scraper to use manually extracted browser
                 # URL context components. This prevents the code from executing automated customer profile queries,
                 # keeping this entire script iteration running safely, anonymously, and unauthenticated.
-                get_cruise_price(prospective_account, prospective_booking, ship_dictionary, automatic_URL=False)
+                prospective_target = {'paidPrice': paid_price}
+                get_cruise_price(prospective_account, prospective_booking, ship_dictionary, automatic_URL=False, paid_price_struct=prospective_target)
 
             # Safely release the connection socket resources back to the OS
             anon_session.close()
