@@ -99,7 +99,7 @@ def setup_global_config_mock():
 @pytest.fixture
 def mock_booking_with_dining_and_checkin():
     return {
-        "reservationId": "9818245",
+        "reservationId": "9999999",
         # Simulating the dining table payload structure
         "dining": {
             "type": "TRADITIONAL",
@@ -109,12 +109,12 @@ def mock_booking_with_dining_and_checkin():
         # Simulating individual passenger check-in details
         "guests": [
             {
-                "firstName": "Laura",
+                "firstName": "Bob",
                 "checkInStatus": "Partially Complete",
                 "boardingTime": "12:00 PM"
             },
             {
-                "firstName": "Adam",
+                "firstName": "Matt",
                 "checkInStatus": "Partially Complete",
                 "boardingTime": "12:00 PM"
             }
@@ -802,14 +802,14 @@ def test_parse_dining_includes_table_size(mock_booking_with_dining_and_checkin):
     mock_bookings_response = {
         "payload": {
             "profileBookings": [{
-                "bookingId": "9818245",
+                "bookingId": "9999999",
                 "passengerId": "33333333",
                 "sailDate": "20270510",
                 "numberOfNights": 7,
                 "shipCode": "WN",
                 "stateroomNumber": "6574",
                 "stateroomType": "B",
-                "passengersInStateroom": [{"firstName": "Adam", "lastName": "Sternberg", "bookingId": "9818245"}]
+                "passengersInStateroom": [{"firstName": "Matt", "lastName": "Smith", "bookingId": "9999999"}]
             }]
         }
     }
@@ -829,7 +829,7 @@ def test_parse_dining_includes_table_size(mock_booking_with_dining_and_checkin):
             # Default to the primary booking payload profile
             return MagicMock(json=lambda: mock_bookings_response)
 
-    mock_metrics = {"passenger_names": "Adam Sternberg", "checkin_string": "Boarding Time 12:00"}
+    mock_metrics = {"passenger_names": "Matt Smith", "checkin_string": "Boarding Time 12:00"}
 
     mock_dining_and_prices = {
         "dining_selection": [
@@ -868,14 +868,14 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
     mock_bookings_response = {
         "payload": {
             "profileBookings": [{
-                "bookingId": "9818245",
+                "bookingId": "9999999",
                 "passengerId": "33333333",
                 "sailDate": "20270510",
                 "numberOfNights": 7,
                 "shipCode": "WN",
                 "stateroomNumber": "6574",
                 "stateroomType": "B",
-                "passengersInStateroom": [{"firstName": "Adam", "lastName": "Sternberg", "bookingId": "9818245"}]
+                "passengersInStateroom": [{"firstName": "Matt", "lastName": "Smith", "bookingId": "9999999"}]
             }]
         }
     }
@@ -899,7 +899,7 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
         checkin_logs.append(f"{name} Check in {status}, Boarding Time {b_time}")
 
     mock_metrics = {
-        "passenger_names": "Laura, Adam",
+        "passenger_names": "Bob, Matt",
         "checkin_string": ", ".join(checkin_logs)
     }
 
@@ -917,7 +917,7 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
         get_voyages(account_info, discounts, ship_registry)
 
         log_outputs = [call[0][0] for call in mock_log.call_args_list]
-        assert any("Laura Check in Partially Complete, Boarding Time 12:00" in s for s in log_outputs), \
+        assert any("Bob Check in Partially Complete, Boarding Time 12:00" in s for s in log_outputs), \
             "Granular passenger check-in layout contract was missed!"
 
 # =====================================================================
@@ -1072,7 +1072,7 @@ def test_login_jwt_decoding_padding_resilience():
     # Generate a dummy valid 3-part token layout string layout format
     header = '{"alg":"HS256","typ":"JWT"}'
     # Ensure payload has exact modulo lengths that test standard padding boundaries
-    payload = '{"sub":"1234567890","name":"Adam"}'
+    payload = '{"sub":"1234567890","name":"Matt"}'
 
     def b64_encode(s):
         return base64.urlsafe_b64encode(s.encode('utf-8')).decode('utf-8').replace('=', '')
@@ -1144,7 +1144,7 @@ def test_get_voyages_resilience_to_malformed_manual_prices_config():
         mock_bookings = {
             "payload": {
                 "profileBookings": [{
-                    "bookingId": "9818245",
+                    "bookingId": "9999999",
                     "passengerId": "33333333",
                     "stateroomType": "B",
                     "passengersInStateroom": []
@@ -1357,7 +1357,7 @@ def test_get_orders_per_day_price_calculation_safety():
                 "guests": [{
                     "id": "999",
                     "orderStatus": "COMPLETED",
-                    "firstName": "ADAM",
+                    "firstName": "MATT",
                     "guestType": "ADULT",
                     "priceDetails": {
                         "subtotal": 490.0, # Total cost for 1 person for 7 nights ($70/night)
@@ -1436,7 +1436,7 @@ def test_get_new_order_price_execution():
         prefix='BEVERAGE',
         product='DBP01',
         passenger_ID='999',
-        passenger_name='Adam',
+        passenger_name='Matt',
         room='1234',
         paid_price=70.00,
         currency='USD',
@@ -1490,8 +1490,8 @@ def test_calculate_passenger_metrics_gty_scope_isolation():
 
     # Guest 1 has missing details triggering the patch; Guest 2 has correct fields
     guests = [
-        {"firstName": "ADAM", "stateroomCategoryCode": None, "onlineCheckinStatus": "PENDING"},
-        {"firstName": "LAURA", "stateroomCategoryCode": "AZ", "onlineCheckinStatus": "PENDING"}
+        {"firstName": "MATT", "stateroomCategoryCode": None, "onlineCheckinStatus": "PENDING"},
+        {"firstName": "BOB", "stateroomCategoryCode": "AZ", "onlineCheckinStatus": "PENDING"}
     ]
 
     metrics = _calculate_passenger_metrics(
@@ -1514,7 +1514,7 @@ def test_calculate_passenger_metrics_brittle_timestamp_fallback():
     """
     booking = {"stateroomType": "B", "stateroomSubtype": "D8"}
     guests = [{
-        "firstName": "Adam",
+        "firstName": "Matt",
         "onlineCheckinStatus": "COMPLETED",
         "arrivalTime": "11:45", # Alternative short string representation
         "stateroomCategoryCode": "D8"
