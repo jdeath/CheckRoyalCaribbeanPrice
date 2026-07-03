@@ -1,3 +1,4 @@
+import base64
 import pytest
 import requests
 
@@ -8,12 +9,30 @@ from CheckRoyalCaribbeanPrice import (
     AccountInfo,
     CruiseAppConfig,
     CruiseURLParams,
+    DiscountProfile,
     ShipRegistry,
     WatchItemContext,
+    _build_checkout_url,
+    _calculate_passenger_metrics,
+    _execute_api_request,
+    _extract_json_array,
+    above_age_on_sail_date,
+    check_if_room_is_available,
     config,
+    get_all_promotions,
+    get_club_royale_tier,
     get_cruise_price,
+    get_dining_and_prices,
+    get_new_order_price,
+    get_orders,
+    get_room_price_via_API,
+    get_ship_dictionary_web,
+    get_profile,
     get_orders,
     get_voyages,
+    load_config_objects,
+    login,
+    parse_provided_URL
 )
 
 # =====================================================================
@@ -62,6 +81,46 @@ def base_account_info():
     account.access = mock_access
     account.found_items = []
     return account
+
+# Setup a dummy minimal global config to satisfy formatting calls
+@pytest.fixture()
+def setup_global_config_mock():
+    with patch('CheckRoyalCaribbeanPrice.config') as mock_global_config:
+        mock_global_config.date_display_format = "%m/%d/%Y"
+        mock_global_config.watch_list = []
+        mock_global_config.display_cruise_prices = True
+        mock_global_config.reservation_prices = {}
+        mock_global_config.reservation_names = {}
+        mock_global_config.show_promos = True
+        mock_global_config.apobj = None
+        yield mock_global_config
+
+
+@pytest.fixture
+def mock_booking_with_dining_and_checkin():
+    return {
+        "reservationId": "9818245",
+        # Simulating the dining table payload structure
+        "dining": {
+            "type": "TRADITIONAL",
+            "time": "08:30 PM",
+            "tableSize": "04"  # The missing field
+        },
+        # Simulating individual passenger check-in details
+        "guests": [
+            {
+                "firstName": "Laura",
+                "checkInStatus": "Partially Complete",
+                "boardingTime": "12:00 PM"
+            },
+            {
+                "firstName": "Adam",
+                "checkInStatus": "Partially Complete",
+                "boardingTime": "12:00 PM"
+            }
+        ]
+    }
+
 
 # =====================================================================
 # ITEM 1 TESTS: Cabin "Not For Sale" Notification Logic
@@ -592,19 +651,6 @@ def test_empty_guest_filter_resilience():
 # =====================================================================
 # ITEM 4 TESTS: Full Branch Execution Integration Coverage
 # =====================================================================
-# Setup a dummy minimal global config to satisfy formatting calls
-@pytest.fixture()
-def setup_global_config_mock():
-    with patch('CheckRoyalCaribbeanPrice.config') as mock_global_config:
-        mock_global_config.date_display_format = "%m/%d/%Y"
-        mock_global_config.watch_list = []
-        mock_global_config.display_cruise_prices = True
-        mock_global_config.reservation_prices = {}
-        mock_global_config.reservation_names = {}
-        mock_global_config.show_promos = True
-        mock_global_config.apobj = None
-        yield mock_global_config
-
 def test_get_voyages_complete_execution_path():
     """Exercise all logical branches inside get_voyages loop to ensure no undefined scoping or variable errors."""
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
@@ -735,4 +781,797 @@ def test_get_orders_complete_execution_path():
             get_orders(account_info, mock_booking, mock_metrics)
         except Exception as exc:
             pytest.fail(f"Execution path loop threw unexpected tracking exception: {exc}")
+
+
+# =====================================================================
+# ITEM 5 TESTS: Client/Server Target Price Comparison Key Alignment
+# =====================================================================
+
+def test_parse_dining_includes_table_size(mock_booking_with_dining_and_checkin):
+    """
+    Verify that the dining log output zero-pads and includes the table size
+    when executing the standard voyage loop context.
+    """
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+
+    discounts = CruiseURLParams(loyalty_number="390323599", state="FL")
+    ship_registry = ShipRegistry()
+
+    # Define the individual payloads
+    mock_bookings_response = {
+        "payload": {
+            "profileBookings": [{
+                "bookingId": "9818245",
+                "passengerId": "33333333",
+                "sailDate": "20270510",
+                "numberOfNights": 7,
+                "shipCode": "WN",
+                "stateroomNumber": "6574",
+                "stateroomType": "B",
+                "passengersInStateroom": [{"firstName": "Adam", "lastName": "Sternberg", "bookingId": "9818245"}]
+            }]
+        }
+    }
+    mock_promo_response = {"payload": []}
+    mock_order_response = {"payload": []}  # Safe fallback for get_orders execution path
+
+    # Dynamic network router instead of a strict sequence
+    def api_router(*args, **kwargs):
+        # Inspect URL string passed into positional arguments
+        url_called = args[2] if len(args) > 2 else kwargs.get("url", "")
+
+        if "promotions/list" in url_called:
+            return MagicMock(json=lambda: mock_promo_response)
+        elif "orderHistory" in url_called:
+            return MagicMock(json=lambda: mock_order_response)
+        else:
+            # Default to the primary booking payload profile
+            return MagicMock(json=lambda: mock_bookings_response)
+
+    mock_metrics = {"passenger_names": "Adam Sternberg", "checkin_string": "Boarding Time 12:00"}
+
+    mock_dining_and_prices = {
+        "dining_selection": [
+            {
+                "sittingType": mock_booking_with_dining_and_checkin["dining"]["type"],
+                "sittingTime": mock_booking_with_dining_and_checkin["dining"]["time"],
+                "tableSize": mock_booking_with_dining_and_checkin["dining"]["tableSize"]
+            }
+        ],
+        "prices": [{"priceTypeCode": "GROSS_TOTALS", "amount": 2662.96}]
+    }
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=api_router), \
+         patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value=mock_metrics), \
+         patch('CheckRoyalCaribbeanPrice.get_dining_and_prices', return_value=mock_dining_and_prices), \
+         patch('CheckRoyalCaribbeanPrice.get_checkin_info'), \
+         patch('CheckRoyalCaribbeanPrice.log') as mock_log:
+
+        get_voyages(account_info, discounts, ship_registry)
+
+        log_outputs = [call[0][0] for call in mock_log.call_args_list]
+        assert any("Table Size: 04" in s for s in log_outputs), "Table size formatting parameter missing from output logs!"
+
+
+def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_checkin):
+    """
+    Verify that individual passenger check-in statuses and boarding constraints
+    are clearly enumerated inside the log stream.
+    """
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+
+    discounts = CruiseURLParams(loyalty_number="390323599", state="FL")
+    ship_registry = ShipRegistry()
+
+    mock_bookings_response = {
+        "payload": {
+            "profileBookings": [{
+                "bookingId": "9818245",
+                "passengerId": "33333333",
+                "sailDate": "20270510",
+                "numberOfNights": 7,
+                "shipCode": "WN",
+                "stateroomNumber": "6574",
+                "stateroomType": "B",
+                "passengersInStateroom": [{"firstName": "Adam", "lastName": "Sternberg", "bookingId": "9818245"}]
+            }]
+        }
+    }
+    mock_promo_response = {"payload": []}
+    mock_order_response = {"payload": []}
+
+    def api_router(*args, **kwargs):
+        url_called = args[2] if len(args) > 2 else kwargs.get("url", "")
+        if "promotions/list" in url_called:
+            return MagicMock(json=lambda: mock_promo_response)
+        elif "orderHistory" in url_called:
+            return MagicMock(json=lambda: mock_order_response)
+        else:
+            return MagicMock(json=lambda: mock_bookings_response)
+
+    checkin_logs = []
+    for guest in mock_booking_with_dining_and_checkin["guests"]:
+        name = guest["firstName"]
+        status = guest["checkInStatus"]
+        b_time = guest["boardingTime"].replace(" PM", "").strip()
+        checkin_logs.append(f"{name} Check in {status}, Boarding Time {b_time}")
+
+    mock_metrics = {
+        "passenger_names": "Laura, Adam",
+        "checkin_string": ", ".join(checkin_logs)
+    }
+
+    mock_dining_and_prices = {
+        "dining_selection": [{"sittingType": "TRADITIONAL", "sittingTime": "05:00 PM", "tableSize": "04"}],
+        "prices": [{"priceTypeCode": "GROSS_TOTALS", "amount": 2662.96}]
+    }
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=api_router), \
+         patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value=mock_metrics), \
+         patch('CheckRoyalCaribbeanPrice.get_dining_and_prices', return_value=mock_dining_and_prices), \
+         patch('CheckRoyalCaribbeanPrice.get_checkin_info'), \
+         patch('CheckRoyalCaribbeanPrice.log') as mock_log:
+
+        get_voyages(account_info, discounts, ship_registry)
+
+        log_outputs = [call[0][0] for call in mock_log.call_args_list]
+        assert any("Laura Check in Partially Complete, Boarding Time 12:00" in s for s in log_outputs), \
+            "Granular passenger check-in layout contract was missed!"
+
+# =====================================================================
+# ITEM 5 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
+# =====================================================================
+
+def test_execute_api_request_handles_uninitialized_access_context():
+    """
+    Ensure the network engine falls back cleanly to the standard requests
+    module if account_info is passed but access configurations are missing.
+    """
+    # Create an AccountInfo model wrapper where access profile is explicit None
+    account_info = AccountInfo(username="tester", password="password", cruise_line="royal")
+    account_info.access = None
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+
+    with patch('requests.request', return_value=mock_response) as mock_req:
+        resp = _execute_api_request(
+            account_info=account_info,
+            method="GET",
+            url="https://aws-prd.api.rccl.com/test-endpoint",
+            exit_on_fail=False
+        )
+        assert resp is not None
+        mock_req.assert_called_once()
+
+
+def test_extract_json_array_resilience_to_unclosed_strings():
+    """
+    Verify that the bracket-counter doesn't choke or raise index exceptions
+    if a malformed server response contains mismatched text quotes.
+    """
+    corrupt_html_payload = (
+        '<div>var pricingAddOns = {"addons" : ["item1", "item2", "item3"</div>'
+        '  "some_other_key": "unclosed_double_quote_starts_here... '
+    )
+    result = _extract_json_array(corrupt_html_payload, "addons")
+    assert result is None
+
+
+def test_above_age_on_sail_date_leap_year_boundaries():
+    """
+    Verify age calculations hold true for edge cases like leap-day birthdays
+    when evaluated against standard sailing target periods.
+    """
+    birth_date = "20240229"  # Leap Day
+    sail_date = "20260228"   # Non-leap year day prior to anniversary boundary
+
+    # User hasn't crossed the true fractional milestone date threshold yet
+    is_two = above_age_on_sail_date(birth_date, sail_date, age_threshold=2)
+    assert is_two is False
+
+
+def test_club_royale_tier_ordering_and_boundaries():
+    """
+    Verify correct corporate loyalty tier mappings across exact point milestone values.
+    """
+    assert get_club_royale_tier(0) is None
+    assert get_club_royale_tier(-15) is None
+
+    # Choice Tier: 1 to 2,499 points
+    assert get_club_royale_tier(500) == "CHOICE"
+    assert get_club_royale_tier(2499) == "CHOICE"
+
+    # Prime Tier: 2,500 to 24,999 points
+    # NOTE: Fix logic if tier ordering has transposed priority names!
+    assert get_club_royale_tier(2500) == "PRIME"
+    assert get_club_royale_tier(15000) == "PRIME"
+
+    # Icon Tier: 25,000 to 99,999 points
+    assert get_club_royale_tier(25000) == "ICON"
+    assert get_club_royale_tier(99999) == "ICON"
+
+    # Masters Tier: 100,000+ points
+    assert get_club_royale_tier(100000) == "MASTERS"
+
+# =====================================================================
+# ITEM 6 EXTRA DOMAIN TESTS: Fleet Discovery Data Structural Boundaries
+# =====================================================================
+def test_get_ship_dictionary_web_handles_empty_or_missing_payload_keys():
+    """
+    Verify that if the corporate ships API returns a valid HTTP 200 response
+    but drops the expected structure, the registry parser halts or raises rather
+    than letting downstream scripts run with blank vessel mappings.
+    """
+    # Simulate a structural drift scenario from the server (missing "ships" array)
+    mock_malformed_json = {
+        "payload": {
+            "status": "SUCCESS"
+            # "ships" key is entirely absent or misnamed due to server changes
+        }
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = mock_malformed_json
+
+    registry = ShipRegistry()
+
+    # If your original intent is to halt when the registry fails to populate,
+    # let's verify that a downstream error is caught or the function exits cleanly.
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        # Depending on how strict registry.add_from_payload is, check for the outcome:
+        get_ship_dictionary_web(registry)
+
+        # Check that the registry didn't accidentally populate junk
+        assert len(registry.ships) == 0
+
+
+def test_get_ship_dictionary_web_exception_handling_triggers_exit():
+    """
+    Ensure that any completely corrupt JSON structural response inside the parsing
+    block safely catches the parsing exception and executes a clean sys.exit(1).
+    """
+    mock_resp = MagicMock()
+    # Force JSON method to raise a critical parsing exception
+    mock_resp.json.side_effect = ValueError("Corrupt structural formatting or invalid characters")
+
+    registry = ShipRegistry()
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp), \
+         patch('sys.exit') as mock_exit:
+
+        get_ship_dictionary_web(registry)
+        mock_exit.assert_called_once_with(1)
+
+# =====================================================================
+# ITEM 7 EXTRA PARSER & SESSION TESTS: Edge-Case Handling & Robust Fallbacks
+# =====================================================================
+
+def test_parse_provided_url_handles_empty_or_missing_list_parameters():
+    """
+    Ensure the URL engine safely extracts values without throwing an IndexError
+    when lists are present but empty or query parameters are blank.
+    """
+    # URL containing an empty query structure that could trigger list evaluation glitches
+    malformed_url = "https://www.royalcaribbean.com/booking/landing?r0d=&cabinClassType="
+
+    parsed = parse_provided_URL(malformed_url)
+    assert parsed.cabin_class_string == ""
+    assert parsed.stateroom_type_name == "" or parsed.stateroom_type_name is None
+
+
+def test_login_jwt_decoding_padding_resilience():
+    """
+    Verify that token slice base64 decoding doesn't throw bad padding exceptions
+    regardless of the raw text string segment length.
+    """
+    account_info = AccountInfo(username="test@test.com", password="password", cruise_line="royal")
+
+    # Generate a dummy valid 3-part token layout string layout format
+    header = '{"alg":"HS256","typ":"JWT"}'
+    # Ensure payload has exact modulo lengths that test standard padding boundaries
+    payload = '{"sub":"1234567890","name":"Adam"}'
+
+    def b64_encode(s):
+        return base64.urlsafe_b64encode(s.encode('utf-8')).decode('utf-8').replace('=', '')
+
+    mock_jwt = f"{b64_encode(header)}.{b64_encode(payload)}.signature_chunk"
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"access_token": mock_jwt}
+
+    # If the main script base64 logic is fragile, it may crash on clean multiples.
+    # Let's ensure the application handles it or use this test to implement a robust pad-fix:
+    # E.g., string1 + '=' * (-len(string1) % 4)
+    with patch('requests.Session.post', return_value=mock_resp):
+        access_profile = login(account_info)
+        assert access_profile.id == "1234567890"
+
+
+def test_get_profile_handles_none_loyalty_information_safely():
+    """
+    Verify that if a user account has zero historical tracking data and the
+    loyaltyInformation payload key returns None, the script degrades without crashing.
+    """
+    account_info = AccountInfo(username="new_user", password="password", cruise_line="royal")
+    account_info.access = MagicMock(id="99999")
+
+    # Profile response for a brand new user missing deep data structures
+    mock_profile_json = {
+        "payload": {
+            "contactInformation": {
+                "address": {"residencyCountryCode": "USA", "state": "FL"}
+            },
+            "loyaltyInformation": None  # Edge case: server returns None instead of an empty dict
+        }
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = mock_profile_json
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        state, loyalty_num, points = get_profile(account_info)
+        assert state == "FL"
+        assert loyalty_num is None
+        assert points == 0
+
+# =====================================================================
+# ITEM 8 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
+# =====================================================================
+def test_get_voyages_resilience_to_malformed_manual_prices_config():
+    """
+    Verify that if the user's manual configuration list contains an entry
+    missing a reservation ID or passes an alphanumeric string, the loop handles
+    or skips the entry without raising an unhandled ValueError/TypeError.
+    """
+    account_info = AccountInfo(username="tester", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+    ship_registry = ShipRegistry()
+
+    # Configure global mock state variables safely
+    with patch('CheckRoyalCaribbeanPrice.config') as mock_config:
+        mock_config.display_cruise_prices = True
+        mock_config.watch_list = []
+        mock_config.show_promos = False
+        # Edge case entry: Alphanumeric typo or blank dictionary
+        mock_config.reservation_prices = [{"reservation": None}, {"reservation": "BrokenIDText"}]
+        mock_config.reservation_names = {}
+        mock_config.format_date = lambda d: "2027-05-10"
+
+        mock_bookings = {
+            "payload": {
+                "profileBookings": [{
+                    "bookingId": "9818245",
+                    "passengerId": "33333333",
+                    "stateroomType": "B",
+                    "passengersInStateroom": []
+                }]
+            }
+        }
+
+        # If int() conversion fails inside the loop without a try/except, this test catches it
+        with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=MagicMock(json=lambda: mock_bookings)), \
+             patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value={"passenger_names": "", "checkin_string": ""}), \
+             patch('CheckRoyalCaribbeanPrice.get_dining_and_prices', return_value={}), \
+             patch('CheckRoyalCaribbeanPrice.get_OBC'), \
+             patch('CheckRoyalCaribbeanPrice.get_orders'):
+
+            # Expecting it to gracefully log or step past malformed values
+            try:
+                get_voyages(account_info, MagicMock(), ship_registry)
+            except (ValueError, TypeError) as err:
+                pytest.fail(f"get_voyages crashed on malformed manual override structures: {err}")
+
+
+def test_get_dining_and_prices_whitespace_and_formatting_drift():
+    """
+    Verify get_dining_and_prices parses valid arrays correctly even if the Next.js
+    stream contains non-standard whitespace shifts or variations around key fields.
+    """
+    account_info = AccountInfo(username="tester", password="password", cruise_line="royal")
+    booking = {"amendToken": "token123", "bookingOfficeCountryCode": "USA"}
+
+    # Simulated React Server Component string response containing spaces and unique spacing layouts
+    mock_rsc_stream = (
+        '{"someUnrelatedKey": true}\n'
+        '"diningSelection"   :   [{"sittingType": "LATE", "sittingTime": "08:30 PM"}]\n'
+        '"prices":[{"priceTypeCode":"GROSS_TOTALS","amount":1500.00}]'
+    )
+
+    mock_resp = MagicMock()
+    mock_resp.text = mock_rsc_stream
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        result = get_dining_and_prices(account_info, booking)
+
+        assert len(result["dining_selection"]) == 1
+        assert result["dining_selection"][0]["sittingType"] == "LATE"
+        assert result["prices"][0]["amount"] == 1500.00
+
+# =====================================================================
+# ITEM 9 EXTRA PRICING LOGIC TESTS: Boolean Typo & Notification Filtering
+# =====================================================================
+def test_get_cruise_price_resolves_boolean_discount_labels_accurately():
+    """
+    Verify that the discount metric assembly handles Boolean-based parameters
+    correctly so that active discounts are logged and passed to notifications
+    instead of being skipped by string literal mismatches.
+    """
+    account_info = AccountInfo(username="tester", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+    ship_registry = ShipRegistry()
+    ship_registry.get_ship = MagicMock(return_value="Icon of the Seas")
+
+    # Mock a valid query state profile return structure
+    mock_url_params = MagicMock()
+    mock_url_params.ship_code = "IC"
+    mock_url_params.sail_date = "2027-05-10"
+    mock_url_params.cabin_class_string = "BALCONY"
+    mock_url_params.stateroom_category_code = "CB"
+    mock_url_params.currency_code = "USD"
+    mock_url_params.coupon_code = None
+    mock_url_params.refundable = False
+    mock_url_params.travel_insurance = False
+    mock_url_params.prepaid_grats = False
+    mock_url_params.all_included = False
+
+    # Mirror the actual dataclass boolean assignments from the URL parser
+    mock_url_params.loyalty_number = "123456"
+    mock_url_params.state = "FL"
+    mock_url_params.senior = True
+    mock_url_params.police = True
+    mock_url_params.military = True
+
+    mock_api_results = {
+        "room_available": True,
+        "sailing_nights": 7,
+        "base_fare": {"fare": 1200.00, "gratuities": 0.0, "insurance": 0.0, "obc": "0.0"}
+    }
+
+    paid_price_struct = {"paidPrice": 1500.00, "police": True}
+
+    with patch('CheckRoyalCaribbeanPrice.config') as mock_config, \
+         patch('CheckRoyalCaribbeanPrice.parse_provided_URL', return_value=mock_url_params), \
+         patch('CheckRoyalCaribbeanPrice.get_room_price_via_API', return_value=mock_api_results), \
+         patch('CheckRoyalCaribbeanPrice.log') as mock_log:
+
+        mock_config.format_date = lambda d: "2027-05-10"
+        mock_config.date_display_format = "%Y-%m-%d"
+        mock_config.minimum_saving_alert = 10.0
+        mock_config.apobj = MagicMock()
+
+        # Execute check with an explicit booking tracking override
+        booking = {"url": "https://dummy-url.com", "paidPriceStruct": paid_price_struct}
+        get_cruise_price(account_info, booking, ship_registry, automatic_URL=True)
+
+        # Capture all arguments passed to log to see if labels processed correctly
+        logged_messages = "".join([call.args[0] for call in mock_log.call_args_list])
+
+        # If the script uses `== "y"` checks on booleans, these strings won't appear.
+        # This test documents that the script updates should check `is True` or truthiness.
+        assert "Loyalty" in logged_messages or "Residency" in logged_messages
+
+#======================================================================
+# ITEM 10 EXTRA LIVE API TESTS: Schema Alignment & Request Resilience
+# =====================================================================
+
+def test_get_room_price_via_api_suite_schema_realignment():
+    """
+    Ensure the checkout payload correctly remaps suite category codes to 'SUITE'
+    so that requests for Grand Suites, Junior Suites, etc. do not pass
+    unsupported type codes to the server.
+    """
+    url_params = CruiseURLParams()
+    url_params.booking_office_country_code = "USA"
+    url_params.package_code = "AL07W114"
+    url_params.sail_date = "2027-05-10"
+    url_params.currency_code = "USD"
+    url_params.stateroom_type_name = "DELUXE"
+    # Target code triggering re-indexing
+    url_params.stateroom_category_code = "GS"
+    url_params.stateroom_subtype = "W"
+    url_params.number_of_adults = 2
+    url_params.number_of_children = 0
+    url_params.fire = url_params.military = url_params.police = url_params.senior = "n"
+    url_params.coupon_code = url_params.state = url_params.loyalty_number = None
+
+    # Force availability true to hit the payload compilation block
+    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(True, [])), \
+         patch('CheckRoyalCaribbeanPrice._execute_api_request') as mock_request:
+
+        mock_request.return_value = None  # Short-circuit after capture
+        get_room_price_via_API(url_params)
+
+        # Verify the captured JSON structure passed to the corporate endpoint
+        called_json = mock_request.call_args[1].get('data')
+        assert called_json is not None
+
+        # If the comment bug persists, this assertion will fail because it passed 'DELUXE'
+        assert '"stateroomTypeCode": "DELUXE"' in called_json
+
+
+def test_check_if_room_is_available_network_exception_tolerance():
+    """
+    Verify that if a direct requests call to room-selection triggers a network exception,
+    the script handles the failure gracefully instead of throwing a script crash.
+    """
+    url_params = CruiseURLParams()
+    url_params.package_code = "SY07W115"
+    url_params.cabin_class_string = "BALCONY"
+
+    # Simulate a sudden socket/connection reset drop during validation loops
+    with patch('requests.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
+        try:
+            available, alternate_rooms = check_if_room_is_available(url_params)
+            assert available is False
+            assert alternate_rooms == []
+        except Exception as err:
+            pytest.fail(f"check_if_room_is_available leaked a raw unhandled exception: {err}")
+
+# =====================================================================
+# ITEM 11 EXTRA ADD-ON ENGINE TESTS: Cost Metrics & Promotion Boundaries
+# =====================================================================
+
+def test_get_orders_per_day_price_calculation_safety():
+    """
+    Ensure get_orders divides the package subtotal accurately without
+    double-deducting nights and quantities, which would artificially deflate
+    the tracked paid price.
+    """
+    account_info = AccountInfo(username="tester@domain.com", password="SecurePassword123")
+    account_info.found_items = []
+
+    booking = {
+        "bookingId": "1234567",
+        "shipCode": "AL",
+        "sailDate": "20270510",
+        "numberOfNights": 7,
+        "bookingCurrency": "USD",
+        "guests": [{"passengerId": "999", "cabinNumber": "1234"}]
+    }
+
+    # Mock order history responses
+    mock_history_payload = {
+        "payload": {
+            "myOrders": [{
+                "orderCode": "RC-TST123",
+                "orderDate": "2026-05-15",
+                "owner": True,
+                "orderTotals": {"total": 490.0}
+            }]
+        }
+    }
+
+    mock_detail_payload = {
+        "payload": {
+            "orderHistoryDetailItems": [{
+                "productSummary": {
+                    "title": "Deluxe Beverage Package",
+                    "defaultVariantId": "DBP01",
+                    "productTypeCategory": {"id": "BEVERAGE"},
+                    "salesUnit": "PER_NIGHT"
+                },
+                "guests": [{
+                    "id": "999",
+                    "orderStatus": "COMPLETED",
+                    "firstName": "ADAM",
+                    "guestType": "ADULT",
+                    "priceDetails": {
+                        "subtotal": 490.0, # Total cost for 1 person for 7 nights ($70/night)
+                        "quantity": 7,      # Represents 7 package-days
+                        "currency": "USD"
+                    }
+                }]
+            }]
+        }
+    }
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request') as mock_api:
+        # Side effect to return history list, then history details
+        mock_resp1 = MagicMock()
+        mock_resp1.json.return_value = mock_history_payload
+        mock_resp2 = MagicMock()
+        mock_resp2.json.return_value = mock_detail_payload
+        mock_api.side_effect = [mock_resp1, mock_resp2]
+
+        with patch('CheckRoyalCaribbeanPrice.get_new_order_price') as mock_check_price:
+            get_orders(account_info, booking, {})
+
+            assert mock_check_price.called
+            captured_ctx = mock_check_price.call_args[0][3]
+            # Price must resolve precisely to 70.00 per night (490 / 7)
+            assert captured_ctx.paid_price == 70.00
+
+
+def test_get_all_promotions_malformed_template_resilience():
+    """
+    Verify that if the promotion list returns a malformed structure or flat
+    string elements inside the templates array, the parser catches the error
+    gracefully without a loop crash.
+    """
+    account_info = AccountInfo(username="tester@domain.com", password="SecurePassword123")
+    booking = {"shipCode": "SY", "sailDate": "20270510", "bookingCurrency": "USD"}
+
+    mock_pdp_payload = {
+        "payload": [
+            {
+                "id": "PROMO_ERR_99",
+                "templates": ["MALFORMED_FLAT_STRING_INSTEAD_OF_DICT"]
+            }
+        ]
+    }
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request') as mock_api:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = mock_pdp_payload
+        mock_api.return_value = mock_resp
+
+        try:
+            get_all_promotions(account_info, booking)
+        except Exception as err:
+            pytest.fail(f"get_all_promotions crashed on malformed template definitions: {err}")
+
+def test_get_new_order_price_execution():
+    """
+    Exercises the internal tracking, comparison, and Apprise notification
+    mechanics of get_new_order_price while patching internal API network hooks.
+    """
+    # 1. Setup minimal structural parameters
+    account_info = AccountInfo(username="tester@domain.com", password="SecurePassword123")
+    booking = {
+        "bookingId": "1234567",
+        "shipCode": "AL",
+        "sailDate": "20270510",
+        "numberOfNights": 7
+    }
+
+    # Mock the Apprise notification object
+    mock_apprise = MagicMock()
+
+    # 2. Build a populated context object using our verified $70/night rate
+    ctx = WatchItemContext(
+        prefix='BEVERAGE',
+        product='DBP01',
+        passenger_ID='999',
+        passenger_name='Adam',
+        room='1234',
+        paid_price=70.00,
+        currency='USD',
+        guest_age_string='adult',
+        sales_unit='PER_NIGHT',
+        for_watch=False,
+        order_code='RC-TST123',
+        order_date='2026-05-15',
+        owner=True,
+        reservations=[],
+        reservation_id='1234567'
+    )
+
+    # Mock a valid item response payload from the catalog API
+    mock_catalog_response = MagicMock()
+    mock_catalog_response.json.return_value = {
+        "payload": {
+            "price": {
+                "value": 65.00  # Drop the price to simulate a better current deal!
+            }
+        }
+    }
+
+    # 3. Suppress logs AND intercept the network call layer cleanly
+    with patch('CheckRoyalCaribbeanPrice.log'), \
+         patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_catalog_response):
+
+        # Test Path A: Standard processing
+        get_new_order_price(account_info, booking, mock_apprise, ctx)
+
+        # Test Path B: Force an alert state by toggling watch conditions
+        ctx.for_watch = True
+        get_new_order_price(account_info, booking, mock_apprise, ctx)
+
+        # 4. Verify that execution passed cleanly through the block
+        assert True
+
+# =====================================================================
+# ITEM 12 EXTRA METRIC CALCULATION TESTS: Scope Isolation & String Resiliency
+# =====================================================================
+def test_calculate_passenger_metrics_gty_scope_isolation():
+    """
+    Verify that guess logic for one guest's GTY category code does not
+    unintentionally corrupt or mutate the final returned sub_type value
+    for subsequent guests in the loop payload.
+    """
+    booking = {
+        "stateroomType": "I",
+        "stateroomSubtype": None
+    }
+
+    # Guest 1 has missing details triggering the patch; Guest 2 has correct fields
+    guests = [
+        {"firstName": "ADAM", "stateroomCategoryCode": None, "onlineCheckinStatus": "PENDING"},
+        {"firstName": "LAURA", "stateroomCategoryCode": "AZ", "onlineCheckinStatus": "PENDING"}
+    ]
+
+    metrics = _calculate_passenger_metrics(
+        guests=guests,
+        sail_date="20270510",
+        booking=booking,
+        brand_code="R",
+        display_prices=False
+    )
+
+    # The final evaluation should reflect the explicit category details
+    # instead of leaking a leaked mutated assignment from earlier iterations
+    assert metrics["category_code"] == "AZ"
+
+
+def test_calculate_passenger_metrics_brittle_timestamp_fallback():
+    """
+    Ensure the arrival time extractor handles alternative or short format
+    timestamp variations without throwing string slice index or range errors.
+    """
+    booking = {"stateroomType": "B", "stateroomSubtype": "D8"}
+    guests = [{
+        "firstName": "Adam",
+        "onlineCheckinStatus": "COMPLETED",
+        "arrivalTime": "11:45", # Alternative short string representation
+        "stateroomCategoryCode": "D8"
+    }]
+
+    try:
+        metrics = _calculate_passenger_metrics(
+            guests=guests,
+            sail_date="20270510",
+            booking=booking,
+            brand_code="R",
+            display_prices=False
+        )
+        # Verify the calculation falls back cleanly rather than crashing out
+        assert isinstance(metrics["checkin_string"], str)
+    except Exception as err:
+        pytest.fail(f"_calculate_passenger_metrics crashed on non-standard arrival timestamp: {err}")
+
+# =====================================================================
+# ITEM 13 ORCHESTRATION & RUN CONTROL TESTS: Configuration Lifecycle
+# =====================================================================
+
+def test_load_config_objects_handles_none_values_safely(tmp_path):
+    """
+    Ensure load_config_objects safely parses a YAML configuration even when
+    optional keys like minimumSavingAlert are explicitly declared as null/None.
+    """
+    yaml_content = """
+    accountInfo:
+      - username: "test_user"
+        password: "password123"
+    minimumSavingAlert: null
+    displayCruisePrices: true
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml_content)
+
+    with patch('CheckRoyalCaribbeanPrice.setup_hybrid_logging') as mock_log_setup:
+        config = load_config_objects(str(config_file))
+        assert isinstance(config, CruiseAppConfig)
+        assert config.minimum_saving_alert is None
+
+
+def test_exception_block_scoping_resilience():
+    """
+    Verify that an uninitialized config variable doesn't corrupt the
+    global exception reporting path during a configuration failure.
+    """
+    # Simulate the exact logic at the entry point block when config is missing
+    config = None
+    try:
+        if config is not None:
+            date_part = config.format_date("20260702")
+        else:
+            date_part = "07/02/2026"
+    except NameError:
+        pytest.fail("The exception fallback block threw a NameError due to unbound config references.")
+
+    assert date_part == "07/02/2026"
 

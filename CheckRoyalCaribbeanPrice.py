@@ -594,6 +594,9 @@ def above_age_on_sail_date(birth_date: str, sail_date: str, age_threshold: int) 
     calendar anniversary month and day have been crossed on the ship's sailing
     timeline to account for fractional year offsets.
     """
+    if not birth_date or not sail_date:
+        return False
+
     dt1 = datetime.strptime(birth_date, "%Y%m%d")
     dt2 = datetime.strptime(sail_date, "%Y%m%d")
     age = dt2.year - dt1.year
@@ -662,11 +665,13 @@ def get_club_royale_tier(points: int) -> str | None:
     elif points < 2500:
         return "CHOICE"
     elif points < 25000:
-        return "ICON"
-    elif points < 100000:
         return "PRIME"
+    elif points < 100000:
+        return "ICON"
     else:
         return "MASTERS"
+
+
 #####################################
 # Criuse Domain and Pricing Functions
 #####################################
@@ -874,12 +879,12 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
         state = address.get("state")
 
     # Pull the loyalty information from the profile
-    loyalty = payload.get("loyaltyInformation")
+    loyalty = payload.get("loyaltyInformation") or {}
     captains_club_ID = loyalty.get("captainsClubId")
     c_and_a_number = loyalty.get("crownAndAnchorId")
     c_and_a_level = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
-    c_and_a_points = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints")
-    c_and_a_shared_points = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints")
+    c_and_a_points = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints", 0)
+    c_and_a_shared_points = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints", 0)
 
     # Get and display Royal Caribbean (Crown & Anchor and Club Royale) information
     if c_and_a_number and c_and_a_shared_points > 0:
@@ -893,8 +898,6 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
         # but keep the payload check in case it ever comes back (key name may need to change)
         casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
         club_royale_loyalty_tier = loyalty.get("clubRoyaleLoyaltyTier") or get_club_royale_tier(casino_points)
-#        club_royale_loyalty_tier = loyalty.get("clubRoyaleLoyaltyTier")
-#        if club_royale_loyalty_tier != "Unknown":
         if club_royale_loyalty_tier:
             casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
             log(f"\tCasino Royale Tier: {club_royale_loyalty_tier} - {casino_points} Credits")
@@ -1003,6 +1006,9 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         booking_office_country_code = booking.get("bookingOfficeCountryCode")
         stateroom_number = booking.get("stateroomNumber")
         amend_token = booking.get("amendToken")
+
+        if not sail_date:
+            continue
 
         # Translate room letter code
         stateroom_type_name = _parse_stateroom_type(booking.get("stateroomType"))
@@ -1318,6 +1324,12 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
             log(f"{RED}All Included Fare is Not Available - Reverting to Non-refundable fare{RESET}")
             fare_struct = results.get("base_fare")
 
+        # --- INITIALIZE DEFAULTS TO PREVENT UNBOUNDLOCALERROR ---
+        price = 0.0
+        grats = 0.0
+        ins = 0.0
+        obc = "0.0"
+
         if fare_struct is not None:
             price = fare_struct.get("fare", 0.0)
             grats = fare_struct.get("gratuities", 0.0)
@@ -1447,105 +1459,6 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
         log(temp_string)
 
 
-def get_cruise_price_from_API(
-    currency: str,
-    package_code: str,
-    sail_date: str,
-    booking_type: str,
-    num_adults: Union[int, str],
-    num_children: Union[int, str]
-) -> None:
-    """
-    High-level orchestration manager that pulls live retail cabin pricing directly via the API.
-
-    Acts as the main bridge between raw parsed parameters and structural request assemblies.
-    Pre-formats inventory query arrays and submits them through the target pricing API
-    endpoint to calculate current base fares, port taxes, and total room options.
-    """
-    cookies: Dict[str, str] = {
-        'currency': currency,
-    }
-
-    # Custom headers requested specifically by this GraphQL engine endpoint
-    headers: Dict[str, str] = {
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'currency': currency,
-    }
-
-    filter_string: str = f"id:{package_code}|adults:{num_adults}|children:{num_children}|startDate:{sail_date}~{sail_date}"
-
-    json_data: Dict[str, Any] = {
-        'operationName': 'cruiseSearch_Cruises',
-        'variables': {
-            'filters': filter_string,
-            'enableNewCasinoExperience': False,
-            'sort': {
-                'by': 'RECOMMENDED',
-            },
-            'pagination': {
-                'count': 100,
-                'skip': 0,
-            },
-        },
-        'query': 'query cruiseSearch_Cruises($filters: String) {cruiseSearch(filters: $filters) {results {cruises {id sailings {sailDate stateroomClassPricing {price {value currency { code }} stateroomClass {id name content { code } }}}}}}}',
-    }
-
-    # Route using the centralized execution platform
-    # Passing cookies as an additional named parameter via keyword args extraction or direct tracking
-    resp = _execute_api_request(
-        account_info=None, # Public consumer catalog endpoint, no authentication required
-        method="POST",
-        url='https://www.royalcaribbean.com/cruises/graph',
-        data=json.dumps(json_data),
-        headers=headers,
-        exit_on_fail=False # Prevent a transient pricing lookup failure from killing the tracking pipeline
-    )
-
-    if resp is None:
-        log("\tUnable to fetch public live API pricing stream at this time.")
-        return
-
-    try:
-        response_json = resp.json()
-        cruises = response_json.get("data", {}).get("cruiseSearch", {}).get("results", {}).get("cruises", [])
-    except Exception:
-        cruises = []
-
-    if cruises:
-        sailings = cruises[0].get("sailings", [])
-    else:
-        log("         Sailing is sold out")
-        return
-
-    for sailing in sailings:
-        # Standardize matching criteria format
-        current_sail_date: str = sailing.get("sailDate", "")
-        if current_sail_date.replace("-", "") != sail_date and current_sail_date != sail_date:
-            continue
-
-        prices = sailing.get("stateroomClassPricing", [])
-        for price in prices:
-            stateroom_class = price.get("stateroomClass", {})
-            content_struct = stateroom_class.get("content", {}) if stateroom_class else {}
-            cabin_code = content_struct.get("code") if content_struct else None
-
-            if cabin_code == booking_type:
-                post_string = " (your current room class) "
-            else:
-                post_string = ""
-
-            cabin_type = stateroom_class.get("name", "Unknown Type") if stateroom_class else "Unknown Type"
-            price_data = price.get("price")
-
-            if price_data is None:
-                log(f"\t\t{cabin_type} sold out")
-            else:
-                num_passengers = int(num_adults) + int(num_children)
-                total_cabin_cost = float(price_data.get("value", 0.0)) * num_passengers
-                log(f"\t\t{total_cabin_cost} {currency}: Cheapest {cabin_type} Price for {num_passengers}" + post_string)
-
-
 def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[str] = None) -> Dict[str, Any]:
     # Check room availability against the downstream checker
     room_available, available_rooms = check_if_room_is_available(url_params)
@@ -1595,8 +1508,8 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
                     'senior': url_params.senior,
                 },
                 'occupancy': {
-                    'adultCount': url_params.number_of_adults, #int(url_params.number_of_adults),
-                    'childCount': int(url_params.number_of_children), #int(url_params.number_of_children),
+                    'adultCount': url_params.number_of_adults,
+                    'childCount': int(url_params.number_of_children),
                 },
             },
         ],
@@ -1724,14 +1637,18 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     }
 
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
-    response = requests.get(api_URL, params=request_params, headers=headers)
+    try:
+        response = requests.get(api_URL, params=request_params, headers=headers)
+    except Exception as err:
+        log (f"Unable to check room availability with server")
+        return False, []
 
     # Extract structural array matrix out of the component text stream
     available_rooms = []
     rooms = _extract_json_array(response.text, "rooms")
 
     if not rooms:
-        log (f"check_if_room_is_available didn't extract rooms from response.txt")
+        log (f"check_if_room_is_available didn't extract rooms from response.text")
         log (f"passed params were {request_params}")
         return False, available_rooms
 
@@ -2140,9 +2057,16 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
 
                         # Compute specialized per-day or per-night calculations
                         if sales_unit in ['PER_NIGHT', 'PER_DAY'] and number_of_nights > 0:
-                            paid_price = round(paid_price / number_of_nights, 2)
+                            # paid_quantity represents (Number of Guests * Number of Nights).
+                            # Dividing it by number_of_nights gives us the actual headcount of passengers.
+                            passenger_count = max(1, round(paid_quantity / number_of_nights))
 
-                        if paid_quantity > 0:
+                            # The daily per-person rate is the total subtotal divided by nights and headcount
+                            paid_price = round(paid_price / (number_of_nights * passenger_count), 2)
+#                            paid_price = round(paid_price / number_of_nights, 2)
+
+                        elif paid_quantity > 0:
+                            # Fallback for flat-rate items (excursions, passes)
                             paid_price = round(paid_price / paid_quantity, 2)
 
                         currency = guest.get("priceDetails", {}).get("currency")
@@ -2229,6 +2153,8 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
             continue
 
         for template in promo.get("templates", []):
+            if not isinstance(template, dict):
+                continue
             if template.get("type") == "SITEWIDE_BANNER":
                 banner_by_id[promo.get("id")] = template
                 break
@@ -2248,7 +2174,7 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
         if banner:
             promo_line = f"[PROMO] {banner.get('heading3', '')} {banner.get('heading4', '')} - {banner.get('heading1', '')} {date_range}"
         else:
-            template = next((t for t in promo.get("templates", []) if t.get("type") == "HOME_HERO_LOCKUP"), None)
+            template = next((t for t in promo.get("templates", []) if isinstance(t, dict) and t.get("type") == "HOME_HERO_LOCKUP"), None)
             if not template:
                 continue
 
@@ -2554,7 +2480,7 @@ def _calculate_passenger_metrics(
         "sub_type": stateroom_subtype
     }
 
-
+'''
 ######################################################
 # Dead/Obsolete/Unused functions
 # WARNING: These were NOT refactored to use snake_case
@@ -2796,9 +2722,110 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
     for booking in response.json().get("payload"):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
 
+
+def get_cruise_price_from_API(
+    currency: str,
+    package_code: str,
+    sail_date: str,
+    booking_type: str,
+    num_adults: Union[int, str],
+    num_children: Union[int, str]
+) -> None:
+    """
+    High-level orchestration manager that pulls live retail cabin pricing directly via the API.
+
+    Acts as the main bridge between raw parsed parameters and structural request assemblies.
+    Pre-formats inventory query arrays and submits them through the target pricing API
+    endpoint to calculate current base fares, port taxes, and total room options.
+    """
+    cookies: Dict[str, str] = {
+        'currency': currency,
+    }
+
+    # Custom headers requested specifically by this GraphQL engine endpoint
+    headers: Dict[str, str] = {
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'currency': currency,
+    }
+
+    filter_string: str = f"id:{package_code}|adults:{num_adults}|children:{num_children}|startDate:{sail_date}~{sail_date}"
+
+    json_data: Dict[str, Any] = {
+        'operationName': 'cruiseSearch_Cruises',
+        'variables': {
+            'filters': filter_string,
+            'enableNewCasinoExperience': False,
+            'sort': {
+                'by': 'RECOMMENDED',
+            },
+            'pagination': {
+                'count': 100,
+                'skip': 0,
+            },
+        },
+        'query': 'query cruiseSearch_Cruises($filters: String) {cruiseSearch(filters: $filters) {results {cruises {id sailings {sailDate stateroomClassPricing {price {value currency { code }} stateroomClass {id name content { code } }}}}}}}',
+    }
+
+    # Route using the centralized execution platform
+    # Passing cookies as an additional named parameter via keyword args extraction or direct tracking
+    resp = _execute_api_request(
+        account_info=None, # Public consumer catalog endpoint, no authentication required
+        method="POST",
+        url='https://www.royalcaribbean.com/cruises/graph',
+        data=json.dumps(json_data),
+        headers=headers,
+        exit_on_fail=False # Prevent a transient pricing lookup failure from killing the tracking pipeline
+    )
+
+    if resp is None:
+        log("\tUnable to fetch public live API pricing stream at this time.")
+        return
+
+    try:
+        response_json = resp.json()
+        cruises = response_json.get("data", {}).get("cruiseSearch", {}).get("results", {}).get("cruises", [])
+    except Exception:
+        cruises = []
+
+    if cruises:
+        sailings = cruises[0].get("sailings", [])
+    else:
+        log("         Sailing is sold out")
+        return
+
+    for sailing in sailings:
+        # Standardize matching criteria format
+        current_sail_date: str = sailing.get("sailDate", "")
+        if current_sail_date.replace("-", "") != sail_date and current_sail_date != sail_date:
+            continue
+
+        prices = sailing.get("stateroomClassPricing", [])
+        for price in prices:
+            stateroom_class = price.get("stateroomClass", {})
+            content_struct = stateroom_class.get("content", {}) if stateroom_class else {}
+            cabin_code = content_struct.get("code") if content_struct else None
+
+            if cabin_code == booking_type:
+                post_string = " (your current room class) "
+            else:
+                post_string = ""
+
+            cabin_type = stateroom_class.get("name", "Unknown Type") if stateroom_class else "Unknown Type"
+            price_data = price.get("price")
+
+            if price_data is None:
+                log(f"\t\t{cabin_type} sold out")
+            else:
+                num_passengers = int(num_adults) + int(num_children)
+                total_cabin_cost = float(price_data.get("value", 0.0)) * num_passengers
+                log(f"\t\t{total_cabin_cost} {currency}: Cheapest {cabin_type} Price for {num_passengers}" + post_string)
+
+
 ####################################
 # End Dead/Obsolete/Unused functions
 ####################################
+'''
 #####################################
 # Main execution path and Run Control
 #####################################
