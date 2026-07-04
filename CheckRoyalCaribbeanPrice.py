@@ -199,20 +199,32 @@ class CruiseURLParams:
     is_royal: bool = True
     username: Optional[str] = None
     coupon_code: Optional[str] = None
-    state: Optional[str] = None
+    number_of_adults: str = "2"
+    number_of_children: str = "0"
     loyalty_number: Optional[str] = None
+    state: Optional[str] = None
     senior: bool = False
     fire: bool = False
     police: bool = False
     military: bool = False
-    number_of_adults: str = "2"
-    number_of_children: str = "0"
+    dp340: bool = False
 
     # Pricing addon flags required by apply_overrides and parse_provided_URL
     all_included: bool = False
     refundable: bool = False
     travel_insurance: bool = False
     prepaid_grats: bool = False
+
+    def apply_discount_profile(self, profile: DiscountProfile) -> None:
+        """Safely maps profile values without dropping asymmetric keys."""
+        self.loyalty_number = profile.loyalty_number
+        self.state = profile.state
+        self.senior = "y" if profile.senior else "n"
+        self.military = "y" if profile.military else "n"
+        self.police = "y" if profile.police else "n"
+        self.fire = "y" if profile.fire else "n"
+        self.dp340 = profile.dp340
+
 
     @property
     def api_brand(self) -> str:
@@ -276,6 +288,7 @@ class DiscountProfile:
     state: Optional[str]
     senior: bool
     military: bool
+    fire: bool
     police: bool
     dp340: bool  # Diamond Plus with 340+ points (free single supplement tier)
 
@@ -332,6 +345,7 @@ class AccountInfo:
     state: Optional[str] = None
     senior: bool = False
     military: bool = False
+    fire: bool = False
     police: bool = False
     cruise_line: Optional[str] = "royalcaribbean"
 
@@ -925,7 +939,13 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
     return state, loyalty_number_to_use, c_and_a_shared_points
 
 
-def get_checkin_info(account_info: AccountInfo, reservationId: str, passenger_ID: str, ship_code: str, sail_date: str, apobj: Optional[Apprise]) -> None:
+def get_checkin_info(account_info: AccountInfo,
+                     reservationId: str,
+                     passenger_ID: str,
+                     ship_code: str,
+                     sail_date: str,
+                     apobj: Optional[Apprise]
+) -> None:
     """
     Retrieves mandatory pre-cruise check-in statuses and digital health manifest timelines.
 
@@ -1065,15 +1085,15 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 gross_totals = amount
             elif price_type_code == "GRATUITIES":
                 prepaid_grats_flag = True
-                payment_string += f" Including: {amount} Gratuities"
+                payment_string += f" Including: {amount:.2f} Gratuities"
             elif price_type_code == "TRIP_INSURANCE":
                 insurance_flag = True
-                payment_string += f" Including: {amount} Insurance"
+                payment_string += f" Including: {amount:.2f} Insurance"
             elif "ALL_INC" in price_type_code or "INCLUDED" in price_type_code:
                 all_included_flag = True
-                payment_string += f" Including: {amount} All Included Drinks/WiFi"
+                payment_string += f" Including: {amount:.2f} All Included Drinks/WiFi"
             elif price_type_code == "BALANCE_DUE":
-                payment_string += f" You Still Owe: {amount}"
+                payment_string += f" You Still Owe: {amount:.2f}"
 
         # Store the parsed information into a dictionary for easy passing around
         paid_price_struct = {}
@@ -1083,13 +1103,13 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             paid_price_struct['gratuities'] = prepaid_grats_flag
             paid_price_struct['trip_insurance'] = insurance_flag
             paid_price_struct['all_in_upgrade'] = all_included_flag
-            log(f"Cruise Fare - Total {gross_totals}{payment_string}")
+            log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
         final_payment_date = get_final_payment_date(number_of_nights, sail_date)
         final_payment_date_display = final_payment_date.strftime(date_display_format)
 
         if booking.get("balanceDue") is True:
-            log(YELLOW + f"Remaining Cruise Payment Balance is {booking.get('balanceDueAmount')} due {final_payment_date_display}" + RESET)
+            log(YELLOW + f"Remaining Cruise Payment Balance is {booking.get('balanceDueAmount'):.2f} due {final_payment_date_display}" + RESET)
 
         get_OBC(account_info, booking)
 
@@ -1113,7 +1133,12 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                             paid_price_struct[item] = reservation.get(item)
 
             if booking.get("stateroomType") != "NONE":
-                get_cruise_price(account_info, booking, ship_dictionary, automatic_URL=True, paid_price_struct=paid_price_struct)
+                get_cruise_price(account_info,
+                                 booking,
+                                 ship_dictionary,
+                                 automatic_URL=True,
+                                 paid_price_struct=paid_price_struct,
+                                 discounts=discounts)
             else:
                 log(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
@@ -1183,7 +1208,13 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
     return result
 
 
-def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_dictionary: ShipDictionary, automatic_URL: bool = True, paid_price_struct: Dict[str, Any] = None) -> None:
+def get_cruise_price(account_info: AccountInfo,
+                     booking: Dict[str, Any],
+                     ship_dictionary: ShipDictionary,
+                     automatic_URL: bool = True,
+                     paid_price_struct: Dict[str, Any] = None,
+                     discounts: Optional[DiscountProfile] = None
+) -> None:
     """
     Performs dynamic live web-pricing evaluations for a specific stateroom or prospective cruise.
 
@@ -1249,15 +1280,20 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
             'category_code': stateroom_category_code
         }
 
-        # 1. Create a clean dummy dataclass container to pass to the builder
-        temp_discounts = DiscountProfile(
-            loyalty_number=getattr(account_info, 'loyalty_number', None),
-            state=getattr(account_info, 'state', None),
-            senior='y' if have_a_senior else 'n',
-            military=True if (paid_price_struct and paid_price_struct.get('military')) else False,
-            police=True if (paid_price_struct and paid_price_struct.get('polics')) else False,
-            dp340=True if (paid_price_struct and paid_price_struct.get('dp340')) else False
-        )
+        # 1. Use the pre-validated discounts profile if provided, otherwise fall back
+        #    and create a clean dummy dataclass container to pass to the builder
+        if discounts is not None:
+            temp_discounts = discounts
+        else:
+            temp_discounts = DiscountProfile(
+                loyalty_number=getattr(account_info, 'loyalty_number', None),
+                state=getattr(account_info, 'state', None),
+                senior='y' if have_a_senior else 'n',
+                military=True if (paid_price_struct and paid_price_struct.get('military')) else False,
+                fire=True if (paid_price_struct and paid_price_struct.get('fire')) else False,
+                police=True if (paid_price_struct and paid_price_struct.get('police')) else False,
+                dp340=True if (paid_price_struct and paid_price_struct.get('dp340')) else False
+            )
 
         # 2. Build a dummy pristine, validated web URL
         cruise_price_URL = _build_checkout_url(booking, metrics, account_info, temp_discounts)
@@ -1268,7 +1304,17 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
         # 4. Fix the parser/override omissions immediately while we are safely inside Path B scope
         url_params.package_code = booking.get("packageCode")
         url_params.ship_code = booking.get("shipCode")
-        url_params.loyalty_number = booking.get("loyaltyNumber")
+
+        # Extract the correct C&A loyalty asset string rather than the username/email context
+        if hasattr(account_info, 'access') and account_info.access and getattr(account_info.access, 'loyalty_number', None):
+            url_params.loyalty_number = account_info.access.loyalty_number
+        else:
+            url_params.loyalty_number = booking.get("loyaltyNumber") or getattr(account_info, 'loyalty_number', None)
+
+        # If the account meets the 340 cruise point threshold, pass DP340 as the active code
+        if temp_discounts.dp340:
+            url_params.coupon_code = 'DP340'
+
         if have_a_senior:
             url_params.senior = True
 
@@ -1391,29 +1437,29 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
             for available_room in results.get("available_rooms", []):
                 rooms_left = available_room.get('roomsLeft')
                 if rooms_left is not None and rooms_left > 0:
-                    log(f"\t{available_room.get('name')} {available_room.get('price')} - Rooms Left {rooms_left}")
+                    log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {rooms_left}")
         return
 
     # Path 2: Standard Pricing Evaluation
     if paid_price is None:
-        log(GREEN + f"{pre_string}: Current Price {price} {url_params.currency_code}" + RESET)
+        log(GREEN + f"{pre_string}: Current Price {price:.2f} {url_params.currency_code}" + RESET)
         return
 
     obc_value = float(obc or 0.0)
-    obc_string = str(obc)
+    obc_string = f"{obc_value:.2f}"
 
     if price < paid_price:
         saving = round(paid_price - price, 2)
 
         # Sub-branch 1: Actionable booked drop before final lock dates
         if automatic_URL and not past_final_payment_date:
-            text_string = f"Rebook! {pre_string} New price of {price} {url_params.currency_code}"
+            text_string = f"Rebook! {pre_string} New price of {price:.2f} {url_params.currency_code}"
             if obc_value > 0:
-                text_string += f" not including {obc_string} USD OBC"
-            text_string += f" is lower than {paid_price}"
+                text_string += f", not including {obc_string} USD OBC,"
+            text_string += f" is lower than {paid_price:.2f}"
 
             if config.minimum_saving_alert is not None and saving < config.minimum_saving_alert:
-                text_string += f" (Saving {saving} < minimumSavingAlert {config.minimum_saving_alert}; no notification sent)"
+                text_string += f" (Saving {saving:.2f} < minimumSavingAlert {config.minimum_saving_alert}; no notification sent)"
                 log(YELLOW + text_string + RESET)
             else:
                 log(RED + text_string + RESET)
@@ -1422,21 +1468,21 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
 
         # Sub-branch 2: Booked drop but locked behind final lock dates
         if automatic_URL and past_final_payment_date:
-            text_string = f"Past Final Payment Date of {final_payment_date_display} : {pre_string} New price of {price} {url_params.currency_code}"
+            text_string = f"Past Final Payment Date of {final_payment_date_display}: {pre_string} New price of {price:.2f} {url_params.currency_code}"
             if obc_value > 0:
-                text_string += f" not including {obc_string} USD OBC"
-            text_string += f" is lower than {paid_price}"
+                text_string += f", not including {obc_string} USD OBC,"
+            text_string += f" is lower than {paid_price:.2f}"
             log(YELLOW + text_string + RESET)
 
         # Sub-branch 3: Speculative prospective watchlist match
         if not automatic_URL:
-            text_string = f"Consider Booking! {pre_string} New price of {price} {url_params.currency_code}"
+            text_string = f"Consider Booking! {pre_string}: New price of {price:.2f} {url_params.currency_code}"
             if obc_value > 0:
-                text_string += f" not including {obc_string} OBC"
-            text_string += f" is lower than watchlist price of {paid_price}"
+                text_string += f", not including {obc_string} OBC,"
+            text_string += f" is lower than watchlist price of {paid_price:.2f}"
 
             if config.minimum_saving_alert is not None and saving < config.minimum_saving_alert:
-                text_string += f" (Saving {saving} < minimumSavingAlert {config.minimum_saving_alert}; no notification sent)"
+                text_string += f" (Saving {saving:.2f} < minimumSavingAlert {config.minimum_saving_alert:.2f}; no notification sent)"
                 log(YELLOW + text_string + RESET)
             else:
                 log(RED + text_string + RESET)
@@ -1444,17 +1490,17 @@ def get_cruise_price(account_info: AccountInfo, booking: Dict[str, Any], ship_di
                     apobj.notify(body=text_string, title='Cruise Price Alert')
     else:
         # Current catalog price is equal to or higher than target price thresholds
-        temp_string = GREEN + f"{pre_string}: You have best price of {paid_price} {url_params.currency_code}" + RESET
+        temp_string = GREEN + f"{pre_string}: You have the best price of {paid_price:.2f} {url_params.currency_code}" + RESET
         if price > paid_price:
-            temp_string += GREEN + f" (now {price} {url_params.currency_code}"
+            temp_string += GREEN + f" (now {price:.2f} {url_params.currency_code}"
             if obc_value > 0:
                 temp_string += f" not including {obc_string} OBC"
             temp_string += ")" + RESET
 
         if desire_refund_price and paid_price > base_price:
-            temp_string += f"{YELLOW} Non-Refundable price {base_price} {url_params.currency_code} is lower than you paid{RESET}"
+            temp_string += f"{YELLOW} Non-Refundable price {base_price:.2f} {url_params.currency_code} is lower than you paid{RESET}"
         elif desire_refund_price:
-            temp_string += f" Non-refundable price is {base_price} {url_params.currency_code}"
+            temp_string += f" Non-refundable price is {base_price:.2f} {url_params.currency_code}"
 
         log(temp_string)
 
@@ -1473,6 +1519,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
         return results
 
     # --- ENDPOINT SCHEMA REALIGNMENT ---
+    # DEAD CODE
     # The checkout API strictly requires 'SUITE' for GS, JS, OS, etc.,
     # even if marketing links display 'DELUXE'
     target_type_code = url_params.stateroom_type_name
@@ -1495,8 +1542,8 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
         'language': 'en',
         'rooms': [
             {
-                # Use the realigned type code here
-                'stateroomTypeCode': url_params.stateroom_type_name, #target_type_code,
+                # DO NOT Use the realigned type code here
+                'stateroomTypeCode': url_params.stateroom_type_name,
                 'stateroomSubtypeCode': url_params.stateroom_subtype,
                 'categoryCode': url_params.stateroom_category_code,
                 'fareCode': 'BESTRATE',
@@ -1769,7 +1816,7 @@ def get_new_order_price(
             temp_string = YELLOW + f"\t{passenger_name.ljust(10)} (Cabin {room}) has best price "
             if per_day_price:
                 temp_string += "per night "
-            temp_string += f"for {title} of: {paid_price} {currency} (No Longer for Sale)" + RESET
+            temp_string += f"for {title} of: {paid_price:.2f} {currency} (No Longer for Sale)" + RESET
         else:
             temp_string = YELLOW + f"\t{title} not available or already booked for {passenger_name.ljust(10)}" + RESET
 
@@ -1824,7 +1871,7 @@ def get_new_order_price(
             text += "\tThis was booked by another in your party. They will have to cancel/rebook for you!"
 
         if config.minimum_saving_alert is not None and saving_for_alert < config.minimum_saving_alert:
-            text += f" ({saving_label} < minimumSavingAlert {config.minimum_saving_alert}; no notification sent)"
+            text += f" ({saving_label} < minimumSavingAlert {config.minimum_saving_alert:.2f}; no notification sent)"
             log(YELLOW + text + RESET)
         else:
             log(RED + text + RESET)
@@ -1836,14 +1883,14 @@ def get_new_order_price(
             temp_string = GREEN + f"{passenger_name.ljust(10)} {title} price "
             if per_day_price:
                 temp_string += "per night "
-            temp_string += f"is higher than watch price: {paid_price} {currency}" + RESET
+            temp_string += f"is higher than watch price: {paid_price:.2f} {currency}" + RESET
         else:
             temp_string = GREEN + f"{passenger_name.ljust(10)} (Cabin {room}) has best price "
             if per_day_price:
                 temp_string += "per night "
-            temp_string += f"for {title} of: {paid_price} {currency}" + RESET
+            temp_string += f"for {title} of: {paid_price:.2f} {currency}" + RESET
         if current_price > paid_price:
-            temp_string += f" (now {current_price} {currency})"
+            temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
 
 
@@ -2229,7 +2276,7 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
     cur = payload.get("currencyIso")
 
     if amount and amount > 0:
-        log(f"\tOnboard Credit of {amount} {cur}")
+        log(f"\tOnboard Credit of {amount:.2f} {cur}")
 
 
 def _build_checkout_url(
@@ -2252,6 +2299,7 @@ def _build_checkout_url(
     is_senior = "y" if (discounts.senior or metrics['have_a_senior']) else "n"
     is_military = "y" if discounts.military else "n"
     is_police = "y" if discounts.police else "n"
+    is_fire = "y" if discounts.fire else "n"
 
     sail_date = booking.get("sailDate")
     url_sail_date = f"{sail_date[0:4]}-{sail_date[4:6]}-{sail_date[6:8]}"
@@ -2272,7 +2320,7 @@ def _build_checkout_url(
         'r0f': metrics['category_code'],
         'r0b': 'n',
         'r0r': is_police,
-        'r0s': 'n',
+        'r0s': 'n', #is_fire
         'r0q': is_military,
         'r0t': is_senior,
         'r0D': 'y'
@@ -2464,11 +2512,23 @@ def _calculate_passenger_metrics(
             num_children += 1
 
         # Calculate Check-in Windows
-        if guest.get("onlineCheckinStatus") == "COMPLETED" and guest.get("arrivalTime"):
-            time_str = guest.get("arrivalTime")
-            boarding_hour = time_str[9:11]
-            boarding_min = time_str[11:13]
-            checkin_strings.append(f"{first_name} Boarding Time {boarding_hour}:{boarding_min}")
+        status = guest.get("onlineCheckinStatus", "")
+        arrival_time = guest.get("arrivalTime")
+
+        if arrival_time:
+            # Safely slice hours and minutes from the API's time string
+            boarding_hour = arrival_time[9:11]
+            boarding_min = arrival_time[11:13]
+            formatted_time = f"{boarding_hour}:{boarding_min}"
+
+            if status == "COMPLETED":
+                checkin_strings.append(f"{first_name}: Boarding Time {formatted_time}")
+            # Catch "IN_PROGRESS", "PARTIAL", or "PARTIALLY_COMPLETE" safely
+            elif "PART" in status or status == "IN_PROGRESS":
+                checkin_strings.append(f"{first_name}: Check-in partially complete; Boarding Time {formatted_time}")
+            else:
+                # Fallback if a time exists but the status string is unusual
+                checkin_strings.append(f"{first_name}: Boarding Time {formatted_time}")
 
     return {
         "passenger_names": ", ".join(passenger_names),
@@ -2902,6 +2962,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
             state=a.get("state"),
             senior=a.get("senior", False),
             military=a.get("military", False),
+            fire=a.get("fire", False),
             police=a.get("police", False),
             cruise_line=a.get("cruiseLine", "royalcaribbean")
         )
@@ -3006,7 +3067,7 @@ def main() -> None:
             quit()
 
         if config.minimum_saving_alert is not None:
-            log(YELLOW + f"Only alerting for savings >= {config.minimum_saving_alert}" + RESET)
+            log(YELLOW + f"Only alerting for savings >= {config.minimum_saving_alert:.2f}" + RESET)
 
         if config.currency_override:
             log(YELLOW + f"Overriding Current Price Currency to {config.currency_override}" + RESET)
@@ -3033,6 +3094,7 @@ def main() -> None:
                 state=account_info.state,
                 senior=account_info.senior,
                 military=account_info.military,
+                fire=account_info.fire,
                 police=account_info.police,
                 dp340=(c_and_a_points >= 340)
             )

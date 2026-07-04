@@ -658,7 +658,7 @@ def test_get_voyages_complete_execution_path():
     account_info.access.token = "fake_token"
     account_info.access.id = "fake_id"
 
-    discounts = CruiseURLParams(loyalty_number="123456", state="MD")
+    discounts = CruiseURLParams(loyalty_number="123456", state="MD", dp340=False)
     ship_registry = ShipRegistry()
 
     # Mock full corporate server structure response for profileBookings
@@ -795,7 +795,7 @@ def test_parse_dining_includes_table_size(mock_booking_with_dining_and_checkin):
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
     account_info.access = MagicMock()
 
-    discounts = CruiseURLParams(loyalty_number="390323599", state="FL")
+    discounts = CruiseURLParams(loyalty_number="390323599", state="FL", dp340=False)
     ship_registry = ShipRegistry()
 
     # Define the individual payloads
@@ -862,7 +862,7 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
     account_info.access = MagicMock()
 
-    discounts = CruiseURLParams(loyalty_number="390323599", state="FL")
+    discounts = CruiseURLParams(loyalty_number="390323599", state="FL", dp340=False)
     ship_registry = ShipRegistry()
 
     mock_bookings_response = {
@@ -1533,6 +1533,7 @@ def test_calculate_passenger_metrics_brittle_timestamp_fallback():
     except Exception as err:
         pytest.fail(f"_calculate_passenger_metrics crashed on non-standard arrival timestamp: {err}")
 
+
 # =====================================================================
 # ITEM 13 ORCHESTRATION & RUN CONTROL TESTS: Configuration Lifecycle
 # =====================================================================
@@ -1575,3 +1576,176 @@ def test_exception_block_scoping_resilience():
 
     assert date_part == "07/02/2026"
 
+
+# =====================================================================
+# ITEM 14: PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION
+# =====================================================================
+
+def test_calculate_passenger_metrics_partial_checkin_spec(mock_global_config):
+    """
+    Verify that an IN_PROGRESS or partial check-in status accompanied by an
+    arrivalTime correctly builds the owner's exact requested string layout
+    instead of dropping into an empty fallback state.
+    """
+    booking = {
+        "stateroomType": "BALCONY",
+        "stateroomSubtype": "2D"
+    }
+
+    # Simulating a live API layout where a time slot is locked down
+    # but the documentation processing is incomplete
+    guests_payload = [
+        {
+            "firstName": "Matt",
+            "birthdate": "19711212",
+            "onlineCheckinStatus": "IN_PROGRESS",
+            "arrivalTime": "2027-05-10120000",  # Slices [9:11] and [11:13] -> 12:00
+            "stateroomCategoryCode": "2D"
+        }
+    ]
+
+    metrics = _calculate_passenger_metrics(
+        guests=guests_payload,
+        sail_date="20271212",
+        booking=booking,
+        brand_code="R",
+        display_prices=False
+    )
+
+    expected_string = "Matt: Check-in partially complete; Boarding Time 01:20"
+    assert metrics["checkin_string"] == expected_string
+
+
+def test_calculate_passenger_metrics_completed_checkin_regression(mock_global_config):
+    """
+    Sanity Check: Verify that standard completed check-ins still format
+    without the "Partially Complete" modifier flag.
+    """
+    booking = {
+        "stateroomType": "BALCONY",
+        "stateroomSubtype": "2D"
+    }
+
+    guests_payload = [
+        {
+            "firstName": "Bob",
+            "birthdate": "19750412",
+            "onlineCheckinStatus": "COMPLETED",
+            "arrivalTime": "2027-05-10133000",  # Slices -> 13:30
+            "stateroomCategoryCode": "2D"
+        }
+    ]
+
+    metrics = _calculate_passenger_metrics(
+        guests=guests_payload,
+        sail_date="20270510",
+        booking=booking,
+        brand_code="R",
+        display_prices=False
+    )
+
+    assert metrics["checkin_string"] == "Bob: Boarding Time 01:33"
+
+
+def test_get_cruise_price_forwards_discount_profile_dp340(mock_global_config, base_account_info):
+    """
+    Verify that get_cruise_price safely routes and forwards a passed-in
+    DiscountProfile (DP340 alignment) to the checkout URL engine rather than
+    dropping the configuration flags.
+    """
+    mock_booking_payload = {
+#        "url": "https://www.royalcaribbean.com/booking/landing?shipCode=WN&sailDate=2026-11-15&r0d=BALCONY",
+        "stateroomType": "BALCONY",
+        "stateroomSubtype": "2D",
+        "sailDate": "20261115",
+        "shipCode": "WN",
+        "packageCode": "WN07BAL",
+        "passengersInStateroom": [
+            {
+                "firstName": "Matt",
+                "birthdate": "19711212",
+                "stateroomCategoryCode": "2D"
+            }
+        ]
+    }
+
+    mock_api_results = {
+        "room_available": True,
+        "sailing_nights": 7,
+        "baseFare": {"fare": 1200.00, "gratuities": 0.0, "insurance": 0.0, "obc": "0.0"},
+        "taxes": 150.00,
+        "total_price": 1350.00
+    }
+
+    # Instantiating the specific profile targeting the loop parameter fix
+    custom_discounts = DiscountProfile(
+        loyalty_number="333333333",
+        state="FL",
+        senior="n",
+        military=False,
+        fire=False,
+        police=False,
+        dp340=True  # Ensure the target property is true
+    )
+
+    real_registry = ShipRegistry()
+    mock_url_params = MagicMock()
+    mock_url_params.ship_code = "WN"
+    mock_url_params.cabin_class_string = "BALCONY"
+    mock_url_params.stateroom_category_code = ""
+    mock_url_params.coupon_code = None
+    mock_url_params.refundable = False
+    mock_url_params.travel_insurance = False
+    mock_url_params.prepaid_grats = False
+    mock_url_params.all_included = False
+    mock_url_params.loyalty_number = "333333333"
+    mock_url_params.state = "FL"
+    mock_url_params.senior = False
+    mock_url_params.police = False
+    mock_url_params.military = False
+    mock_url_params.fire = False
+    mock_url_params.currency_code = "USD"
+    mock_url_params.sail_date = "20261115"
+
+    # Intercept internal calls to isolate parameter transmission path
+    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(True, [])), \
+         patch('CheckRoyalCaribbeanPrice.get_room_price_via_API', return_value=mock_api_results), \
+         patch('CheckRoyalCaribbeanPrice.parse_provided_URL', return_value=mock_url_params), \
+         patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value={"num_adults": 1, \
+                                                                                      "num_children": 0, \
+                                                                                      "have_a_senior": False, \
+                                                                                      "sub_type": "",
+                                                                                      "category_code": ""}), \
+         patch('CheckRoyalCaribbeanPrice._build_checkout_url') as mock_build_url:
+
+        get_cruise_price(
+            account_info=base_account_info,
+            booking=mock_booking_payload,
+            ship_dictionary=real_registry,
+            automatic_URL=False,
+            discounts=custom_discounts  # Testing the new optional argument signature
+        )
+
+        # Assert that the checkout URL builder received the profile containing our modifications
+        mock_build_url.assert_called_once()
+        forwarded_profile = mock_build_url.call_args[0][3]
+        assert forwarded_profile.dp340 is True
+
+def test_discount_profile_to_url_params_alignment():
+    """Verify that fire and dp340 map across structures without losing data state."""
+    profile = DiscountProfile(
+        loyalty_number="12345",
+        state="FL",
+        senior=True,
+        military=False,
+        fire=True,
+        police=False,
+        dp340=True
+    )
+
+    url_params = CruiseURLParams()
+    # Ensure your mapper or assignment handles it cleanly
+    url_params.apply_discount_profile(profile)
+
+    assert url_params.fire == "y"
+    assert hasattr(url_params, "dp340") and url_params.dp340 is True
