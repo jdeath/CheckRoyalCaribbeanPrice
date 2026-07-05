@@ -1019,7 +1019,6 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         passenger_ID = booking.get("passengerId")
         sail_date = booking.get("sailDate")
         number_of_nights = int(booking.get("numberOfNights", 0))
-#        number_of_nights = booking.get("numberOfNights")
         ship_code = booking.get("shipCode")
         guests = booking.get("passengersInStateroom", [])
         package_code = booking.get("packageCode")
@@ -2281,7 +2280,6 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
     payload = response.json().get("payload")
     if not payload:
         return 0.0
-#        return
 
     amount = payload.get("amount")
     cur = payload.get("currencyIso")
@@ -3156,7 +3154,7 @@ def main() -> None:
                 # STRATEGY NOTE: 'automaticURL=False' forces the scraper to use manually extracted browser
                 # URL context components. This prevents the code from executing automated customer profile queries,
                 # keeping this entire script iteration running safely, anonymously, and unauthenticated.
-                prospective_target = {'paidPrice': paid_price}
+                prospective_target = {'paid_price': paid_price}
                 get_cruise_price(prospective_account, prospective_booking, ship_dictionary, automatic_URL=False, paid_price_struct=prospective_target)
 
             # Safely release the connection socket resources back to the OS
