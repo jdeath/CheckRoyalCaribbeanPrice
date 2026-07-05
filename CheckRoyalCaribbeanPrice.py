@@ -1018,7 +1018,8 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         reservation_ID = booking.get("bookingId")
         passenger_ID = booking.get("passengerId")
         sail_date = booking.get("sailDate")
-        number_of_nights = booking.get("numberOfNights")
+        number_of_nights = int(booking.get("numberOfNights", 0))
+#        number_of_nights = booking.get("numberOfNights")
         ship_code = booking.get("shipCode")
         guests = booking.get("passengersInStateroom", [])
         package_code = booking.get("packageCode")
@@ -1111,7 +1112,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         if booking.get("balanceDue") is True:
             log(YELLOW + f"Remaining Cruise Payment Balance is {booking.get('balanceDueAmount'):.2f} due {final_payment_date_display}" + RESET)
 
-        get_OBC(account_info, booking)
+        paid_price_struct['booked_obc'] = get_OBC(account_info, booking)
 
         if show_promos:
             get_all_promotions(account_info, booking)
@@ -1285,8 +1286,9 @@ def get_cruise_price(account_info: AccountInfo,
         if discounts is not None:
             temp_discounts = discounts
         else:
+            # Safely extract loyalty context from nested access structure
             temp_discounts = DiscountProfile(
-                loyalty_number=getattr(account_info, 'loyalty_number', None),
+                loyalty_number=booking.get("loyaltyNumber") or getattr(account_info, 'loyalty_number', None),
                 state=getattr(account_info, 'state', None),
                 senior='y' if have_a_senior else 'n',
                 military=True if (paid_price_struct and paid_price_struct.get('military')) else False,
@@ -1305,11 +1307,9 @@ def get_cruise_price(account_info: AccountInfo,
         url_params.package_code = booking.get("packageCode")
         url_params.ship_code = booking.get("shipCode")
 
-        # Extract the correct C&A loyalty asset string rather than the username/email context
+        # Extract the correct C&A loyalty asset string rather than the username/email context if given
         if hasattr(account_info, 'access') and account_info.access and getattr(account_info.access, 'loyalty_number', None):
             url_params.loyalty_number = account_info.access.loyalty_number
-        else:
-            url_params.loyalty_number = booking.get("loyaltyNumber") or getattr(account_info, 'loyalty_number', None)
 
         # If the account meets the 340 cruise point threshold, pass DP340 as the active code
         if temp_discounts.dp340:
@@ -1322,7 +1322,7 @@ def get_cruise_price(account_info: AccountInfo,
     url_params.apply_overrides(paid_price_struct)
 
     # Capture target price bounds if they exist
-    paid_price = paid_price_struct.get("paidPrice") if paid_price_struct else None
+    paid_price = paid_price_struct.get("paid_price") if paid_price_struct else None
     room_number = None
 
     # Primary API pricing check pass
@@ -1336,7 +1336,7 @@ def get_cruise_price(account_info: AccountInfo,
         results = get_room_price_via_API(url_params, room_number)
         room_available = results.get("room_available")
 
-    number_of_nights = results.get("sailing_nights")
+    number_of_nights = int(results.get("sailing_nights", 0))
 
     # Pass the resolved string or date into the helper
     final_payment_date = get_final_payment_date(number_of_nights, url_params.sail_date)
@@ -1380,7 +1380,13 @@ def get_cruise_price(account_info: AccountInfo,
             price = fare_struct.get("fare", 0.0)
             grats = fare_struct.get("gratuities", 0.0)
             ins = fare_struct.get("insurance", 0.0)
-            obc = fare_struct.get("obc", "0.0")
+
+            live_obc = float(fare_struct.get("obc", 0.0) or 0.0)
+            booked_obc = float(paid_price_struct.get("booked_obc", 0.0) if paid_price_struct else 0.0)
+
+            # NOTE: For now, we keep the original variable 'obc' mapped to the live_obc
+            # to preserve the exact string output behavior the script owner expects.
+            obc = f"{live_obc:.2f}" #fare_struct.get("obc", "0.0")
 
         base_price = price
         base_grats = grats
@@ -1440,13 +1446,13 @@ def get_cruise_price(account_info: AccountInfo,
                     log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {rooms_left}")
         return
 
-    # Path 2: Standard Pricing Evaluation
-    if paid_price is None:
-        log(GREEN + f"{pre_string}: Current Price {price:.2f} {url_params.currency_code}" + RESET)
-        return
-
     obc_value = float(obc or 0.0)
     obc_string = f"{obc_value:.2f}"
+
+    # Path 2: Standard Pricing Evaluation
+    if paid_price is None:
+        log(GREEN + f"{pre_string}:" + RESET + f" Current Price {price:.2f} {url_params.currency_code}")
+        return
 
     if price < paid_price:
         saving = round(paid_price - price, 2)
@@ -1490,12 +1496,16 @@ def get_cruise_price(account_info: AccountInfo,
                     apobj.notify(body=text_string, title='Cruise Price Alert')
     else:
         # Current catalog price is equal to or higher than target price thresholds
-        temp_string = GREEN + f"{pre_string}: You have the best price of {paid_price:.2f} {url_params.currency_code}" + RESET
+        temp_string = GREEN + f"{pre_string}: You have the best price of {paid_price:.2f} {url_params.currency_code}"
         if price > paid_price:
-            temp_string += GREEN + f" (now {price:.2f} {url_params.currency_code}"
+            temp_string += f" (now {price:.2f} {url_params.currency_code}"
             if obc_value > 0:
                 temp_string += f" not including {obc_string} OBC"
-            temp_string += ")" + RESET
+            temp_string += ")"
+        else:
+            if obc_value > 0:
+                temp_string += f" (not including {obc_string} OBC)"
+        temp_string += RESET
 
         if desire_refund_price and paid_price > base_price:
             temp_string += f"{YELLOW} Non-Refundable price {base_price:.2f} {url_params.currency_code} is lower than you paid{RESET}"
@@ -2270,13 +2280,17 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
     response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
     payload = response.json().get("payload")
     if not payload:
-        return
+        return 0.0
+#        return
 
     amount = payload.get("amount")
     cur = payload.get("currencyIso")
 
     if amount and amount > 0:
         log(f"\tOnboard Credit of {amount:.2f} {cur}")
+        return float(amount)
+
+    return 0.0
 
 
 def _build_checkout_url(

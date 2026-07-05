@@ -6,7 +6,24 @@ from unittest.mock import MagicMock, patch
 
 # Import the specific entities and orchestration engines from your script
 from CheckRoyalCaribbeanPrice import (
+# ITEM 1 TESTS: Cabin "Not For Sale" Notification Logic
+# ITEM 2 TESTS: get_orders() Context Instantiation Scope Verification
+# ITEM 3 TESTS: API Resilience / Missing Keys
+# ITEM 4 TESTS: Full Branch Execution Integration Coverage
+# ITEM 5 TESTS: Client/Server Target Price Comparison Key Alignment
+# ITEM 6 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
+# ITEM 7 EXTRA DOMAIN TESTS: Fleet Discovery Data Structural Boundaries
+# ITEM 8 EXTRA PARSER & SESSION TESTS: Edge-Case Handling & Robust Fallbacks
+# ITEM 9 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
+# ITEM 10 EXTRA PRICING LOGIC TESTS: Boolean Typo & Notification Filtering
+# ITEM 11 EXTRA LIVE API TESTS: Schema Alignment & Request Resilience
+# ITEM 12 EXTRA ADD-ON ENGINE TESTS: Cost Metrics & Promotion Boundaries
+# ITEM 13 EXTRA METRIC CALCULATION TESTS: Scope Isolation & String Resiliency
+# ITEM 14 ORCHESTRATION & RUN CONTROL TESTS: Configuration Lifecycle
+# ITEM 15: PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION
+# ITEM 16 EXTRA REFACTOR & WATCHLIST ROUTING FIXES
     AccountInfo,
+    APIAccess,
     CruiseAppConfig,
     CruiseURLParams,
     DiscountProfile,
@@ -25,10 +42,9 @@ from CheckRoyalCaribbeanPrice import (
     get_dining_and_prices,
     get_new_order_price,
     get_orders,
+    get_profile,
     get_room_price_via_API,
     get_ship_dictionary_web,
-    get_profile,
-    get_orders,
     get_voyages,
     load_config_objects,
     login,
@@ -921,7 +937,7 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
             "Granular passenger check-in layout contract was missed!"
 
 # =====================================================================
-# ITEM 5 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
+# ITEM 6 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
 # =====================================================================
 
 def test_execute_api_request_handles_uninitialized_access_context():
@@ -997,7 +1013,7 @@ def test_club_royale_tier_ordering_and_boundaries():
     assert get_club_royale_tier(100000) == "MASTERS"
 
 # =====================================================================
-# ITEM 6 EXTRA DOMAIN TESTS: Fleet Discovery Data Structural Boundaries
+# ITEM 7 EXTRA DOMAIN TESTS: Fleet Discovery Data Structural Boundaries
 # =====================================================================
 def test_get_ship_dictionary_web_handles_empty_or_missing_payload_keys():
     """
@@ -1046,7 +1062,7 @@ def test_get_ship_dictionary_web_exception_handling_triggers_exit():
         mock_exit.assert_called_once_with(1)
 
 # =====================================================================
-# ITEM 7 EXTRA PARSER & SESSION TESTS: Edge-Case Handling & Robust Fallbacks
+# ITEM 8 EXTRA PARSER & SESSION TESTS: Edge-Case Handling & Robust Fallbacks
 # =====================================================================
 
 def test_parse_provided_url_handles_empty_or_missing_list_parameters():
@@ -1119,7 +1135,7 @@ def test_get_profile_handles_none_loyalty_information_safely():
         assert points == 0
 
 # =====================================================================
-# ITEM 8 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
+# ITEM 9 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
 # =====================================================================
 def test_get_voyages_resilience_to_malformed_manual_prices_config():
     """
@@ -1192,7 +1208,7 @@ def test_get_dining_and_prices_whitespace_and_formatting_drift():
         assert result["prices"][0]["amount"] == 1500.00
 
 # =====================================================================
-# ITEM 9 EXTRA PRICING LOGIC TESTS: Boolean Typo & Notification Filtering
+# ITEM 10 EXTRA PRICING LOGIC TESTS: Boolean Typo & Notification Filtering
 # =====================================================================
 def test_get_cruise_price_resolves_boolean_discount_labels_accurately():
     """
@@ -1255,7 +1271,7 @@ def test_get_cruise_price_resolves_boolean_discount_labels_accurately():
         assert "Loyalty" in logged_messages or "Residency" in logged_messages
 
 #======================================================================
-# ITEM 10 EXTRA LIVE API TESTS: Schema Alignment & Request Resilience
+# ITEM 11 EXTRA LIVE API TESTS: Schema Alignment & Request Resilience
 # =====================================================================
 
 def test_get_room_price_via_api_suite_schema_realignment():
@@ -1312,7 +1328,7 @@ def test_check_if_room_is_available_network_exception_tolerance():
             pytest.fail(f"check_if_room_is_available leaked a raw unhandled exception: {err}")
 
 # =====================================================================
-# ITEM 11 EXTRA ADD-ON ENGINE TESTS: Cost Metrics & Promotion Boundaries
+# ITEM 12 EXTRA ADD-ON ENGINE TESTS: Cost Metrics & Promotion Boundaries
 # =====================================================================
 
 def test_get_orders_per_day_price_calculation_safety():
@@ -1475,7 +1491,7 @@ def test_get_new_order_price_execution():
         assert True
 
 # =====================================================================
-# ITEM 12 EXTRA METRIC CALCULATION TESTS: Scope Isolation & String Resiliency
+# ITEM 13 EXTRA METRIC CALCULATION TESTS: Scope Isolation & String Resiliency
 # =====================================================================
 def test_calculate_passenger_metrics_gty_scope_isolation():
     """
@@ -1535,7 +1551,7 @@ def test_calculate_passenger_metrics_brittle_timestamp_fallback():
 
 
 # =====================================================================
-# ITEM 13 ORCHESTRATION & RUN CONTROL TESTS: Configuration Lifecycle
+# ITEM 14 ORCHESTRATION & RUN CONTROL TESTS: Configuration Lifecycle
 # =====================================================================
 
 def test_load_config_objects_handles_none_values_safely(tmp_path):
@@ -1578,9 +1594,8 @@ def test_exception_block_scoping_resilience():
 
 
 # =====================================================================
-# ITEM 14: PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION
+# ITEM 15: PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION
 # =====================================================================
-
 def test_calculate_passenger_metrics_partial_checkin_spec(mock_global_config):
     """
     Verify that an IN_PROGRESS or partial check-in status accompanied by an
@@ -1654,7 +1669,6 @@ def test_get_cruise_price_forwards_discount_profile_dp340(mock_global_config, ba
     dropping the configuration flags.
     """
     mock_booking_payload = {
-#        "url": "https://www.royalcaribbean.com/booking/landing?shipCode=WN&sailDate=2026-11-15&r0d=BALCONY",
         "stateroomType": "BALCONY",
         "stateroomSubtype": "2D",
         "sailDate": "20261115",
@@ -1749,3 +1763,123 @@ def test_discount_profile_to_url_params_alignment():
 
     assert url_params.fire == "y"
     assert hasattr(url_params, "dp340") and url_params.dp340 is True
+
+# =====================================================================
+# ITEM 16 EXTRA REFACTOR & WATCHLIST ROUTING FIXES
+# =====================================================================
+class MockURLParams:
+    def __init__(self):
+        self.ship_code = "FR"
+        self.package_code = "FR07D015"
+        self.sail_date = "2027-11-04"
+        self.cabin_class_string = "DELUXE"
+        self.stateroom_category_code = "D1"
+        self.currency_code = "USD"  # <-- ADD THIS LINE
+
+        # Ensure it has these as well for the string building logic
+        self.loyalty_number = None
+        self.state = None
+        self.senior = None
+        self.police = None
+        self.military = None
+        self.coupon_code = None
+        self.all_included = False
+        self.refundable = False
+        self.travel_insurance = False
+        self.prepaid_grats = False
+
+    def apply_overrides(self, paid_price_struct):
+        pass
+
+def test_watchlist_missing_paid_price(monkeypatch):
+    """Verifies that watchlist items without a paidPrice safely log the current rate via the discovery block."""
+    # Defensively clean out global configuration properties
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.config.minimum_saving_alert", None)
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.config.format_date", lambda d: "2027-11-04")
+
+    mock_account = AccountInfo(
+        username="TestWatch", password="", cruise_line="royalcaribbean",
+        access=APIAccess(token=None, id=None, session=requests.Session())
+    )
+
+    mock_booking = {
+        "url": "https://www.royalcaribbean.com/checkout/summary?shipCode=FR&sailDate=2027-11-04&cabinClassType=DELUXE&numberOfNights=7",
+        "paidPriceStruct": None,
+        "finalPaymentDate": None
+    }
+
+    # Nest the payload correctly so results.get("base_fare") successfully finds pricing metrics
+    mock_fare_struct = {
+        "room_available": True,
+        "sailing_nights": 7,
+        "base_fare": {
+            "fare": 5000.00,
+            "price": 5000.00,
+            "total_price": 5000.00,
+            "gratuities": 0.0,
+            "insurance": 0.0,
+            "obc": "100.00"
+        }
+    }
+
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.get_room_price_via_API", lambda *args, **kwargs: mock_fare_struct)
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.parse_provided_URL", lambda *args, **kwargs: MockURLParams())
+
+    captured_logs = []
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.log", lambda msg: captured_logs.append(msg))
+
+    target_struct = {'paid_price': None, 'paidPrice': None}
+    mock_ship_dict = type('ShipDictionary', (object,), {'get_ship': lambda self, code: "Mock Ship"})()
+
+    get_cruise_price(mock_account, mock_booking, mock_ship_dict, automatic_URL=False, paid_price_struct=target_struct)
+
+    # ASSERTION FIX: Assert against what the discovery path actually prints
+    assert any("Current Price 5000.00" in log_line for log_line in captured_logs), \
+        f"Discovery logging path failed. Logs: {''.join(captured_logs)}"
+
+
+def test_exact_price_match_includes_obc(monkeypatch):
+    """Verifies that when live price == paid price, OBC reporting isn't lost."""
+    # Isolate global configuration from leaky sub-mocks
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.config.minimum_saving_alert", None)
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.config.format_date", lambda d: "2027-11-04")
+
+    mock_account = AccountInfo(
+        username="TestUser", password="", cruise_line="royalcaribbean",
+        access=APIAccess(token=None, id=None, session=requests.Session())
+    )
+
+    mock_booking = {
+        "url": "https://www.royalcaribbean.com/checkout/summary?shipCode=FR&sailDate=2027-11-04&cabinClassType=DELUXE&numberOfNights=7",
+        "paidPriceStruct": {"paidPrice": 2500.00, "paid_price": 2500.00},
+        "finalPaymentDate": None
+    }
+
+    # Nest fields correctly
+    mock_fare_struct = {
+        "room_available": True,
+        "sailing_nights": 7,
+        "base_fare": {
+            "fare": 2500.00,
+            "price": 2500.00,
+            "total_price": 2500.00,
+            "gratuities": 0.0,
+            "insurance": 0.0,
+            "obc": "150.00"
+        }
+    }
+
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.get_room_price_via_API", lambda *args, **kwargs: mock_fare_struct)
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.parse_provided_URL", lambda *args, **kwargs: MockURLParams())
+
+    captured_logs = []
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.log", lambda msg: captured_logs.append(msg))
+
+    target_struct = {'paidPrice': 2500.00, 'paid_price': 2500.00}
+    mock_ship_dict = type('ShipDictionary', (object,), {'get_ship': lambda self, code: "Mock Ship"})()
+
+    get_cruise_price(mock_account, mock_booking, mock_ship_dict, automatic_URL=False, paid_price_struct=target_struct)
+
+    # Assert that execution successfully reached the best price block and printed the live OBC metrics
+    assert any("You have the best price of 2500.00" in log_line and "150.00 OBC" in log_line for log_line in captured_logs), \
+        f"OBC tracking lost on exact match. Logs: {''.join(captured_logs)}"
