@@ -1352,10 +1352,15 @@ def get_cruise_price(account_info: AccountInfo,
         results = get_room_price_via_API(url_params, room_number)
         room_available = results.get("room_available")
 
-    number_of_nights = int(results.get("sailing_nights", 0))
-
-    # Pass the resolved string or date into the helper
-    final_payment_date = get_final_payment_date(number_of_nights, url_params.sail_date)
+    # If the API drops, try to grab the duration from url_params if it exists, otherwise default to None or a safe value
+    nights_read_from_api = results.get("sailing_nights")
+    if nights_read_from_api is not None:
+        number_of_nights = int(nights_read_from_api)
+        final_payment_date = get_final_payment_date(number_of_nights, url_params.sail_date)
+    else:
+        # If the API skipped or failed, look for an override in the URL or set to None to force the downstream evaluation
+        number_of_nights = getattr(url_params, 'duration', 0)
+        final_payment_date = None
 
     # Reach into the global ship mapper object natively
     ship_name = ship_dictionary.get_ship(url_params.ship_code)
@@ -1437,7 +1442,9 @@ def get_cruise_price(account_info: AccountInfo,
 
     # Calculate final payment window limits dynamically if missing
     if final_payment_date is None:
-        final_payment_date = get_final_payment_date(number_of_nights, url_params.sail_date.replace('-', ''))
+        # If number of nights is still unresolvable, default to a standard 90-day window baseline
+        resolved_nights = number_of_nights if number_of_nights > 0 else 7
+        final_payment_date = get_final_payment_date(resolved_nights, url_params.sail_date)
 
     final_payment_date_display = final_payment_date.strftime(config.date_display_format)
     past_final_payment_date = date.today() > final_payment_date

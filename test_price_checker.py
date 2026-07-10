@@ -1235,6 +1235,7 @@ def test_get_cruise_price_resolves_boolean_discount_labels_accurately():
     mock_url_params.travel_insurance = False
     mock_url_params.prepaid_grats = False
     mock_url_params.all_included = False
+    mock_url_params.duration = 0
 
     # Mirror the actual dataclass boolean assignments from the URL parser
     mock_url_params.loyalty_number = "123456"
@@ -1722,6 +1723,7 @@ def test_get_cruise_price_forwards_discount_profile_dp340(mock_global_config, ba
     mock_url_params.fire = False
     mock_url_params.currency_code = "USD"
     mock_url_params.sail_date = "20261115"
+    mock_url_params.duration = 0
 
     # Intercept internal calls to isolate parameter transmission path
     with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(True, [])), \
