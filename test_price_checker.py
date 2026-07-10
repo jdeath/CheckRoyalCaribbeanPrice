@@ -1059,7 +1059,9 @@ def test_get_ship_dictionary_web_exception_handling_triggers_exit():
          patch('sys.exit') as mock_exit:
 
         get_ship_dictionary_web(registry)
-        mock_exit.assert_called_once_with(1)
+        mock_exit.assert_not_called()
+        assert len(registry.ships) == 0
+
 
 # =====================================================================
 # ITEM 8 EXTRA PARSER & SESSION TESTS: Edge-Case Handling & Robust Fallbacks
@@ -1883,3 +1885,4 @@ def test_exact_price_match_includes_obc(monkeypatch):
     # Assert that execution successfully reached the best price block and printed the live OBC metrics
     assert any("You have the best price of 2500.00" in log_line and "150.00 OBC" in log_line for log_line in captured_logs), \
         f"OBC tracking lost on exact match. Logs: {''.join(captured_logs)}"
+

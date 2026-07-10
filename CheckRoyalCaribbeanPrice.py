@@ -147,6 +147,12 @@ class Ship:
     name: str = "Unknown Ship"
 
 
+    # Adding an explicit init to ensure attributes map correctly when instantiated manually
+    def __init__(self, code: str, name: str = "Unknown Ship"):
+        self.code = code
+        self.name = name
+
+
 class ShipRegistry:
     """
     In-memory dictionary cache tracking valid fleet vessel assets.
@@ -170,12 +176,20 @@ class ShipRegistry:
         for item in payload:
             code = item.get("shipCode")
             name = item.get("name", "Unknown Ship")
-            self.ships[code] = Ship(code=code, name=name)
+            if code:
+                self.ships[code] = Ship(code=code, name=name)
 
 
-    def get_ship(self, code: str) -> Ship:
-        # Returns the ship if found, otherwise a new 'Unknown' ship object
-        return self.ships.get(code, Ship(code=code)).name
+    def get_ship(self, code: str) -> str:
+        """
+        Returns the ship if found, otherwise a new 'Unknown' ship object
+        """
+        # Check if the ship object exists in our registry dictionary
+        ship_obj = self.ships.get(code)
+
+        # If it exists, return its clean name.
+        # Otherwise, return the raw code string
+        return ship_obj.name if ship_obj else code
 
 
 @dataclass
@@ -716,7 +730,7 @@ def get_ship_dictionary_web(registry: ShipRegistry) -> None:
         url=url,
         params=params,
         headers=headers,
-        exit_on_fail=True    # Maintain original developer's intent to halt program on failure
+        exit_on_fail=False #True    # Maintain original developer's intent to halt program on failure
     )
 
     # Due to exit_on_fail=True, response is guaranteed to be a valid requests.Response here
@@ -724,8 +738,11 @@ def get_ship_dictionary_web(registry: ShipRegistry) -> None:
         ships = response.json().get("payload", {}).get("ships", [])
         registry.add_from_payload(ships)
     except Exception as e:
-        log(f"Error parsing ship fleet payload: {e}")
-        sys.exit(1)
+        if response is None:
+            log(f"{YELLOW}[WARN] Fleet API unreachable. Falling back to raw ship codes.{RESET}")
+        else:
+            log(f"{YELLOW}[WARN] Fleet API schema parsing failed ({e}). Falling back to raw ship codes.{RESET}")
+        return
 
 
 #
@@ -1704,8 +1721,6 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     rooms = _extract_json_array(response.text, "rooms")
 
     if not rooms:
-        log (f"check_if_room_is_available didn't extract rooms from response.text")
-        log (f"passed params were {request_params}")
         return False, available_rooms
 
     try:
