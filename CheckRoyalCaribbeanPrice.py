@@ -1519,7 +1519,7 @@ def get_cruise_price(account_info: AccountInfo,
                     apobj.notify(body=text_string, title='Cruise Price Alert')
     else:
         # Current catalog price is equal to or higher than target price thresholds
-        temp_string = GREEN + f"{pre_string}: You have the best price of {paid_price:.2f} {url_params.currency_code}"
+        temp_string = GREEN + f"{pre_string}: You have the best price of {paid_price:.2f} {url_params.currency_code}" + RESET
         if price > paid_price:
             temp_string += f" (now {price:.2f} {url_params.currency_code}"
             if obc_value > 0:
@@ -1528,7 +1528,6 @@ def get_cruise_price(account_info: AccountInfo,
         else:
             if obc_value > 0:
                 temp_string += f" (not including {obc_string} OBC)"
-        temp_string += RESET
 
         if desire_refund_price and paid_price > base_price:
             temp_string += f"{YELLOW} Non-Refundable price {base_price:.2f} {url_params.currency_code} is lower than you paid{RESET}"
