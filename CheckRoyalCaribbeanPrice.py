@@ -1822,8 +1822,12 @@ def get_new_order_price(
     # Get the information on the watched item from the server
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/catalog/v2/{ship}/categories/{prefix}/products/{product}'
     response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
-    payload = response.json().get("payload")
-    if payload is None:
+
+    try:
+        payload = response.json().get("payload")
+        if payload is None:
+            raise ValueError # Force an excpetion if the payload layer itself is None
+    except (AttributeError, ValueError, TypeError):
         log(f"{prefix} {product} not available for passenger")
         return
 
