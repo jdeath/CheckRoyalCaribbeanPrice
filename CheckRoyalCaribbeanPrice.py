@@ -493,7 +493,8 @@ def _execute_api_request(
     data: Optional[Union[str, dict]] = None,
     headers: Optional[dict] = None,
     timeout: int = 30,
-    exit_on_fail: bool = True
+    on_failure: str = "retry",
+    max_retries: int = 3
 ) -> Optional[requests.Response]:
     """
     Unified API execution engine for all cruise line network interactions.
@@ -502,12 +503,10 @@ def _execute_api_request(
     If an active session profile exists, it automatically injects 'Access-Token'
     and account tracking headers into the request context.
 
-    Setting exit_on_fail=False allows non-essential network lookups (such as
-    historical loyalty status summaries) to fail silently without breaking the script.
-
-    NOTE: If an account context is passed, we reuse its persistent state
-    session (maintaining cookies and token headers). For anonymous/watchlist lookups,
-    we fall back onto an ephemeral, short-lived 'requests.Session()' instance on-the-fly.
+    Supported strategies for on_failure:
+    - "retry": Automatically retries transient errors with exponential backoff.
+    - "skip" : Logs the warning and returns None.
+    - "exit" : Logs the error and terminates the script entirely.
     """
     # Start with any caller-specified override headers, or an empty base
     final_headers = headers.copy() if headers else {}
@@ -528,7 +527,30 @@ def _execute_api_request(
     # Choose the target network session channel
     session_context = account_info.access.session if (account_info and account_info.access) else requests
 
-    # Fire the request dynamically
+    # --- STRATEGY A: RESILIENT RETRY LOOP ---
+    if on_failure == "retry":
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = session_context.request(
+                    method=method.upper(),
+                    url=url,
+                    params=params,
+                    data=data,
+                    headers=final_headers,
+                    timeout=timeout
+                )
+                response.raise_for_status()
+                return response  # Success!
+            except Exception as e:
+                if attempt < max_retries:
+                    backoff_time = 2 ** attempt
+                    logging.warning(f"Attempt {attempt}/{max_retries} failed for {url}: {e}. Retrying in {backoff_time}s...")
+                    time.sleep(backoff_time)
+                else:
+                    logging.warning(f"All {max_retries} retry attempts exhausted for {url}. Falling back to 'skip' safety.")
+                    return None
+
+    # --- STRATEGY B: STATIC SINGLE-SHOT ACTIONS ("skip" or "exit") ---
     try:
         response = session_context.request(
             method=method.upper(),
@@ -540,13 +562,14 @@ def _execute_api_request(
         )
         response.raise_for_status()
         return response
-
     except Exception as e:
         error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{e}')"
-        if exit_on_fail:
+
+        if on_failure == "exit":
             log(error_msg)
             sys.exit(1)
         else:
+            # Matches legacy exit_on_fail=False behavior
             logging.warning(f"Non-critical API interaction skipped (exception: {e})")
             return None
 
@@ -730,10 +753,9 @@ def get_ship_dictionary_web(registry: ShipRegistry) -> None:
         url=url,
         params=params,
         headers=headers,
-        exit_on_fail=False #True    # Maintain original developer's intent to halt program on failure
+        on_failure="retry"
     )
 
-    # Due to exit_on_fail=True, response is guaranteed to be a valid requests.Response here
     try:
         ships = response.json().get("payload", {}).get("ships", [])
         registry.add_from_payload(ships)
@@ -1209,7 +1231,7 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
         params={"token": amendtoken, "country": country},
         headers=HEADERS,
         timeout=30,
-        exit_on_fail=False
+        on_failure="retry"
     )
 
     if resp is None:
@@ -1619,7 +1641,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
           url=api_URL,
           data=json.dumps(json_data),
           headers=headers,
-          exit_on_fail=False
+          on_failure="retry"
     )
 
     if response is not None:
@@ -2200,7 +2222,7 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
             method="GET",
             url=base_url,
             params={'sailingId': sailing_ID, 'page': page, 'currencyIso': currency},
-            exit_on_fail=False  # Allow non-essential promotions to degrade gracefully if API drops
+            on_failure="retry"  # Allow non-essential promotions to degrade gracefully if API drops
         )
 
         if resp is None:
@@ -2414,7 +2436,7 @@ def get_checkin_statuses(account_info: AccountInfo, reservation_id: str, guest_I
             data=json.dumps(payload),
             headers=headers,
             timeout=10,
-            exit_on_fail=False
+            on_failure="retry"
     )
 
     if response is None:
@@ -2459,7 +2481,7 @@ def get_boarding_pass(account_info: AccountInfo, booking: Dict[str, Any], guest_
             data=json.dumps(payload),
             headers=headers,
             timeout=10,
-            exit_on_fail=False
+            on_failure="retry"
     )
 
     ret_val = {} if response is None else response.json()
@@ -2473,7 +2495,7 @@ def get_number_of_nights(account_info: AccountInfo, loyalty_number: str) -> Tupl
     """
     Queries cumulative night metrics and cruise totals for a specified loyalty profile.
 
-    Queries corporate historical data points. Runs with 'exit_on_fail=False' inside the
+    Queries corporate historical data points. Runs with 'on_failure="retry"' inside the
     request core so historical lookup dropouts won't crash critical root execution pipelines.
     """
     total_nights, total_trips = -1, -1
@@ -2485,7 +2507,7 @@ def get_number_of_nights(account_info: AccountInfo, loyalty_number: str) -> Tupl
         account_info, "GET", url,
         params={'loyaltyNumber': loyalty_number},
         timeout=10,
-        exit_on_fail=False
+        on_failure="retry"
     )
 
     if response and response.status_code == 200:
@@ -2872,7 +2894,7 @@ def get_cruise_price_from_API(
         url='https://www.royalcaribbean.com/cruises/graph',
         data=json.dumps(json_data),
         headers=headers,
-        exit_on_fail=False # Prevent a transient pricing lookup failure from killing the tracking pipeline
+        on_failure="retry" # Prevent a transient pricing lookup failure from killing the tracking pipeline
     )
 
     if resp is None:

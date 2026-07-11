@@ -957,10 +957,65 @@ def test_execute_api_request_handles_uninitialized_access_context():
             account_info=account_info,
             method="GET",
             url="https://aws-prd.api.rccl.com/test-endpoint",
-            exit_on_fail=False
+            on_failure="retry"
         )
         assert resp is not None
         mock_req.assert_called_once()
+
+
+@patch("time.sleep", return_value=None)  # Fast execution warp drive
+@patch("requests.Session.request")      # Or patch 'requests.request' depending on context
+def test_execute_api_request_retry_and_fallback(mock_request, mock_sleep):
+    """Verifies that 'retry' attempts connection 3 times before returning None."""
+    # Force the network call to throw an error every time it is called
+    mock_request.side_effect = requests.exceptions.HTTPError("Server Down")
+
+    result = _execute_api_request(
+        account_info=None,
+        method="GET",
+        url="https://api.royalcaribbean.com/test",
+        on_failure="retry",
+        max_retries=3
+    )
+
+    # Assertions
+    assert result is None
+    assert mock_request.call_count == 3  # Confirms it tried 3 times
+    assert mock_sleep.call_count == 2    # Backoff happens between attempts (1->2, 2->3)
+
+
+@patch("requests.Session.request")
+def test_execute_api_request_skip_behavior(mock_request):
+    """Verifies that 'skip' returns None immediately without retrying."""
+    mock_request.side_effect = requests.exceptions.ConnectionError("Timeout")
+
+    result = _execute_api_request(
+        account_info=None,
+        method="POST",
+        url="https://api.royalcaribbean.com/test",
+        on_failure="skip"
+    )
+
+    assert result is None
+    assert mock_request.call_count == 1  # No retries!
+
+
+@patch("requests.Session.request")
+def test_execute_api_request_hard_exit(mock_request):
+    """Verifies that 'exit' raises a SystemExit crash on failure."""
+    mock_request.side_effect = requests.exceptions.RequestException("Fatal")
+
+    # pytest looks specifically for sys.exit(1)
+    with pytest.raises(SystemExit) as exc_info:
+        _execute_api_request(
+            account_info=None,
+            method="GET",
+            url="https://api.royalcaribbean.com/critical-path",
+            on_failure="exit"
+        )
+
+    assert exc_info.value.code == 1
+    assert mock_request.call_count == 1
 
 
 def test_extract_json_array_resilience_to_unclosed_strings():
