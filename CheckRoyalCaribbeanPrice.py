@@ -202,7 +202,7 @@ def main(config_path=None):
                     if cAndAPoints is None:
                         print("Error finding C&A Points")
                         cAndAPoints = 0
-                    discountFlags = [loyaltyNumber, state, senior, military, police, cAndAPoints >= 340]
+                    discountFlags = [loyaltyNumber, state, senior, military, police, cAndAPoints >= 175] # reports only need to be D+ for single discount
                     getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFriendlyNames,watchListItems,displayCruisePrices,reservationPricePaid,showPromos,discountFlags)
                 
                     if numAccounts > 1:
