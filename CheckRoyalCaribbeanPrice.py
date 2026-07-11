@@ -877,6 +877,10 @@ def login(account_info: AccountInfo) -> APIAccess:
     data = f'grant_type=password&username={username}&password={url_safe_password}&scope=openid+profile+email+vdsid'
 
     # Attempt the login using the provided variables
+    # TODO: Refactor to unified execution engine in a future architecture pass.
+    # NOTE: This is left as a direct session call for now to guarantee that the
+    # login cookie container and initial OAuth handshakes are preserved perfectly
+    # without running into downstream fallback session side-effects.
     try:
         response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data)
     except Exception as e:
@@ -1737,6 +1741,10 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
         'r0C': 'y',
     }
 
+    # TODO: Migrate to _execute_api_request() with on_failure="retry".
+    # This loop lookup is an excellent candidate for our new exponential backoff
+    # engine, but is left single-shot for this PR to keep the price-tracking loop
+    # scope completely isolated and test-stabilized.
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
     try:
         response = requests.get(api_URL, params=request_params, headers=headers)
@@ -2164,6 +2172,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             # Dividing it by number_of_nights gives us the actual headcount of passengers.
                             passenger_count = max(1, round(paid_quantity / number_of_nights))
 
+                            # TODO: Verify this is the proper formula for paid_price
                             # The daily per-person rate is the total subtotal divided by nights and headcount
                             paid_price = round(paid_price / (number_of_nights * passenger_count), 2)
 #                            paid_price = round(paid_price / number_of_nights, 2)
@@ -2365,6 +2374,7 @@ def _build_checkout_url(
     stateroom_number = booking.get("stateroomNumber")
 
     # Build the dictionary of parameters that URLs for GTY and non-GTY share completely
+    # TODO:  Should r0s still be hardcoded to 'n' even though we have the is_fire Boolean?
     params = {
         'packageCode': booking.get("packageCode"),
         'sailDate': url_sail_date,
