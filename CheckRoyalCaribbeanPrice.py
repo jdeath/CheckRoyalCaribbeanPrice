@@ -1341,7 +1341,8 @@ def get_cruise_price(account_info: AccountInfo,
             temp_discounts = DiscountProfile(
                 loyalty_number=booking.get("loyaltyNumber") or getattr(account_info, 'loyalty_number', None),
                 state=getattr(account_info, 'state', None),
-                senior='y' if have_a_senior else 'n',
+                senior=have_a_senior,
+#                senior='y' if have_a_senior else 'n',
                 military=True if (paid_price_struct and paid_price_struct.get('military')) else False,
                 fire=True if (paid_price_struct and paid_price_struct.get('fire')) else False,
                 police=True if (paid_price_struct and paid_price_struct.get('police')) else False,
@@ -1366,9 +1367,9 @@ def get_cruise_price(account_info: AccountInfo,
         if temp_discounts.dp340:
             url_params.coupon_code = 'DP340'
 
-        if have_a_senior:
-            url_params.senior = True
-
+#        if have_a_senior:
+#            url_params.senior = True
+#
     # Absorb any YAML overrides safely now that url_params is guaranteed to be an object
     url_params.apply_overrides(paid_price_struct)
 
@@ -1493,6 +1494,22 @@ def get_cruise_price(account_info: AccountInfo,
         if not automatic_URL and apobj is not None:
             apobj.notify(body=text_string, title='Cruise Room Not Available')
 
+        # TODO: This code block will print the "Available Rooms" line even if the count is 0;
+        #       do we want to use this commented-out block instead
+#        if url_params.package_code and not automatic_URL:
+#            # Pre-filter rooms that actually have inventory available
+#            valid_rooms = [
+#                r for r in results.get("available_rooms", [])
+#                if r.get('roomsLeft') is not None and r.get('roomsLeft') > 0
+#            ]
+#
+#            if valid_rooms:
+#                log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
+#                for available_room in valid_rooms:
+#                    log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {available_room.get('roomsLeft')}")
+#            else:
+#                log(f"\tNo alternative room inventory returned by the booking engine.")
+#        return
         if url_params.package_code and not automatic_URL:
             log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
             for available_room in results.get("available_rooms", []):
@@ -1581,15 +1598,6 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
     if not room_available:
         results['available_rooms'] = available_rooms
         return results
-
-    # --- ENDPOINT SCHEMA REALIGNMENT ---
-    # DEAD CODE
-    # The checkout API strictly requires 'SUITE' for GS, JS, OS, etc.,
-    # even if marketing links display 'DELUXE'
-    target_type_code = url_params.stateroom_type_name
-    if url_params.stateroom_category_code in ['GS', 'JS', 'OS', 'RS', 'SG', 'WS']:
-        target_type_code = 'SUITE'
-    # -----------------------------------
 
     headers = {
         'user-agent': USER_AGENT_WEB,
@@ -1861,7 +1869,8 @@ def get_new_order_price(
     try:
         payload = response.json().get("payload")
         if payload is None:
-            raise ValueError # Force an excpetion if the payload layer itself is None
+            # Force an exception if the payload layer itself is None
+            raise ValueError
     except (AttributeError, ValueError, TypeError):
         log(f"{prefix} {product} not available for passenger")
         return
@@ -2011,7 +2020,6 @@ def process_watch_list_for_booking(
             log(f"\t{YELLOW}Skipping {name} - missing required fields{RESET}")
             continue
 
-        # Format: [WATCH] Item Name - Passenger (Room): Message
         watch_display_name = f"[WATCH] {passenger_name} (Cabin {room})"
 
         # Pack up the transient items into a context object
@@ -3146,8 +3154,8 @@ def main() -> None:
         get_ship_dictionary_web(ship_dictionary)
 
         for account_info in config.accounts:
-            log(f"\n  Using {account_info.friendly_name} for user {account_info.username}")
-            log(f"        {account_info.friendly_name} loyalty number will be used for checking cabin prices")
+            log(f"\nUsing {account_info.friendly_name} for user {account_info.username}")
+            log(f"\t{account_info.friendly_name} loyalty number will be used for checking cabin prices")
 
             # Login in to this account and get the profile information
             account_info.access = login(account_info)
