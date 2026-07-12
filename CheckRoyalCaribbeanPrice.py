@@ -1019,6 +1019,15 @@ def get_checkin_info(account_info: AccountInfo,
                 status = guest.get("onlineCheckinStatus", "NOT_STARTED")
                 log(f"\tPassenger Check-In Status: {status}")
                 log(f"\tAssigned Boarding Window: {arrival_time}")
+    else:
+        # Log the future check-in window opening date if check-in is not yet open
+        if check_window_open_start_date_time:
+            # The API typically gives you a string like "2027-03-26T00:00:00.000Z"
+            # Slice just the date portion or format it according to your config layout
+            opening_date = check_window_open_start_date_time.split('T')[0]
+            log(f"\tCheck-In opens on: {opening_date}")
+        else:
+            log(f"\tCheck-In window opening date not yet released.")
 
 
 #
@@ -1102,7 +1111,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             else:
                 sitting_type = selection.get('sittingType', '')
                 sitting_time = selection.get('sittingTime', '')
-                dining_string = f"Dining: {sitting_type} {sitting_time}"
+                dining_string = f"\tDining: {sitting_type} {sitting_time}"
                 raw_table_size = selection.get("tableSize", "")
                 if raw_table_size and str(raw_table_size) != "00":
                     padded_table = str(raw_table_size).zfill(2)
@@ -1378,15 +1387,18 @@ def get_cruise_price(account_info: AccountInfo,
         results = get_room_price_via_API(url_params, room_number)
         room_available = results.get("room_available")
 
-    # If the API drops, try to grab the duration from url_params if it exists, otherwise default to None or a safe value
-    nights_read_from_api = results.get("sailing_nights")
-    if nights_read_from_api is not None:
-        number_of_nights = int(nights_read_from_api)
-        final_payment_date = get_final_payment_date(number_of_nights, url_params.sail_date)
+    # === Localized Night Count Extraction ===
+    # Prioritize the clean parsed values from the watchlist or configuration properties.
+    if getattr(url_params, 'duration', 0) > 0:
+        resolved_nights = url_params.duration
+    elif paid_price_struct and paid_price_struct.get("duration"):
+        resolved_nights = int(paid_price_struct["duration"])
     else:
-        # If the API skipped or failed, look for an override in the URL or set to None to force the downstream evaluation
-        number_of_nights = getattr(url_params, 'duration', 0)
-        final_payment_date = None
+        # Last resort fallback if the availability API contains a valid reading
+        api_nights = results.get("sailing_nights")
+        resolved_nights = int(api_nights) if (api_nights and int(api_nights) > 0) else 7
+
+    final_payment_date = get_final_payment_date(resolved_nights, url_params.sail_date)
 
     # Reach into the global ship mapper object natively
     ship_name = ship_dictionary.get_ship(url_params.ship_code)
@@ -1465,12 +1477,6 @@ def get_cruise_price(account_info: AccountInfo,
 
         if addons != "":
             pre_string = f"{pre_string} ({addons[:-2]})"
-
-    # Calculate final payment window limits dynamically if missing
-    if final_payment_date is None:
-        # If number of nights is still unresolvable, default to a standard 90-day window baseline
-        resolved_nights = number_of_nights if number_of_nights > 0 else 7
-        final_payment_date = get_final_payment_date(resolved_nights, url_params.sail_date)
 
     final_payment_date_display = final_payment_date.strftime(config.date_display_format)
     past_final_payment_date = date.today() > final_payment_date
@@ -2168,17 +2174,11 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
 
                         # Compute specialized per-day or per-night calculations
                         if sales_unit in ['PER_NIGHT', 'PER_DAY'] and number_of_nights > 0:
-                            # paid_quantity represents (Number of Guests * Number of Nights).
-                            # Dividing it by number_of_nights gives us the actual headcount of passengers.
-                            passenger_count = max(1, round(paid_quantity / number_of_nights))
+                            # Strip out voyage duration to establish a daily cabin base rate
+                            paid_price = round(paid_price / number_of_nights, 2)
 
-                            # TODO: Verify this is the proper formula for paid_price
-                            # The daily per-person rate is the total subtotal divided by nights and headcount
-                            paid_price = round(paid_price / (number_of_nights * passenger_count), 2)
-#                            paid_price = round(paid_price / number_of_nights, 2)
-
-                        elif paid_quantity > 0:
-                            # Fallback for flat-rate items (excursions, passes)
+                        if paid_quantity > 0:
+                            # Divide by package headcount to isolate the final per-guest daily rate
                             paid_price = round(paid_price / paid_quantity, 2)
 
                         currency = guest.get("priceDetails", {}).get("currency")
@@ -2351,7 +2351,7 @@ def _build_checkout_url(
     booking: Dict[str, Any],
     metrics: Dict[str, Any],
     account_info: AccountInfo,
-    discounts: DiscountProfile #CruiseURLParams
+    discounts: DiscountProfile
 ) -> str:
     """
     Generates a live corporate web URL mirroring the parameters used during price tracking.
@@ -2374,7 +2374,6 @@ def _build_checkout_url(
     stateroom_number = booking.get("stateroomNumber")
 
     # Build the dictionary of parameters that URLs for GTY and non-GTY share completely
-    # TODO:  Should r0s still be hardcoded to 'n' even though we have the is_fire Boolean?
     params = {
         'packageCode': booking.get("packageCode"),
         'sailDate': url_sail_date,
@@ -2389,7 +2388,8 @@ def _build_checkout_url(
         'r0f': metrics['category_code'],
         'r0b': 'n',
         'r0r': is_police,
-        'r0s': 'n', #is_fire
+        'r0s': is_fire,
+#        'r0s': 'n', # Formerly hardcoded; kept for a revert in case of problems
         'r0q': is_military,
         'r0t': is_senior,
         'r0D': 'y'
@@ -3158,6 +3158,12 @@ def main() -> None:
             # This block bundles all age, loyalty, and regional residency codes
             # together. If you want to check prices for a specific state or check senior discounts,
             # this profile ensures the request matches those promotional brackets.
+            # July 2026: RCCL recently changed the 340 point discount benefit for any
+            #            Diamond Plus tier members.  Keep it under diamond_plus_override
+            #            to easily back that out if necessary
+            diamond_plus_override = True
+            has_dp340_bracket = (c_and_a_points >= 340) or (diamond_plus_override and c_and_a_points >= 175)
+
             discounts = DiscountProfile(
                 loyalty_number=loyalty_number,
                 state=account_info.state,
@@ -3165,7 +3171,7 @@ def main() -> None:
                 military=account_info.military,
                 fire=account_info.fire,
                 police=account_info.police,
-                dp340=(c_and_a_points >= 340)
+                dp340=has_dp340_bracket
             )
 
             # Gather the information on all voyages under the current account

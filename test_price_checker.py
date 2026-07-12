@@ -1420,28 +1420,28 @@ def test_get_orders_per_day_price_calculation_safety():
     }
 
     mock_detail_payload = {
-        "payload": {
-            "orderHistoryDetailItems": [{
-                "productSummary": {
-                    "title": "Deluxe Beverage Package",
-                    "defaultVariantId": "DBP01",
-                    "productTypeCategory": {"id": "BEVERAGE"},
-                    "salesUnit": "PER_NIGHT"
-                },
-                "guests": [{
-                    "id": "999",
-                    "orderStatus": "COMPLETED",
-                    "firstName": "MATT",
-                    "guestType": "ADULT",
-                    "priceDetails": {
-                        "subtotal": 490.0, # Total cost for 1 person for 7 nights ($70/night)
-                        "quantity": 7,      # Represents 7 package-days
-                        "currency": "USD"
-                    }
+            "payload": {
+                "orderHistoryDetailItems": [{
+                    "productSummary": {
+                        "title": "Deluxe Beverage Package",
+                        "defaultVariantId": "DBP01",
+                        "productTypeCategory": {"id": "BEVERAGE"},
+                        "salesUnit": "PER_NIGHT"
+                    },
+                    "guests": [{
+                        "id": "999",
+                        "orderStatus": "COMPLETED",
+                        "firstName": "MATT",
+                        "guestType": "ADULT",
+                        "priceDetails": {
+                            "subtotal": 490.0, # Total cost for 1 person for 7 nights ($70/night)
+                            "quantity": 1,      # FIX: Represents 1 guest package headcount
+                            "currency": "USD"
+                        }
+                    }]
                 }]
-            }]
+            }
         }
-    }
 
     with patch('CheckRoyalCaribbeanPrice._execute_api_request') as mock_api:
         # Side effect to return history list, then history details
