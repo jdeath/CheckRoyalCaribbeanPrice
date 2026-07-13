@@ -1342,7 +1342,6 @@ def get_cruise_price(account_info: AccountInfo,
                 loyalty_number=booking.get("loyaltyNumber") or getattr(account_info, 'loyalty_number', None),
                 state=getattr(account_info, 'state', None),
                 senior=have_a_senior,
-#                senior='y' if have_a_senior else 'n',
                 military=True if (paid_price_struct and paid_price_struct.get('military')) else False,
                 fire=True if (paid_price_struct and paid_price_struct.get('fire')) else False,
                 police=True if (paid_price_struct and paid_price_struct.get('police')) else False,
@@ -1374,7 +1373,9 @@ def get_cruise_price(account_info: AccountInfo,
     url_params.apply_overrides(paid_price_struct)
 
     # Capture target price bounds if they exist
-    paid_price = paid_price_struct.get("paid_price") if paid_price_struct else None
+    # NOTE: both paid_price and paidPrice are valid keys,
+    #       depending on booked vs. prospective cruises
+    paid_price = paid_price_struct.get("paid_price") or paid_price_struct.get("paidPrice") if paid_price_struct else None
     room_number = None
 
     # Primary API pricing check pass
@@ -1855,6 +1856,8 @@ def get_new_order_price(
     order_date = ctx.order_date
     owner = ctx.owner
 
+    display_name = passenger_name.ljust(10)
+
     params = {
         'reservationId': reservation_ID,
         'startDate': start_date,
@@ -1892,7 +1895,7 @@ def get_new_order_price(
     # Item is no longer for sale or already purchased
     if new_price_payload is None:
         if not for_watch:
-            temp_string = YELLOW + f"\t{passenger_name.ljust(10)} (Cabin {room}) has best price "
+            temp_string = YELLOW + f"\t{display_name} (Cabin {room}) has best price "
             if per_day_price:
                 temp_string += "per night "
             temp_string += f"for {title} of: {paid_price:.2f} {currency} (No Longer for Sale)" + RESET
@@ -1921,16 +1924,21 @@ def get_new_order_price(
             saving_for_alert = round(saving * number_of_nights, 2)
             saving_label = f"Saving {saving} {currency} per night ({saving_for_alert} {currency} total)"
 
-        if for_watch:
-            text = f"{passenger_name}: Book! {title} Price "
-            if per_day_price:
-                text += "per night "
-            text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
-        else:
-            text = f"{passenger_name}: Rebook! {title} Price "
-            if per_day_price:
-                text += "per night "
-            text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
+        prefix_tag = f"[WATCH] {display_name} (Cabin {room})" if for_watch else f"{passenger_name}"
+        text = f"{prefix_tag}: {'Book!' if for_watch else 'Rebook!'} {title} Price "
+        if per_day_price:
+            text += "per night "
+        text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
+#        if for_watch:
+#            text = f"{passenger_name}: Book! {title} Price "
+#            if per_day_price:
+#                text += "per night "
+#            text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
+#        else:
+#            text = f"{passenger_name}: Rebook! {title} Price "
+#            if per_day_price:
+#                text += "per night "
+#            text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
 
         # Reaching into global config for alerts configuration
         if config.minimum_saving_alert is not None:
@@ -1959,15 +1967,22 @@ def get_new_order_price(
     else:
         # Current price on server is higher than the paid price ("currently best price" path)
         if for_watch:
-            temp_string = GREEN + f"{passenger_name.ljust(10)} {title} price "
-            if per_day_price:
-                temp_string += "per night "
-            temp_string += f"is higher than watch price: {paid_price:.2f} {currency}" + RESET
+            temp_string = GREEN + f"[WATCH] {display_name} (Cabin {room}) {title} price is higher than watch price: {paid_price:.2f} {currency}" + RESET
         else:
-            temp_string = GREEN + f"{passenger_name.ljust(10)} (Cabin {room}) has best price "
+            temp_string = GREEN + f"{display_name} (Cabin {room}) has best price "
             if per_day_price:
                 temp_string += "per night "
             temp_string += f"for {title} of: {paid_price:.2f} {currency}" + RESET
+#        if for_watch:
+#            temp_string = GREEN + f"{passenger_name.ljust(10)} {title} price "
+#            if per_day_price:
+#                temp_string += "per night "
+#            temp_string += f"is higher than watch price: {paid_price:.2f} {currency}" + RESET
+#        else:
+#            temp_string = GREEN + f"{passenger_name.ljust(10)} (Cabin {room}) has best price "
+#            if per_day_price:
+#                temp_string += "per night "
+#            temp_string += f"for {title} of: {paid_price:.2f} {currency}" + RESET
         if current_price > paid_price:
             temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
@@ -2020,14 +2035,12 @@ def process_watch_list_for_booking(
             log(f"\t{YELLOW}Skipping {name} - missing required fields{RESET}")
             continue
 
-        watch_display_name = f"[WATCH] {passenger_name} (Cabin {room})"
-
         # Pack up the transient items into a context object
         ctx = WatchItemContext(
             prefix=prefix,
             product=product,
             passenger_ID=passenger_ID,
-            passenger_name=watch_display_name,
+            passenger_name=passenger_name,
             room=room,
             paid_price=watch_price,
             currency=currency,
