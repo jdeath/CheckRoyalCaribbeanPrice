@@ -1,3 +1,4 @@
 requests
 PyYAML
 Apprise
+curl_cffi

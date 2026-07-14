@@ -1,4 +1,13 @@
-import requests
+# curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
+# edge servers do not reject some IPs/systems as bots with 403 Access Denied
+# (see GitHub issue #64). Fall back to plain requests where it is not
+# installed (e.g. iOS), which works fine for most people.
+try:
+    from curl_cffi import requests
+    impersonateArgs = {"impersonate": "chrome"}
+except ImportError:
+    import requests
+    impersonateArgs = {}
 import yaml
 from datetime import datetime,date, timedelta, timezone
 from urllib.parse import urlparse, parse_qs, quote
@@ -48,6 +57,9 @@ class TimeoutSession(requests.Session):
     # Retries transient failures (connection errors, timeouts, throttling, server errors)
     # with exponential backoff so a brief API blip does not cost items until the next run.
     # After the last attempt, exceptions raise and error statuses return to the caller as before.
+    def __init__(self):
+        super().__init__(**impersonateArgs)
+
     def request(self, *args, **kwargs):
         kwargs.setdefault('timeout', REQUEST_TIMEOUT)
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -1515,7 +1527,7 @@ def getShipDictionaryWeb():
     }
 
     try:
-        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v2/ships', params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+        response = TimeoutSession().get('https://aws-prd.api.rccl.com/en/royal/web/v2/ships', params=params, headers=headers)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
         sys.exit(1)
