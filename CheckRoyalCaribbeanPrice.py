@@ -33,6 +33,17 @@ REQUEST_TIMEOUT = 30
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 MAX_ATTEMPTS = 3
 
+#RED = '\033[91m'
+#GREEN = '\033[92m'
+RED = '\033[1;31;40m'
+GREEN = '\033[1;32m'
+YELLOW = '\033[33m'
+RESET = '\033[0m' # Resets color to default
+
+dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by config
+
+shipDictionary = {}
+
 class TimeoutSession(requests.Session):
     # Retries transient failures (connection errors, timeouts, throttling, server errors)
     # with exponential backoff so a brief API blip does not cost items until the next run.
@@ -52,18 +63,7 @@ class TimeoutSession(requests.Session):
             wait = 2 ** attempt
             print(YELLOW + f"API request failed ({failure}); retrying in {wait}s (attempt {attempt} of {MAX_ATTEMPTS})" + RESET)
             time.sleep(wait)
-
-#RED = '\033[91m'
-#GREEN = '\033[92m'
-RED = '\033[1;31;40m'
-GREEN = '\033[1;32m'
-YELLOW = '\033[33m'
-RESET = '\033[0m' # Resets color to default
-
-dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by config
-
-shipDictionary = {}
-
+            
 class Logger(object):
     def __init__(self, filename):
         self.terminal = sys.stdout
@@ -934,7 +934,21 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                     checkinString = f"{firstName} Boarding Time {boarding_hour}:{boarding_min}"
                 else:
                     checkinString += f", {firstName} Boarding Time {boarding_hour}:{boarding_min}"
-                
+            
+            if guest.get("onlineCheckinStatus") == "IN_PROGRESS":
+                possibleArrivalTime = guest.get("arrivalTime",None)
+                if possibleArrivalTime is not None:
+                    boarding_hour = possibleArrivalTime[9:11]
+                    boarding_min = possibleArrivalTime[11:13]
+                    boardingTimeString = f", Boarding Time {boarding_hour}:{boarding_min}"
+                else:
+                    boardingTimeString = ""
+                    
+                if checkinString == "":
+                    checkinString = f"{firstName} Check in Partially Complete{boardingTimeString}"
+                else:
+                    checkinString += f", {firstName} Check in Partially Complete{boardingTimeString}"
+                    
         passengerNames = passengerNames.rstrip()
         passengerNames = passengerNames[:-1]
 
@@ -946,8 +960,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         
+        # If ship name not found, just use code
         if shipCode not in shipDictionary:
-            shipDictionary[shipCode] = "Unknown Ship"
+            shipDictionary[shipCode] = shipCode
             
         print(f"{sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
         
