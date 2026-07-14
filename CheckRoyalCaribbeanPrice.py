@@ -23,7 +23,35 @@ appkey_web = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 currencyOverride = ""
 minimumSavingAlert = None
 
-foundItems = []
+foundItems = set()
+
+# Seconds before giving up on an API call so a stalled connection cannot hang the run forever
+# Override with requestTimeout in config.yaml if the API is slow for you
+REQUEST_TIMEOUT = 30
+
+# Transient failures worth retrying: throttling and server-side errors
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+MAX_ATTEMPTS = 3
+
+class TimeoutSession(requests.Session):
+    # Retries transient failures (connection errors, timeouts, throttling, server errors)
+    # with exponential backoff so a brief API blip does not cost items until the next run.
+    # After the last attempt, exceptions raise and error statuses return to the caller as before.
+    def request(self, *args, **kwargs):
+        kwargs.setdefault('timeout', REQUEST_TIMEOUT)
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                response = super().request(*args, **kwargs)
+                if response.status_code not in RETRYABLE_STATUS_CODES or attempt == MAX_ATTEMPTS:
+                    return response
+                failure = f"server returned {response.status_code}"
+            except Exception as e:
+                if attempt == MAX_ATTEMPTS:
+                    raise
+                failure = str(e)
+            wait = 2 ** attempt
+            print(YELLOW + f"API request failed ({failure}); retrying in {wait}s (attempt {attempt} of {MAX_ATTEMPTS})" + RESET)
+            time.sleep(wait)
 
 #RED = '\033[91m'
 #GREEN = '\033[92m'
@@ -65,13 +93,27 @@ def get_config_path():
     else:
         return os.path.expanduser('~/Documents') + "/" + args.config
 
+def expandEnvVars(value):
+    # Config values that are exactly ${VAR_NAME} are replaced with that environment
+    # variable, so secrets like passwords can stay out of config.yaml.
+    # Only whole-value matches are expanded so passwords containing $ are untouched.
+    if isinstance(value, dict):
+        return {k: expandEnvVars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expandEnvVars(v) for v in value]
+    if isinstance(value, str):
+        match = re.fullmatch(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', value)
+        if match and match.group(1) in os.environ:
+            return os.environ[match.group(1)]
+    return value
+
 def build_apprise_from_config(config_path):
-    
+
     apobj = None
     notify_on_error = False
     try:
         with open(config_path, 'r') as file:
-            data = yaml.safe_load(file) or {}
+            data = expandEnvVars(yaml.safe_load(file) or {})
             notify_on_error = bool(data.get('notifyOnError', False))
             if 'apprise' in data:
                 from apprise import Apprise
@@ -107,7 +149,7 @@ def main(config_path=None):
         
     try:    
         with open(config_path, 'r') as file:
-            data = yaml.safe_load(file)
+            data = expandEnvVars(yaml.safe_load(file))
             if 'dateDisplayFormat' in data:
                 global dateDisplayFormat
                 dateDisplayFormat = data['dateDisplayFormat']
@@ -148,6 +190,11 @@ def main(config_path=None):
                 global minimumSavingAlert
                 minimumSavingAlert = float(data['minimumSavingAlert'])
                 print(YELLOW + f"Only alerting for savings >= {minimumSavingAlert}" + RESET)
+
+            if 'requestTimeout' in data:
+                global REQUEST_TIMEOUT
+                REQUEST_TIMEOUT = float(data['requestTimeout'])
+                print(YELLOW + f"Using API request timeout of {REQUEST_TIMEOUT:g} seconds" + RESET)
 
             global shipDictionary
             shipDictionary = getShipDictionaryWeb()
@@ -192,9 +239,9 @@ def main(config_path=None):
 
                     print(f"\n  Using {friendlyCruiseLine} for user {username}")
                     print(f"        {friendlyCruiseLine} loyalty number will be used for checking cabin prices")
-                    session = requests.session()
+                    session = TimeoutSession()
                     global foundItems # Clear found items between accounts
-                    foundItems = [] # Clear found items between accounts
+                    foundItems = set() # Clear found items between accounts
                     access_token,accountId,session = login(username,password,session,cruiseLineName)
                     stateFromProfile, loyaltyNumber, cAndAPoints = getProfile(access_token,accountId,cruiseLineName,session)
                     if state is None:
@@ -215,7 +262,7 @@ def main(config_path=None):
                         cruiseURL = cruises['cruiseURL'] 
                         paidPrice = cruises['paidPrice']
                         paidPriceStruct = {"paidPrice":float(paidPrice)} # For New structure
-                        session = requests.session()
+                        session = TimeoutSession()
                         get_cruise_price(cruiseURL, session, paidPriceStruct, apobj, False, None,None)
                         
     except FileNotFoundError:
@@ -224,7 +271,7 @@ def main(config_path=None):
         user_input = input("Enter y if want me to make the file: ")
         if user_input == "y":
             url = 'https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/SAMPLE-SIMPLE-config.yaml'
-            response = requests.get(url)
+            response = requests.get(url, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             localFileName = "config.yaml"
             if platform.system() == "iOS":
@@ -306,21 +353,25 @@ def days_between(d1, d2):
     dt2 = datetime.strptime(d2, "%Y%m%d")
     return (dt2 - dt1).days
 
-def getDiningAndPrices(amendtoken, isRoyal: bool = True , country: str = "USA") -> dict:
+def getDiningAndPrices(session, amendtoken, isRoyal: bool = True , country: str = "USA") -> dict:
 
     if isRoyal:
         RSC_URL = "https://www.royalcaribbean.com/usa/en/booked/overview"
     else:
         RSC_URL = "https://www.celebritycruises.com/usa/en/booked/overview"
-        
+
     HEADERS = {
         "User-Agent": user_agent_web,
         "Accept": "text/x-component",
         "RSC": "1",
     }
-    
-    resp = requests.get(RSC_URL, params={"token": amendtoken, "country": country}, headers=HEADERS, timeout=30)
-    
+
+    try:
+        resp = session.get(RSC_URL, params={"token": amendtoken, "country": country}, headers=HEADERS)
+    except Exception as e:
+        print(f"Can't get dining/pricing info; skipping\n(program exception '{e}')")
+        return {}
+
     text = resp.text
     result = {}
 
@@ -440,15 +491,15 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
     }
 
     try:
-        response = requests.post(
+        response = session.post(
             'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/price',
             params=params,
             headers=headers,
             json=json_data,
         )
     except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
+        print(f"Can't contact cruise line servers; skipping this item\n(program exception '{e}')")
+        return
     
     payload = response.json().get("payload")
     if payload is None:
@@ -489,8 +540,8 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             headers=headers,
         )
     except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
+        print(f"Can't contact cruise line servers; skipping this item\n(program exception '{e}')")
+        return
 
     payload = response.json().get("payload")
     if payload is None:
@@ -501,7 +552,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     variant = ""
     try:
         variant = payload.get("baseOptions")[0].get("selected").get("variantOptionQualifiers")[0].get("value")
-    except:
+    except Exception:
         pass
     
     if "Bottles" in variant:
@@ -696,17 +747,20 @@ def getNumberOfNights(access_token,accountId,session,loyaltyNumber):
         'loyaltyNumber': loyaltyNumber,
     }
 
-    response = requests.get(
-        'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/summary',
-        params=params,
-        headers=headers,
-    )
-    
-    payload = response.json().get("payload")
+    try:
+        response = session.get(
+            'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/summary',
+            params=params,
+            headers=headers,
+        )
+        payload = response.json().get("payload")
+    except Exception:
+        payload = None
+
     if payload is not None:
-        totalNights = payload.get("totalNights","-1")
-        totalTrips = payload.get("totalTrips","-1")
-    
+        totalNights = payload.get("totalNights", -1)
+        totalTrips = payload.get("totalTrips", -1)
+
     return totalNights, totalTrips
     
 def getProfile(access_token,accountId,cruiseLineName,session):
@@ -797,16 +851,21 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
     }
 
     try:
-        response = requests.get(
+        response = session.get(
             f'https://aws-prd.api.rccl.com/v1/profileBookings/enriched/{accountId}',
             params=params,
             headers=headers,
         )
     except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
+        print(f"Can't contact cruise line servers; skipping this account\n(program exception '{e}')")
+        return
 
-    for booking in response.json().get("payload").get("profileBookings"):
+    payload = response.json().get("payload")
+    if payload is None:
+        print("No bookings returned; skipping this account")
+        return
+
+    for booking in payload.get("profileBookings"):
         
         reservationId = booking.get("bookingId")
         passengerId = booking.get("passengerId")
@@ -819,21 +878,12 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         bookingOfficeCountryCode = booking.get("bookingOfficeCountryCode")
         stateroomType = booking.get("stateroomType")
         stateroomNumber = booking.get("stateroomNumber")
-        stateroomTypeName = "NONE"
-        
+
         amendToken = booking.get("amendToken")
-        
-        if stateroomType == "I":
-            stateroomTypeName = "INTERIOR"
-        if stateroomType == "O":
-            stateroomTypeName = "OUTSIDE"
-        if stateroomType == "B":
-            stateroomTypeName = "BALCONY"
-        if stateroomType == "D":
-            stateroomTypeName = "DELUXE"
-        if stateroomType == "C":
-            stateroomTypeName = "CONCIERGE"    
-            
+
+        stateroomTypeNames = {"I": "INTERIOR", "O": "OUTSIDE", "B": "BALCONY", "D": "DELUXE", "C": "CONCIERGE"}
+        stateroomTypeName = stateroomTypeNames.get(stateroomType, "NONE")
+
         passengerNames = ""
         numberOfPassengers = 0
         numberOfChildren = 0
@@ -896,7 +946,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
         
-        if not any(shipCode in d for d in shipDictionary):
+        if shipCode not in shipDictionary:
             shipDictionary[shipCode] = "Unknown Ship"
             
         print(f"{sailDateDisplay} {shipDictionary[shipCode]} Room {stateroomNumber} (In this cabin: {passengerNames})")
@@ -907,7 +957,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         else:
             GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj)
         
-        result = getDiningAndPrices(amendToken, brandCode == "R", bookingOfficeCountryCode)
+        result = getDiningAndPrices(session, amendToken, brandCode == "R", bookingOfficeCountryCode)
         #print(result) # comment out if have all-in or refundable fare and create github issue
   
         diningSelection = result.get("diningSelection",[])
@@ -1013,7 +1063,7 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
                         if paidPriceStruct:
                             print("Can remove paidPrice in config.yaml if above cruise price is correct")
                             print("Overriding with config.yaml values")
-                        paidPriceStruct[paidPrice] = float(paidPrice) # Override Price
+                        paidPriceStruct['paidPrice'] = float(paidPrice) # Override Price
             elif isinstance(reservationPricePaid,list):        
                 for reservation in reservationPricePaid:
                     if int(reservationId) == int(reservation.get("reservation")):
@@ -1069,21 +1119,25 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
     }
     
     try:
-        response = requests.get(
+        response = session.get(
             f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory',
             params=params,
             headers=headers,
         )
     except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
- 
+        print(f"Can't contact cruise line servers; skipping order history for this booking\n(program exception '{e}')")
+        return
+
     if response.status_code != 200:
-        print(f"Error getting voyage information (returned error code {response.status_code}). Try again later.\nQuitting.")
-        sys.exit(1)
+        print(f"Error getting order history (returned error code {response.status_code}). Skipping this booking; try again later.")
+        return
+
+    payload = response.json().get("payload")
+    if payload is None:
+        return
 
     # Check for my orders and orders others booked for me
-    for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
+    for order in (payload.get("myOrders") or []) + (payload.get("ordersOthersHaveBookedForMe") or []):
         orderCode = order.get("orderCode")
 
         # Match Order Date with Website (assuming Website follows locale)
@@ -1096,25 +1150,20 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
             
             # Get Order Details
             try:
-                response = requests.get(
+                response = session.get(
                     f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory/{orderCode}',
                     params=params,
                     headers=headers,
                 )
+                orderPayload = response.json().get("payload")
             except Exception as e:
-                print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-                sys.exit(1)
-            
-            response = requests.get(
-                f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/{ship}/orderHistory/{orderCode}',
-                params=params,
-                headers=headers,
-            )
-            
-            if response.json() is None or response.json().get("payload") is None:
+                print(f"Can't get details for order {orderCode}; skipping\n(program exception '{e}')")
                 continue
-                
-            for orderDetail in response.json().get("payload").get("orderHistoryDetailItems"):
+
+            if orderPayload is None:
+                continue
+
+            for orderDetail in orderPayload.get("orderHistoryDetailItems"):
                 # check for canceled status at item-level
                 
                 quantity = orderDetail.get("priceDetails").get("quantity")
@@ -1127,7 +1176,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                 # I do the except just as a precaution
                 try:
                     product = orderDetail.get("productSummary").get("baseOptions")[0].get("selected").get("code")
-                except:
+                except Exception:
                     product = orderDetail.get("productSummary").get("defaultVariantId")
                     
                 prefix = orderDetail.get("productSummary").get("productTypeCategory").get("id")
@@ -1155,7 +1204,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
                     newKey = guestPassengerId + reservationId + prefix + product
                     if newKey in foundItems:
                         continue
-                    foundItems.append(newKey)
+                    foundItems.add(newKey)
                     
                     # New Per Day Logic From cyntil8 fork
                     if salesUnit in [ 'PER_NIGHT', 'PER_DAY' ]:
@@ -1250,13 +1299,13 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
             allIncluded = False
             
     #print(locals())
-    results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
-    
+    results = getRoomPriceViaAPI(session,isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
+
     roomAvailable = results.get("roomAvailable")
     if not roomAvailable and couponCode is not None:
         print(f"Coupon Code {couponCode} May Have Failed - Trying Without")
         couponCode = None
-        results = getRoomPriceViaAPI(isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
+        results = getRoomPriceViaAPI(session,isRoyal,bookingOfficeCountryCode,packageCode,sailDate,currencyCode,stateroomTypeName,stateroomSubtype,stateroomCategoryCode,roomNumber,loyaltyNumber,state,fire,military,police,senior,couponCode,numberOfAdults,numberOfChildren)
         
     roomAvailable = results.get("roomAvailable")
     
@@ -1297,16 +1346,18 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
             refundFareString = "allIncludedRefundableFare" 
             
         fareStruct = results.get(baseFareString)
-        if fareStruct is None:
+        if fareStruct is None and baseFareString != "baseFare":
             #print(results)
             print(f"{RED}All Included Fare is Not Available - Reverting to Non-refundable fare{RESET}")
             fareStruct = results.get("baseFare")
-        else:
-            price = fareStruct.get("fare")
-            grats = fareStruct.get("gratuities")
-            ins = fareStruct.get("insurance")
-            obc = fareStruct.get("obc")
-        
+        if fareStruct is None:
+            print(YELLOW + f"{preString}: No fare pricing returned; cannot compare price" + RESET)
+            return
+        price = fareStruct.get("fare")
+        grats = fareStruct.get("gratuities")
+        ins = fareStruct.get("insurance")
+        obc = fareStruct.get("obc")
+
         # Save this for later
         basePrice = price
         baseGrats = grats
@@ -1421,12 +1472,14 @@ def get_cruise_price(url, session, paidPriceStruct, apobj, automaticURL,finalPay
                     apobj.notify(body=textString, title='Cruise Price Alert')
     else:
         tempString = GREEN + f"{preString}: You have best price of {paidPrice} {currencyCode}" + RESET
+        extras = ""
         if price > paidPrice:
-            tempString += f" (now {price} {currencyCode}"
+            extras = f"now {price} {currencyCode}"
         if obcValue > 0:
-            tempString += f" not including {obcString} OBC"
-        tempString += ")"   
-        
+            extras += f" not including {obcString} OBC"
+        if extras:
+            tempString += f" ({extras.strip()})"
+
         if desireRefundPrice and paidPrice > basePrice:
             tempString += f"{YELLOW} Non-Refunable price {basePrice} {currencyCode} is lower than you paid{RESET}"
         elif desireRefundPrice:
@@ -1447,10 +1500,10 @@ def getShipDictionaryWeb():
     }
 
     try:
-        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v2/ships', params=params, headers=headers)
+        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v2/ships', params=params, headers=headers, timeout=REQUEST_TIMEOUT)
     except Exception as e:
         print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        exit(1)
+        sys.exit(1)
     ships = response.json().get("payload").get("ships")
     shipCodes = {}    
     for ship in ships:
@@ -1529,6 +1582,8 @@ def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
         print( booking.get("bookingId") + " " + booking.get("offerUrl") )
 
 # Get all available promotions for a sailing
+promoCache = {} # Promotions are per-sailing, so fetch each sailing only once per run
+
 def getAllPromotions(access_token, accountId, session, ship, startDate, currency):
     headers = {
         'Access-Token': access_token,
@@ -1540,8 +1595,17 @@ def getAllPromotions(access_token, accountId, session, ship, startDate, currency
     sailingId = ship + startDate
 
     def fetchPromos(page):
-        resp = session.get(base_url, params={'sailingId': sailingId, 'page': page, 'currencyIso': currency}, headers=headers)
-        return resp.json().get("payload") or [] if resp.status_code == 200 else []
+        cacheKey = (sailingId, currency, page)
+        if cacheKey in promoCache:
+            return promoCache[cacheKey]
+        try:
+            resp = session.get(base_url, params={'sailingId': sailingId, 'page': page, 'currencyIso': currency}, headers=headers)
+            promos = resp.json().get("payload") or [] if resp.status_code == 200 else []
+        except Exception as e:
+            print(f"Can't get promotions; skipping\n(program exception '{e}')")
+            promos = []
+        promoCache[cacheKey] = promos
+        return promos
 
     all_promos = fetchPromos('homepage')
     if not all_promos:
@@ -1670,14 +1734,14 @@ def GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sai
     }
 
     try:
-        response = requests.get(
+        response = session.get(
             f'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/obc/reservations/{reservationId}',
             params=params,
             headers=headers,
         )
     except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
+        print(f"Can't get onboard credit info; skipping\n(program exception '{e}')")
+        return
 
     payload = response.json().get("payload")
     if not payload:
@@ -1689,26 +1753,31 @@ def GetOBC(access_token,accountId,session,reservationId,passengerId,shipCode,sai
     if amount and amount > 0:
         print(f"\tOnboard Credit of {amount} {cur}")
 
+voyageInfoCache = {} # Same-sailing voyage info is identical, so fetch it only once per run
+
 def GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,shipCode,sailDate,apobj):
-    
+
     headers = {
         'Access-Token': access_token,
         'AppKey': appkey_web,
         'Account-Id': accountId,
     }
-        
-    try:
-        response = requests.get(
-            f'https://aws-prd.api.rccl.com/en/royal/web/v3/ships/voyages/{shipCode}{sailDate}/enriched',
-            headers=headers,
-        )
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
 
-    payload = response.json().get("payload")
-    if not payload:
-        return
+    payload = voyageInfoCache.get(shipCode + sailDate)
+    if payload is None:
+        try:
+            response = session.get(
+                f'https://aws-prd.api.rccl.com/en/royal/web/v3/ships/voyages/{shipCode}{sailDate}/enriched',
+                headers=headers,
+            )
+        except Exception as e:
+            print(f"Can't get check-in info; skipping\n(program exception '{e}')")
+            return
+
+        payload = response.json().get("payload")
+        if not payload:
+            return
+        voyageInfoCache[shipCode + sailDate] = payload
 
     isCheckinAvailable = payload.get("sailingInfo")[0].get("isCheckinAvailable")
     checkWindowOpenStartDateTime = payload.get("sailingInfo")[0].get("checkWindowOpenStartDateTime")
@@ -1720,10 +1789,10 @@ def GetCheckinInfo(access_token,accountId,session,reservationId,passengerId,ship
             dt = datetime.fromisoformat(checkWindowOpenStartDateTime)
             local_dt = dt.astimezone().strftime(dateDisplayFormat + " %X %Z")
             print(f"Check In opens on: {local_dt}")
-        except:
+        except Exception:
             pass
 
-def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount):
+def checkIfRoomIsAvailable(session,isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount):
     
     #Use a More Effecient RSC command. Reduces Data returned by 30%
     #Allows easier json parsing 
@@ -1760,8 +1829,8 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
         apiURL = 'https://www.royalcaribbean.com/room-selection/type-and-subtype'
     else:
         apiURL = 'https://www.celebritycruises.com/room-selection/type-and-subtype'
-    
-    response = requests.get(
+
+    response = session.get(
         apiURL,
         params=params,
         headers=headers,
@@ -1803,9 +1872,9 @@ def checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,s
     
     return False, availableRooms
 
-def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomTypeCode,stateroomSubtypeCode,categoryCode,roomNumber,loyaltyNumber,stateCode,fireFighter,military,police,senior,couponCode,adultCount,childCount):
-    
-    roomAvailable, availableRooms = checkIfRoomIsAvailable(isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
+def getRoomPriceViaAPI(session,isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomTypeCode,stateroomSubtypeCode,categoryCode,roomNumber,loyaltyNumber,stateCode,fireFighter,military,police,senior,couponCode,adultCount,childCount):
+
+    roomAvailable, availableRooms = checkIfRoomIsAvailable(session,isRoyal,countryCode,packageId,sailDate,currencyCode,stateroomSubtypeCode,categoryCode,adultCount,childCount)
     
     results = {}
     sailingNights = 0
@@ -1828,9 +1897,7 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
     'accept-language': 'en-US,en;q=0.9',
     'content-type': 'application/json',
     }
-    
-    params = ''
-        
+
     json_data = {
         'countryCode': countryCode,
         'packageId': packageId,
@@ -1874,60 +1941,39 @@ def getRoomPriceViaAPI(isRoyal,countryCode,packageId,sailDate,currencyCode,state
     if isRoyal:
         apiURL = 'https://www.royalcaribbean.com/checkout/api/v1/rooms/checkout'
     else:
-        apiURL = 'https://www.celebritycruises.com/checkout/api/v1/rooms/checkout'    
-        
-    response = requests.post(apiURL,
-        headers=headers,
-        json=json_data,
-    )
+        apiURL = 'https://www.celebritycruises.com/checkout/api/v1/rooms/checkout'
+
     try:
-        rooms = response.json().get("rooms")
-    except:
+        response = session.post(apiURL,
+            headers=headers,
+            json=json_data,
+        )
+        responseData = response.json()
+        rooms = responseData.get("rooms")
+    except Exception:
         rooms = None
-        
+
     if rooms is None:
         # Print Error Message and set room available to false
         print("Room Price Not Found")
         results['roomAvailable'] = False
         results['availableRooms'] = availableRooms
         return results
-        
+
     room = rooms[0]
-    sailingNights = response.json().get("sailing").get("itinerary").get("sailingNights")
+    sailingNights = responseData.get("sailing").get("itinerary").get("sailingNights")
     results['sailingNights'] = sailingNights
-    
-    baseFare = room.get("baseFare",None)
-    if baseFare is not None:
-        base_fare = baseFare.get("pricing").get("amount")
-        base_gratuities = baseFare.get("gratuities")
-        base_insurance = baseFare.get("insurance")
-        obc = baseFare.get("pricing").get("invoice").get("onboardCredits",0)
-        results['baseFare'] = {'fare': base_fare,'gratuities': base_gratuities,'insurance': base_insurance,'obc':obc}
-        
-    baseRefundableFare = room.get("baseRefundableFare",None)
-    if baseRefundableFare is not None:
-        refund_fare = baseRefundableFare.get("pricing").get("amount")
-        refund_gratuities = baseRefundableFare.get("gratuities")
-        refund_insurance = baseRefundableFare.get("insurance")
-        obc = baseRefundableFare.get("pricing").get("invoice").get("onboardCredits",0)
-        results['baseRefundableFare'] = {'fare': refund_fare,'gratuities': refund_gratuities,'insurance': refund_insurance,'obc':obc}
-    
-    allIncludedFare = room.get("allIncludedFare",None)
-    if allIncludedFare is not None:
-        base_fare = allIncludedFare.get("pricing").get("amount")
-        base_gratuities = allIncludedFare.get("gratuities")
-        base_insurance = allIncludedFare.get("insurance")
-        obc = allIncludedFare.get("pricing").get("invoice").get("onboardCredits",0)
-        results['allIncludedFare'] = {'fare': base_fare,'gratuities': base_gratuities,'insurance': base_insurance,'obc':obc}
-        
-    allIncludedRefundableFare = room.get("allIncludedRefundableFare",None)
-    if allIncludedRefundableFare is not None:
-        base_fare = allIncludedRefundableFare.get("pricing").get("amount")
-        base_gratuities = allIncludedRefundableFare.get("gratuities")
-        base_insurance = allIncludedRefundableFare.get("insurance")
-        obc = allIncludedRefundableFare.get("pricing").get("invoice").get("onboardCredits",0)
-        results['allIncludedRefundableFare'] = {'fare': base_fare,'gratuities': base_gratuities,'insurance': base_insurance,'obc':obc}    
-    
+
+    for fareKey in ("baseFare", "baseRefundableFare", "allIncludedFare", "allIncludedRefundableFare"):
+        fare = room.get(fareKey)
+        if fare is not None:
+            results[fareKey] = {
+                'fare': fare.get("pricing").get("amount"),
+                'gratuities': fare.get("gratuities"),
+                'insurance': fare.get("insurance"),
+                'obc': fare.get("pricing").get("invoice").get("onboardCredits", 0),
+            }
+
     results['availableRooms'] = availableRooms
     return results
 
