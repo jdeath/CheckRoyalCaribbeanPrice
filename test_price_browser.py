@@ -8,7 +8,8 @@ from BrowseRoyalCaribbeanPrice import (
     get_ships_web,
     get_sailings_web,
     get_web_categories,
-    get_products_graph_all_pages
+    get_products_graph_all_pages,
+    IMPERSONATE_ARGS
 )
 
 # ==============================================================================
@@ -62,7 +63,8 @@ class TestExecuteApiRequest:
             data=None,
             json=None,
             headers={"appkey": "hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm"},  # Defaults to Web key
-            timeout=15
+            timeout=15,
+            **IMPERSONATE_ARGS  # Present when curl_cffi is installed, empty otherwise
         )
 
     @patch('BrowseRoyalCaribbeanPrice.requests.request')
