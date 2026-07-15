@@ -95,7 +95,7 @@ def base_account_info():
     mock_access = MagicMock()
     mock_access.session = MagicMock(spec=requests.Session)
     account.access = mock_access
-    account.found_items = []
+    account.found_items = set()
     return account
 
 # Setup a dummy minimal global config to satisfy formatting calls
@@ -282,7 +282,7 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
     # 1. Setup our mock inputs
     account_info = AccountInfo(username="dummy_user", password="dummy_password")
     account_info.cruise_line = "royal"
-    account_info.found_items = []
+    account_info.found_items = set()
 
     mock_config.currency_override = None
     mock_config.date_display_format = "%Y-%m-%d"
@@ -952,7 +952,7 @@ def test_execute_api_request_handles_uninitialized_access_context():
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
 
-    with patch('requests.request', return_value=mock_response) as mock_req:
+    with patch('CheckRoyalCaribbeanPrice.requests.Session.request', return_value=mock_response) as mock_req:
         resp = _execute_api_request(
             account_info=account_info,
             method="GET",
@@ -964,7 +964,7 @@ def test_execute_api_request_handles_uninitialized_access_context():
 
 
 @patch("time.sleep", return_value=None)  # Fast execution warp drive
-@patch("requests.Session.request")      # Or patch 'requests.request' depending on context
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")  # Follows whichever requests module the script imported (curl_cffi or plain)
 def test_execute_api_request_retry_and_fallback(mock_request, mock_sleep):
     """Verifies that 'retry' attempts connection 3 times before returning None."""
     # Force the network call to throw an error every time it is called
@@ -984,7 +984,7 @@ def test_execute_api_request_retry_and_fallback(mock_request, mock_sleep):
     assert mock_sleep.call_count == 2    # Backoff happens between attempts (1->2, 2->3)
 
 
-@patch("requests.Session.request")
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
 def test_execute_api_request_skip_behavior(mock_request):
     """Verifies that 'skip' returns None immediately without retrying."""
     mock_request.side_effect = requests.exceptions.ConnectionError("Timeout")
@@ -1000,7 +1000,7 @@ def test_execute_api_request_skip_behavior(mock_request):
     assert mock_request.call_count == 1  # No retries!
 
 
-@patch("requests.Session.request")
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
 def test_execute_api_request_hard_exit(mock_request):
     """Verifies that 'exit' raises a SystemExit crash on failure."""
     mock_request.side_effect = requests.exceptions.RequestException("Fatal")
@@ -1178,7 +1178,7 @@ def test_login_jwt_decoding_padding_resilience():
     # If the main script base64 logic is fragile, it may crash on clean multiples.
     # Let's ensure the application handles it or use this test to implement a robust pad-fix:
     # E.g., string1 + '=' * (-len(string1) % 4)
-    with patch('requests.Session.post', return_value=mock_resp):
+    with patch('CheckRoyalCaribbeanPrice.requests.Session.post', return_value=mock_resp):
         access_profile = login(account_info)
         assert access_profile.id == "1234567890"
 
@@ -1396,7 +1396,7 @@ def test_check_if_room_is_available_network_exception_tolerance():
     url_params.cabin_class_string = "BALCONY"
 
     # Simulate a sudden socket/connection reset drop during validation loops
-    with patch('requests.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
+    with patch('CheckRoyalCaribbeanPrice.requests.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
         try:
             available, alternate_rooms = check_if_room_is_available(url_params)
             assert available is False
@@ -1415,7 +1415,7 @@ def test_get_orders_per_day_price_calculation_safety():
     the tracked paid price.
     """
     account_info = AccountInfo(username="tester@domain.com", password="SecurePassword123")
-    account_info.found_items = []
+    account_info.found_items = set()
 
     booking = {
         "bookingId": "1234567",
@@ -1650,6 +1650,34 @@ def test_load_config_objects_handles_none_values_safely(tmp_path):
         config = load_config_objects(str(config_file))
         assert isinstance(config, CruiseAppConfig)
         assert config.minimum_saving_alert is None
+
+
+def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch):
+    """
+    Ensure values that are exactly ${VAR_NAME} are replaced from the
+    environment (so secrets stay out of config.yaml), while partial matches,
+    unset variables, and literal passwords containing '$' pass through intact.
+    """
+    monkeypatch.setenv("RCCL_TEST_PASSWORD", "sekr$t")
+    yaml_content = """
+    accountInfo:
+      - username: "test_user"
+        password: "${RCCL_TEST_PASSWORD}"
+      - username: "literal_user"
+        password: "pa$$word"
+    reservationFriendlyNames:
+      '1234567': "prefix ${RCCL_TEST_PASSWORD} suffix"
+      '7654321': "${RCCL_TEST_UNSET_VAR}"
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml_content)
+
+    with patch('CheckRoyalCaribbeanPrice.setup_hybrid_logging'):
+        config = load_config_objects(str(config_file))
+        assert config.accounts[0].password == "sekr$t"
+        assert config.accounts[1].password == "pa$$word"
+        assert config.reservation_names['1234567'] == "prefix ${RCCL_TEST_PASSWORD} suffix"
+        assert config.reservation_names['7654321'] == "${RCCL_TEST_UNSET_VAR}"
 
 
 def test_exception_block_scoping_resilience():
