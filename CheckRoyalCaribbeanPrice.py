@@ -7,7 +7,16 @@ import logging
 import os
 import platform
 import re
-import requests
+# curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
+# edge servers do not reject some IPs/systems as bots with 403 Access Denied
+# (see jdeath/CheckRoyalCaribbeanPrice issue #64). Fall back to plain requests
+# where it is not installed (e.g. iOS), which works fine for most people.
+try:
+    from curl_cffi import requests
+    impersonate_args = {"impersonate": "chrome"}
+except ImportError:
+    import requests
+    impersonate_args = {}
 import sys
 import traceback
 import time
@@ -485,6 +494,14 @@ class CruiseAppConfig:
 ############################################
 # Low-level Network Engine & Data Harvesters
 ############################################
+def new_api_session() -> requests.Session:
+    """
+    Creates a network session that impersonates a real browser's TLS fingerprint
+    when curl_cffi is available, falling back to a standard requests session.
+    """
+    return requests.Session(**impersonate_args)
+
+
 def _execute_api_request(
     account_info: Optional[AccountInfo],
     method: str,
@@ -525,7 +542,7 @@ def _execute_api_request(
         final_headers["AppKey"] = APPKEY_WEB
 
     # Choose the target network session channel
-    session_context = account_info.access.session if (account_info and account_info.access) else requests
+    session_context = account_info.access.session if (account_info and account_info.access) else new_api_session()
 
     # --- STRATEGY A: RESILIENT RETRY LOOP ---
     if on_failure == "retry":
@@ -864,7 +881,7 @@ def login(account_info: AccountInfo) -> APIAccess:
     and secret utilized by the cruise line's public mobile app and web infrastructure
     to secure the background OAuth handshake process.
     """
-    session = requests.Session()
+    session = new_api_session()
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ZzlTMDIzdDc0NDczWlVrOTA5Rk42OEYwYjRONjdQU09oOTJvMDR2TDBCUjY1MzdwSTJ5Mmg5NE02QmJVN0Q2SjpXNjY4NDZrUFF2MTc1MDk3NW9vZEg1TTh6QzZUYTdtMzBrSDJRNzhsMldtVTUwRkNncXBQMTN3NzczNzdrN0lC',
@@ -3209,7 +3226,7 @@ def main() -> None:
             log("\nProcessing Prospective Cruise Watchlist...")
 
             # Establish a clean, isolated session for tracking
-            anon_session = requests.Session()
+            anon_session = new_api_session()
             for prospective_cruise in config.prospective_cruises:
 
                 # Build the mock AccountInfo structure with an anonymous access context
