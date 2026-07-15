@@ -184,3 +184,7 @@ class TestCommerceCatalogGraphQL:
 
         assert len(products) == 1
         assert products[0]["id"] == "PROD_123"
+        # The empty page must terminate the loop immediately: one data page plus
+        # one terminal page. Without this assertion the loop can silently burn
+        # through all 100 pagination slots and this test still passes.
+        assert mock_execute.call_count == 2
