@@ -1052,9 +1052,14 @@ def get_checkin_info(account_info: AccountInfo,
     else:
         # Log the future check-in window opening date if check-in is not yet open
         if check_window_open_start_date_time:
-            # The API typically gives you a string like "2027-03-26T00:00:00.000Z"
-            # Slice just the date portion or format it according to your config layout
-            opening_date = check_window_open_start_date_time.split('T')[0]
+            # The API gives a UTC timestamp like "2027-03-26T00:00:00.000Z";
+            # convert it to local time and show date + time in the configured
+            # display format, falling back to the raw date if parsing fails
+            try:
+                dt = datetime.fromisoformat(check_window_open_start_date_time.replace("Z", "+00:00"))
+                opening_date = dt.astimezone().strftime(config.date_display_format + " %X %Z")
+            except Exception:
+                opening_date = check_window_open_start_date_time.split('T')[0]
             log(f"\tCheck-In opens on: {opening_date}")
         else:
             log(f"\tCheck-In window opening date not yet released.")

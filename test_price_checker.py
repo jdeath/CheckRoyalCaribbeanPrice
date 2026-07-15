@@ -2,6 +2,7 @@ import base64
 import pytest
 import re
 import requests
+from datetime import datetime
 
 from unittest.mock import MagicMock, patch
 
@@ -39,6 +40,7 @@ from CheckRoyalCaribbeanPrice import (
     config,
     get_all_promotions,
     get_club_royale_tier,
+    get_checkin_info,
     get_cruise_price,
     get_dining_and_prices,
     get_new_order_price,
@@ -1017,6 +1019,32 @@ def test_execute_api_request_hard_exit(mock_request):
 
     assert exc_info.value.code == 1
     assert mock_request.call_count == 1
+
+
+@patch('CheckRoyalCaribbeanPrice._execute_api_request')
+def test_get_checkin_info_formats_opening_window_in_local_time(mock_net, base_account_info):
+    """
+    The future check-in window must display as a localized date AND time in the
+    configured format (matching the original script), not the raw ISO date slice.
+    """
+    resp = MagicMock()
+    resp.json.return_value = {"payload": {"sailingInfo": [{
+        "isCheckinAvailable": False,
+        "checkWindowOpenStartDateTime": "2027-03-26T14:30:00.000Z",
+    }]}}
+    mock_net.return_value = resp
+
+    mock_cfg = MagicMock()
+    mock_cfg.date_display_format = "%m/%d/%Y"
+
+    with patch('CheckRoyalCaribbeanPrice.config', mock_cfg), \
+         patch('CheckRoyalCaribbeanPrice.log') as mock_log:
+        get_checkin_info(base_account_info, "1234567", "PAX1", "WN", "20270501", None)
+
+    expected = datetime.fromisoformat("2027-03-26T14:30:00.000+00:00").astimezone().strftime("%m/%d/%Y %X %Z")
+    logged = " ".join(str(c.args[0]) for c in mock_log.call_args_list)
+    assert expected in logged
+    assert "2027-03-26T" not in logged
 
 
 @patch("CheckRoyalCaribbeanPrice.requests.Session.request")
