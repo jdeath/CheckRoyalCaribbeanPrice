@@ -3179,10 +3179,13 @@ def main() -> None:
             # This block bundles all age, loyalty, and regional residency codes
             # together. If you want to check prices for a specific state or check senior discounts,
             # this profile ensures the request matches those promotional brackets.
-            # July 2026: RCCL recently changed the 340 point discount benefit for any
-            #            Diamond Plus tier members.  Keep it under diamond_plus_override
-            #            to easily back that out if necessary
-            diamond_plus_override = True
+            # July 2026: a Royal Caribbean loyalty PDF briefly listed this benefit
+            #            at 175 points (any Diamond Plus tier), but that was a typo
+            #            corrected two days later - the single supplement discount
+            #            still requires 340 points, and the original script reverted
+            #            to match. Keep the override switch in case RCCL ever makes
+            #            the 175-point change for real.
+            diamond_plus_override = False
             has_dp340_bracket = (c_and_a_points >= 340) or (diamond_plus_override and c_and_a_points >= 175)
 
             discounts = DiscountProfile(
