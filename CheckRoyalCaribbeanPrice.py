@@ -2615,7 +2615,8 @@ def _calculate_passenger_metrics(
                 checkin_strings.append(f"{first_name}: Boarding Time {formatted_time}")
             # Catch "IN_PROGRESS", "PARTIAL", or "PARTIALLY_COMPLETE" safely
             elif "PART" in status or status == "IN_PROGRESS":
-                checkin_strings.append(f"{first_name}: Check-in partially complete; Boarding Time {formatted_time}")
+                # Yellow: this guest still has check-in steps to finish
+                checkin_strings.append(f"{YELLOW}{first_name}: Check-in partially complete; Boarding Time {formatted_time}{RESET}")
             else:
                 # Fallback if a time exists but the status string is unusual
                 checkin_strings.append(f"{first_name}: Boarding Time {formatted_time}")
