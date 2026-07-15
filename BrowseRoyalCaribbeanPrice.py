@@ -194,38 +194,34 @@ def _execute_api_request(
                 timeout=timeout,
                 **IMPERSONATE_ARGS
             )
+            # Explicitly catch 5xx server codes to trigger retries even on unconfigured test mocks
+            if response.status_code >= 500:
+                raise requests.exceptions.HTTPError(f"Server Error {response.status_code}", response=response)
+
             response.raise_for_status()
             return response
-        except Exception as e:
-            # Connection-level problems (unreachable, reset, timed out, or HTTP error): retryable
+
+        except requests.exceptions.HTTPError as e:
             failure = e
-        
-        # --- We only reach this point if the loop finished and ALL attempts failed ---
-        if failure is not None:
-            error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{failure}')"
-            if exit_on_fail:
-                log(error_msg)
-                sys.exit(1)
-            else:
-              # If we don't exit, we raise the exception or return None depending on Browse's fallback design
-              raise failure
-        else:
-            if response.status_code in RETRYABLE_STATUS_CODES:
-                failure = Exception(f"server returned {response.status_code}")
-            else:
-                try:
-                    response.raise_for_status()
-                except Exception as e:
-                    # A definitive HTTP error (e.g. 404) is an answer, not a blip
-                    return _report_failure(e)
-                return response
+            # Extract status code from exception response, or fall back to local response object if mock is sparse
+            resp_obj = e.response if e.response is not None else response
+            status_code = resp_obj.status_code if resp_obj is not None else None
 
-        if attempt == MAX_ATTEMPTS:
-            return _report_failure(failure)
+            # A 4xx client error (e.g. 404 Not Found) is terminal/definitive and must not retry
+            if status_code is not None and status_code < 500:
+                return _report_failure(e)
+        except Exception as e:
+            # Connection-level problems are transient and retryable
+            failure = e
 
-        wait = 2 ** attempt
-        logging.warning(f"API request failed ({failure}); retrying in {wait}s (attempt {attempt} of {MAX_ATTEMPTS})")
-        time.sleep(wait)
+        # If we experienced a transient failure but have more attempts left, wait and retry
+        if attempt < MAX_ATTEMPTS:
+            wait = 2 ** attempt
+            logging.warning(f"API request failed ({failure}); retrying in {wait}s (attempt {attempt} of {MAX_ATTEMPTS})")
+            time.sleep(wait)
+
+    # --- We only reach this point if the loop finished and ALL attempts failed ---
+    return _report_failure(failure)
 
 
 def print_response(response: Union[Dict[str, Any], List[Any], str, requests.Response]) -> None:
