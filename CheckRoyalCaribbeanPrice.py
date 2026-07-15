@@ -1427,27 +1427,26 @@ def get_cruise_price(account_info: AccountInfo,
         refund_fare_string = "all_included_refundable_fare" if url_params.all_included else "base_refundable_fare"
 
         fare_struct = results.get(base_fare_string)
-        if fare_struct is None:
+        if fare_struct is None and base_fare_string != "base_fare":
             log(f"{RED}All Included Fare is Not Available - Reverting to Non-refundable fare{RESET}")
             fare_struct = results.get("base_fare")
 
-        # --- INITIALIZE DEFAULTS TO PREVENT UNBOUNDLOCALERROR ---
-        price = 0.0
-        grats = 0.0
-        ins = 0.0
-        obc = "0.0"
+        if fare_struct is None:
+            # No fare data at all: bail out rather than comparing against a phantom
+            # 0.00 price, which would fire a false "Rebook! New price of 0.00" alert
+            log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
+            return
 
-        if fare_struct is not None:
-            price = fare_struct.get("fare", 0.0)
-            grats = fare_struct.get("gratuities", 0.0)
-            ins = fare_struct.get("insurance", 0.0)
+        price = fare_struct.get("fare", 0.0)
+        grats = fare_struct.get("gratuities", 0.0)
+        ins = fare_struct.get("insurance", 0.0)
 
-            live_obc = float(fare_struct.get("obc", 0.0) or 0.0)
-            booked_obc = float(paid_price_struct.get("booked_obc", 0.0) if paid_price_struct else 0.0)
+        live_obc = float(fare_struct.get("obc", 0.0) or 0.0)
+        booked_obc = float(paid_price_struct.get("booked_obc", 0.0) if paid_price_struct else 0.0)
 
-            # NOTE: For now, we keep the original variable 'obc' mapped to the live_obc
-            # to preserve the exact string output behavior the script owner expects.
-            obc = f"{live_obc:.2f}" #fare_struct.get("obc", "0.0")
+        # NOTE: For now, we keep the original variable 'obc' mapped to the live_obc
+        # to preserve the exact string output behavior the script owner expects.
+        obc = f"{live_obc:.2f}" #fare_struct.get("obc", "0.0")
 
         base_price = price
         base_grats = grats
