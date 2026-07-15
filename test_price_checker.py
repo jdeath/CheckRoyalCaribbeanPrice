@@ -95,7 +95,7 @@ def base_account_info():
     mock_access = MagicMock()
     mock_access.session = MagicMock(spec=requests.Session)
     account.access = mock_access
-    account.found_items = []
+    account.found_items = set()
     return account
 
 # Setup a dummy minimal global config to satisfy formatting calls
@@ -282,7 +282,7 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
     # 1. Setup our mock inputs
     account_info = AccountInfo(username="dummy_user", password="dummy_password")
     account_info.cruise_line = "royal"
-    account_info.found_items = []
+    account_info.found_items = set()
 
     mock_config.currency_override = None
     mock_config.date_display_format = "%Y-%m-%d"
@@ -1396,7 +1396,7 @@ def test_get_orders_per_day_price_calculation_safety():
     the tracked paid price.
     """
     account_info = AccountInfo(username="tester@domain.com", password="SecurePassword123")
-    account_info.found_items = []
+    account_info.found_items = set()
 
     booking = {
         "bookingId": "1234567",

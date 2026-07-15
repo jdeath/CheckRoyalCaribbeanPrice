@@ -16,7 +16,7 @@ import yaml
 from apprise import Apprise
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 
@@ -366,7 +366,7 @@ class AccountInfo:
     # Defaulting access to None allows us to load the YAML configuration safely
     # before the script logs in and populates it.
     access: Optional[APIAccess] = None
-    found_items: List[str] = field(default_factory=list)
+    found_items: Set[str] = field(default_factory=set)
 
 
     @property
@@ -882,7 +882,7 @@ def login(account_info: AccountInfo) -> APIAccess:
     # login cookie container and initial OAuth handshakes are preserved perfectly
     # without running into downstream fallback session side-effects.
     try:
-        response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data)
+        response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data, timeout=30)
     except Exception as e:
         log(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
         sys.exit(1)
@@ -2191,7 +2191,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                         new_key = f"{guest_passenger_ID}{guestreservation_ID}{prefix}{product}"
                         if new_key in account_info.found_items:
                             continue
-                        account_info.found_items.append(new_key)
+                        account_info.found_items.add(new_key)
 
                         # Compute specialized per-day or per-night calculations
                         if sales_unit in ['PER_NIGHT', 'PER_DAY'] and number_of_nights > 0:
