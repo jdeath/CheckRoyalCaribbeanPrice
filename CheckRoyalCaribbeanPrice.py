@@ -3061,6 +3061,24 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     sys.stdout = PrintRedirector(root_logger.info)
 
 
+def expand_env_vars(value: Any) -> Any:
+    """
+    Recursively replaces configuration values that are exactly ${VAR_NAME} with
+    that environment variable's value, so secrets like passwords can stay out
+    of config.yaml. Only whole-value matches against set variables are
+    expanded, which keeps literal passwords containing '$' untouched.
+    """
+    if isinstance(value, dict):
+        return {k: expand_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand_env_vars(v) for v in value]
+    if isinstance(value, str):
+        match = re.fullmatch(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', value)
+        if match and match.group(1) in os.environ:
+            return os.environ[match.group(1)]
+    return value
+
+
 def load_config_objects(config_path: str) -> CruiseAppConfig:
     """
     Loads, sanitizes, and maps YAML configuration elements into structural dataclass attributes.
@@ -3070,7 +3088,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     and handles fractional logic safely (like differentiating a 0.0 value alert from None).
     """
     with open(config_path, 'r') as file:
-        data = yaml.safe_load(file)    # Parse accounts
+        data = expand_env_vars(yaml.safe_load(file))    # Parse accounts
 
     # Parse accounts
     accounts = [
