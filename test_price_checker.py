@@ -1018,6 +1018,25 @@ def test_execute_api_request_hard_exit(mock_request):
     assert mock_request.call_count == 1
 
 
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
+def test_execute_api_request_uses_configured_timeout(mock_request):
+    """Verifies the engine uses config.request_timeout when the caller passes no timeout."""
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_request.return_value = mock_response
+
+    mock_cfg = MagicMock()
+    mock_cfg.request_timeout = 77
+
+    with patch('CheckRoyalCaribbeanPrice.config', mock_cfg):
+        _execute_api_request(account_info=None, method="GET", url="https://api.royalcaribbean.com/test", on_failure="skip")
+        assert mock_request.call_args.kwargs["timeout"] == 77
+
+        # An explicit caller value still wins over the configured default
+        _execute_api_request(account_info=None, method="GET", url="https://api.royalcaribbean.com/test", timeout=10, on_failure="skip")
+        assert mock_request.call_args.kwargs["timeout"] == 10
+
+
 def test_extract_json_array_resilience_to_unclosed_strings():
     """
     Verify that the bracket-counter doesn't choke or raise index exceptions

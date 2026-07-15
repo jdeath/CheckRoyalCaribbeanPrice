@@ -449,6 +449,7 @@ class CruiseAppConfig:
     """
     # Global Settings
     date_display_format: Optional[str] = "%x"
+    request_timeout: int = 30
     log_file: Optional[str] = None
     apprise_urls: List[str] = field(default_factory=list)
     notify_on_error: bool = False
@@ -509,7 +510,7 @@ def _execute_api_request(
     params: Optional[dict] = None,
     data: Optional[Union[str, dict]] = None,
     headers: Optional[dict] = None,
-    timeout: int = 30,
+    timeout: Optional[int] = None,
     on_failure: str = "retry",
     max_retries: int = 3
 ) -> Optional[requests.Response]:
@@ -525,6 +526,11 @@ def _execute_api_request(
     - "skip" : Logs the warning and returns None.
     - "exit" : Logs the error and terminates the script entirely.
     """
+    # Resolve the effective timeout: an explicit caller override wins, then the
+    # user-configured requestTimeout, then the 30-second baseline default
+    if timeout is None:
+        timeout = config.request_timeout if config else 30
+
     # Start with any caller-specified override headers, or an empty base
     final_headers = headers.copy() if headers else {}
 
@@ -1268,7 +1274,6 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
         url=RSC_URL,
         params={"token": amendtoken, "country": country},
         headers=HEADERS,
-        timeout=30,
         on_failure="retry"
     )
 
@@ -1891,7 +1896,7 @@ def get_new_order_price(
 
     # Get the information on the watched item from the server
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/catalog/v2/{ship}/categories/{prefix}/products/{product}'
-    response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
+    response = _execute_api_request(account_info, "GET", url, params=params)
 
     try:
         payload = response.json().get("payload")
@@ -2148,7 +2153,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
         }
 
         url_history = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory'
-        response = _execute_api_request(account_info, "GET", url_history, params=params, timeout=30)
+        response = _execute_api_request(account_info, "GET", url_history, params=params)
 
         # If this particular reservation has no orders, skip to the next room
         if not response or not response.json().get("payload"):
@@ -2170,7 +2175,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
             # Only process valid paid orders
             if order.get("orderTotals", {}).get("total", 0) > 0:
                 url_detail = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory/{order_code}'
-                response = _execute_api_request(account_info, "GET", url_detail, params=params, timeout=30)
+                response = _execute_api_request(account_info, "GET", url_detail, params=params)
                 if response is None:
                     continue
                 order_data = response.json()
@@ -2379,7 +2384,7 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
     }
 
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/cart/v1/obc/reservations/{reservation_ID}'
-    response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
+    response = _execute_api_request(account_info, "GET", url, params=params)
     if response is None:
         return 0.0
     payload = response.json().get("payload")
@@ -3160,6 +3165,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         minimum_saving_alert=minimum_saving_alert,
         notify_on_error=data.get("notifyOnError", False),
         show_promos=data.get("showPromos", True),
+        request_timeout=int(data.get("requestTimeout", 30)),
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
         apobj=apobj,
