@@ -925,6 +925,9 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
     """
     url = f"https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v3/guestAccounts/{account_info.access.id}"
     response = _execute_api_request(account_info, "GET", url)
+    if response is None:
+        log(f"{YELLOW}Could not retrieve profile after retries; continuing without residency/loyalty discounts{RESET}")
+        return None, None, 0
     payload = response.json().get("payload")
 
     state = None
@@ -997,6 +1000,8 @@ def get_checkin_info(account_info: AccountInfo,
     """
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v3/ships/voyages/{ship_code}{sail_date}/enriched'
     response = _execute_api_request(account_info, "GET", url, timeout=10)
+    if response is None:
+        return
     payload = response.json().get("payload")
     if not payload:
         return
@@ -1063,6 +1068,9 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
     params = {'brand': brand_code, 'includeCheckin': 'true'}
     url = f'https://aws-prd.api.rccl.com/v1/profileBookings/enriched/{account_id}'
     response = _execute_api_request(account_info, "GET", url, params=params)
+    if response is None:
+        log(f"{YELLOW}Could not retrieve bookings after retries; skipping this account{RESET}")
+        return
     bookings = response.json().get("payload", {}).get("profileBookings", [])
 
     for booking in bookings:
@@ -2147,6 +2155,8 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
             if order.get("orderTotals", {}).get("total", 0) > 0:
                 url_detail = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory/{order_code}'
                 response = _execute_api_request(account_info, "GET", url_detail, params=params, timeout=30)
+                if response is None:
+                    continue
                 order_data = response.json()
                 if not order_data or not order_data.get("payload"):
                     continue
@@ -2354,6 +2364,8 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
 
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/cart/v1/obc/reservations/{reservation_ID}'
     response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
+    if response is None:
+        return 0.0
     payload = response.json().get("payload")
     if not payload:
         return 0.0
