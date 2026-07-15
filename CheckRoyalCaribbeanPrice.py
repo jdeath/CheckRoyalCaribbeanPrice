@@ -7,7 +7,16 @@ import logging
 import os
 import platform
 import re
-import requests
+# curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
+# edge servers do not reject some IPs/systems as bots with 403 Access Denied
+# (see jdeath/CheckRoyalCaribbeanPrice issue #64). Fall back to plain requests
+# where it is not installed (e.g. iOS), which works fine for most people.
+try:
+    from curl_cffi import requests
+    impersonate_args = {"impersonate": "chrome"}
+except ImportError:
+    import requests
+    impersonate_args = {}
 import sys
 import traceback
 import time
@@ -16,7 +25,7 @@ import yaml
 from apprise import Apprise
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 
@@ -366,7 +375,7 @@ class AccountInfo:
     # Defaulting access to None allows us to load the YAML configuration safely
     # before the script logs in and populates it.
     access: Optional[APIAccess] = None
-    found_items: List[str] = field(default_factory=list)
+    found_items: Set[str] = field(default_factory=set)
 
 
     @property
@@ -440,6 +449,7 @@ class CruiseAppConfig:
     """
     # Global Settings
     date_display_format: Optional[str] = "%x"
+    request_timeout: int = 30
     log_file: Optional[str] = None
     apprise_urls: List[str] = field(default_factory=list)
     notify_on_error: bool = False
@@ -485,6 +495,14 @@ class CruiseAppConfig:
 ############################################
 # Low-level Network Engine & Data Harvesters
 ############################################
+def new_api_session() -> requests.Session:
+    """
+    Creates a network session that impersonates a real browser's TLS fingerprint
+    when curl_cffi is available, falling back to a standard requests session.
+    """
+    return requests.Session(**impersonate_args)
+
+
 def _execute_api_request(
     account_info: Optional[AccountInfo],
     method: str,
@@ -492,7 +510,7 @@ def _execute_api_request(
     params: Optional[dict] = None,
     data: Optional[Union[str, dict]] = None,
     headers: Optional[dict] = None,
-    timeout: int = 30,
+    timeout: Optional[int] = None,
     on_failure: str = "retry",
     max_retries: int = 3
 ) -> Optional[requests.Response]:
@@ -508,6 +526,11 @@ def _execute_api_request(
     - "skip" : Logs the warning and returns None.
     - "exit" : Logs the error and terminates the script entirely.
     """
+    # Resolve the effective timeout: an explicit caller override wins, then the
+    # user-configured requestTimeout, then the 30-second baseline default
+    if timeout is None:
+        timeout = config.request_timeout if config else 30
+
     # Start with any caller-specified override headers, or an empty base
     final_headers = headers.copy() if headers else {}
 
@@ -525,7 +548,7 @@ def _execute_api_request(
         final_headers["AppKey"] = APPKEY_WEB
 
     # Choose the target network session channel
-    session_context = account_info.access.session if (account_info and account_info.access) else requests
+    session_context = account_info.access.session if (account_info and account_info.access) else new_api_session()
 
     # --- STRATEGY A: RESILIENT RETRY LOOP ---
     if on_failure == "retry":
@@ -864,7 +887,7 @@ def login(account_info: AccountInfo) -> APIAccess:
     and secret utilized by the cruise line's public mobile app and web infrastructure
     to secure the background OAuth handshake process.
     """
-    session = requests.Session()
+    session = new_api_session()
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ZzlTMDIzdDc0NDczWlVrOTA5Rk42OEYwYjRONjdQU09oOTJvMDR2TDBCUjY1MzdwSTJ5Mmg5NE02QmJVN0Q2SjpXNjY4NDZrUFF2MTc1MDk3NW9vZEg1TTh6QzZUYTdtMzBrSDJRNzhsMldtVTUwRkNncXBQMTN3NzczNzdrN0lC',
@@ -882,7 +905,7 @@ def login(account_info: AccountInfo) -> APIAccess:
     # login cookie container and initial OAuth handshakes are preserved perfectly
     # without running into downstream fallback session side-effects.
     try:
-        response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data)
+        response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data, timeout=30)
     except Exception as e:
         log(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
         sys.exit(1)
@@ -925,6 +948,9 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
     """
     url = f"https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v3/guestAccounts/{account_info.access.id}"
     response = _execute_api_request(account_info, "GET", url)
+    if response is None:
+        log(f"{YELLOW}Could not retrieve profile after retries; continuing without residency/loyalty discounts{RESET}")
+        return None, None, 0
     payload = response.json().get("payload")
 
     state = None
@@ -940,8 +966,11 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
     captains_club_ID = loyalty.get("captainsClubId")
     c_and_a_number = loyalty.get("crownAndAnchorId")
     c_and_a_level = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
-    c_and_a_points = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints", 0)
-    c_and_a_shared_points = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints", 0)
+    # "or 0" guards explicit JSON nulls: .get(key, 0) only defaults when the key
+    # is absent, and a null value here becomes a TypeError in the > and >=
+    # comparisons downstream (including the dp340 eligibility check)
+    c_and_a_points = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints", 0) or 0
+    c_and_a_shared_points = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints", 0) or 0
 
     # Get and display Royal Caribbean (Crown & Anchor and Club Royale) information
     if c_and_a_number and c_and_a_shared_points > 0:
@@ -953,10 +982,9 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
 
         # Club Royale tier currently is not part of the loyalty payload; use a helper to compute it
         # but keep the payload check in case it ever comes back (key name may need to change)
-        casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
+        casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0) or 0
         club_royale_loyalty_tier = loyalty.get("clubRoyaleLoyaltyTier") or get_club_royale_tier(casino_points)
         if club_royale_loyalty_tier:
-            casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
             log(f"\tCasino Royale Tier: {club_royale_loyalty_tier} - {casino_points} Credits")
 
     # Get and display Celebrity (Captain's Club and Blue Chip) information
@@ -997,6 +1025,8 @@ def get_checkin_info(account_info: AccountInfo,
     """
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v3/ships/voyages/{ship_code}{sail_date}/enriched'
     response = _execute_api_request(account_info, "GET", url, timeout=10)
+    if response is None:
+        return
     payload = response.json().get("payload")
     if not payload:
         return
@@ -1068,6 +1098,9 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
     params = {'brand': brand_code, 'includeCheckin': 'true'}
     url = f'https://aws-prd.api.rccl.com/v1/profileBookings/enriched/{account_id}'
     response = _execute_api_request(account_info, "GET", url, params=params)
+    if response is None:
+        log(f"{YELLOW}Could not retrieve bookings after retries; skipping this account{RESET}")
+        return
     bookings = response.json().get("payload", {}).get("profileBookings", [])
 
     for booking in bookings:
@@ -1248,7 +1281,6 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
         url=RSC_URL,
         params={"token": amendtoken, "country": country},
         headers=HEADERS,
-        timeout=30,
         on_failure="retry"
     )
 
@@ -1432,27 +1464,26 @@ def get_cruise_price(account_info: AccountInfo,
         refund_fare_string = "all_included_refundable_fare" if url_params.all_included else "base_refundable_fare"
 
         fare_struct = results.get(base_fare_string)
-        if fare_struct is None:
+        if fare_struct is None and base_fare_string != "base_fare":
             log(f"{RED}All Included Fare is Not Available - Reverting to Non-refundable fare{RESET}")
             fare_struct = results.get("base_fare")
 
-        # --- INITIALIZE DEFAULTS TO PREVENT UNBOUNDLOCALERROR ---
-        price = 0.0
-        grats = 0.0
-        ins = 0.0
-        obc = "0.0"
+        if fare_struct is None:
+            # No fare data at all: bail out rather than comparing against a phantom
+            # 0.00 price, which would fire a false "Rebook! New price of 0.00" alert
+            log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
+            return
 
-        if fare_struct is not None:
-            price = fare_struct.get("fare", 0.0)
-            grats = fare_struct.get("gratuities", 0.0)
-            ins = fare_struct.get("insurance", 0.0)
+        price = fare_struct.get("fare", 0.0)
+        grats = fare_struct.get("gratuities", 0.0)
+        ins = fare_struct.get("insurance", 0.0)
 
-            live_obc = float(fare_struct.get("obc", 0.0) or 0.0)
-            booked_obc = float(paid_price_struct.get("booked_obc", 0.0) if paid_price_struct else 0.0)
+        live_obc = float(fare_struct.get("obc", 0.0) or 0.0)
+        booked_obc = float(paid_price_struct.get("booked_obc", 0.0) if paid_price_struct else 0.0)
 
-            # NOTE: For now, we keep the original variable 'obc' mapped to the live_obc
-            # to preserve the exact string output behavior the script owner expects.
-            obc = f"{live_obc:.2f}" #fare_struct.get("obc", "0.0")
+        # NOTE: For now, we keep the original variable 'obc' mapped to the live_obc
+        # to preserve the exact string output behavior the script owner expects.
+        obc = f"{live_obc:.2f}" #fare_struct.get("obc", "0.0")
 
         base_price = price
         base_grats = grats
@@ -1872,7 +1903,7 @@ def get_new_order_price(
 
     # Get the information on the watched item from the server
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/catalog/v2/{ship}/categories/{prefix}/products/{product}'
-    response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
+    response = _execute_api_request(account_info, "GET", url, params=params)
 
     try:
         payload = response.json().get("payload")
@@ -2129,7 +2160,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
         }
 
         url_history = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory'
-        response = _execute_api_request(account_info, "GET", url_history, params=params, timeout=30)
+        response = _execute_api_request(account_info, "GET", url_history, params=params)
 
         # If this particular reservation has no orders, skip to the next room
         if not response or not response.json().get("payload"):
@@ -2151,7 +2182,9 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
             # Only process valid paid orders
             if order.get("orderTotals", {}).get("total", 0) > 0:
                 url_detail = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory/{order_code}'
-                response = _execute_api_request(account_info, "GET", url_detail, params=params, timeout=30)
+                response = _execute_api_request(account_info, "GET", url_detail, params=params)
+                if response is None:
+                    continue
                 order_data = response.json()
                 if not order_data or not order_data.get("payload"):
                     continue
@@ -2196,7 +2229,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                         new_key = f"{guest_passenger_ID}{guestreservation_ID}{prefix}{product}"
                         if new_key in account_info.found_items:
                             continue
-                        account_info.found_items.append(new_key)
+                        account_info.found_items.add(new_key)
 
                         # Compute specialized per-day or per-night calculations
                         if sales_unit in ['PER_NIGHT', 'PER_DAY'] and number_of_nights > 0:
@@ -2322,7 +2355,18 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
                 filename = lockup_media["source"].get("path", "").split("/")[-1]
                 match = re.search(r'lockup-(.+?)_[A-Z]{2}\.', filename)
                 if match:
-                    description = match.group(1).replace("-", " ").upper()
+                    # Asset filenames often end with design descriptors
+                    # (e.g. "40-early-booking-bonus-internet-green-teal-blue-text");
+                    # strip that trailing run of color/design words so only the
+                    # promotion name remains
+                    design_words = {"text", "logo", "lockup", "banner", "light", "dark",
+                                    "white", "black", "red", "green", "blue", "teal", "navy",
+                                    "yellow", "gold", "orange", "purple", "magenta", "pink",
+                                    "silver", "gray", "grey", "aqua", "cyan"}
+                    words = match.group(1).split("-")
+                    while len(words) > 2 and words[-1].lower() in design_words:
+                        words.pop()
+                    description = " ".join(words).upper()
 
             category_code = template.get("categoryCode", "")
             promo_line = f"[PROMO] {description or promo_ID}"
@@ -2358,7 +2402,9 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
     }
 
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/cart/v1/obc/reservations/{reservation_ID}'
-    response = _execute_api_request(account_info, "GET", url, params=params, timeout=30)
+    response = _execute_api_request(account_info, "GET", url, params=params)
+    if response is None:
+        return 0.0
     payload = response.json().get("payload")
     if not payload:
         return 0.0
@@ -2620,7 +2666,8 @@ def _calculate_passenger_metrics(
                 checkin_strings.append(f"{first_name}: Boarding Time {formatted_time}")
             # Catch "IN_PROGRESS", "PARTIAL", or "PARTIALLY_COMPLETE" safely
             elif "PART" in status or status == "IN_PROGRESS":
-                checkin_strings.append(f"{first_name}: Check-in partially complete; Boarding Time {formatted_time}")
+                # Yellow: this guest still has check-in steps to finish
+                checkin_strings.append(f"{YELLOW}{first_name}: Check-in partially complete; Boarding Time {formatted_time}{RESET}")
             else:
                 # Fallback if a time exists but the status string is unusual
                 checkin_strings.append(f"{first_name}: Boarding Time {formatted_time}")
@@ -3038,6 +3085,24 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     sys.stdout = PrintRedirector(root_logger.info)
 
 
+def expand_env_vars(value: Any) -> Any:
+    """
+    Recursively replaces configuration values that are exactly ${VAR_NAME} with
+    that environment variable's value, so secrets like passwords can stay out
+    of config.yaml. Only whole-value matches against set variables are
+    expanded, which keeps literal passwords containing '$' untouched.
+    """
+    if isinstance(value, dict):
+        return {k: expand_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand_env_vars(v) for v in value]
+    if isinstance(value, str):
+        match = re.fullmatch(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', value)
+        if match and match.group(1) in os.environ:
+            return os.environ[match.group(1)]
+    return value
+
+
 def load_config_objects(config_path: str) -> CruiseAppConfig:
     """
     Loads, sanitizes, and maps YAML configuration elements into structural dataclass attributes.
@@ -3047,7 +3112,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     and handles fractional logic safely (like differentiating a 0.0 value alert from None).
     """
     with open(config_path, 'r') as file:
-        data = yaml.safe_load(file)    # Parse accounts
+        data = expand_env_vars(yaml.safe_load(file))    # Parse accounts
 
     # Parse accounts
     accounts = [
@@ -3119,6 +3184,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         minimum_saving_alert=minimum_saving_alert,
         notify_on_error=data.get("notifyOnError", False),
         show_promos=data.get("showPromos", True),
+        request_timeout=int(data.get("requestTimeout", 30)),
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
         apobj=apobj,
@@ -3184,10 +3250,13 @@ def main() -> None:
             # This block bundles all age, loyalty, and regional residency codes
             # together. If you want to check prices for a specific state or check senior discounts,
             # this profile ensures the request matches those promotional brackets.
-            # July 2026: RCCL recently changed the 340 point discount benefit for any
-            #            Diamond Plus tier members.  Keep it under diamond_plus_override
-            #            to easily back that out if necessary
-            diamond_plus_override = True
+            # July 2026: a Royal Caribbean loyalty PDF briefly listed this benefit
+            #            at 175 points (any Diamond Plus tier), but that was a typo
+            #            corrected two days later - the single supplement discount
+            #            still requires 340 points, and the original script reverted
+            #            to match. Keep the override switch in case RCCL ever makes
+            #            the 175-point change for real.
+            diamond_plus_override = False
             has_dp340_bracket = (c_and_a_points >= 340) or (diamond_plus_override and c_and_a_points >= 175)
 
             discounts = DiscountProfile(
@@ -3214,7 +3283,7 @@ def main() -> None:
             log("\nProcessing Prospective Cruise Watchlist...")
 
             # Establish a clean, isolated session for tracking
-            anon_session = requests.Session()
+            anon_session = new_api_session()
             for prospective_cruise in config.prospective_cruises:
 
                 # Build the mock AccountInfo structure with an anonymous access context

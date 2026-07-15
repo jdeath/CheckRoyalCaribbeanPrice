@@ -6,8 +6,19 @@ import logging
 import os
 import platform
 import re
-import requests
 import sys
+
+# curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
+# edge servers do not reject some IPs/systems as bots with 403 Access Denied
+# (see jdeath/CheckRoyalCaribbeanPrice issue #64, where the Browse script was
+# confirmed affected). Fall back to plain requests where it is not installed
+# (e.g. iOS), which works fine for most people.
+try:
+    from curl_cffi import requests
+    IMPERSONATE_ARGS = {"impersonate": "chrome"}
+except ImportError:
+    import requests
+    IMPERSONATE_ARGS = {}
 
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional, Union
@@ -161,7 +172,8 @@ def _execute_api_request(
             data=data,
             json=json_data,
             headers=final_headers,
-            timeout=timeout
+            timeout=timeout,
+            **IMPERSONATE_ARGS
         )
         response.raise_for_status()
         return response
@@ -668,12 +680,10 @@ def get_products_graph_all_pages(
 
         temp_products = products_container.get("commerceProducts")
 
-        # If any empty list was returned, pagination is completely exhausted
-        if temp_products is None:
+        # None or an empty list both mean pagination is completely exhausted;
+        # continuing instead of breaking would fire the remaining ~99 requests
+        if not temp_products:
             break
-
-        if temp_products == []:
-            continue
 
         products.extend(temp_products)
 

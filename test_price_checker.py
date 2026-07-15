@@ -1,5 +1,6 @@
 import base64
 import pytest
+import re
 import requests
 from datetime import datetime
 
@@ -97,7 +98,7 @@ def base_account_info():
     mock_access = MagicMock()
     mock_access.session = MagicMock(spec=requests.Session)
     account.access = mock_access
-    account.found_items = []
+    account.found_items = set()
     return account
 
 # Setup a dummy minimal global config to satisfy formatting calls
@@ -284,7 +285,7 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
     # 1. Setup our mock inputs
     account_info = AccountInfo(username="dummy_user", password="dummy_password")
     account_info.cruise_line = "royal"
-    account_info.found_items = []
+    account_info.found_items = set()
 
     mock_config.currency_override = None
     mock_config.date_display_format = "%Y-%m-%d"
@@ -954,7 +955,7 @@ def test_execute_api_request_handles_uninitialized_access_context():
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
 
-    with patch('requests.request', return_value=mock_response) as mock_req:
+    with patch('CheckRoyalCaribbeanPrice.requests.Session.request', return_value=mock_response) as mock_req:
         resp = _execute_api_request(
             account_info=account_info,
             method="GET",
@@ -966,7 +967,7 @@ def test_execute_api_request_handles_uninitialized_access_context():
 
 
 @patch("time.sleep", return_value=None)  # Fast execution warp drive
-@patch("requests.Session.request")      # Or patch 'requests.request' depending on context
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")  # Follows whichever requests module the script imported (curl_cffi or plain)
 def test_execute_api_request_retry_and_fallback(mock_request, mock_sleep):
     """Verifies that 'retry' attempts connection 3 times before returning None."""
     # Force the network call to throw an error every time it is called
@@ -986,7 +987,7 @@ def test_execute_api_request_retry_and_fallback(mock_request, mock_sleep):
     assert mock_sleep.call_count == 2    # Backoff happens between attempts (1->2, 2->3)
 
 
-@patch("requests.Session.request")
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
 def test_execute_api_request_skip_behavior(mock_request):
     """Verifies that 'skip' returns None immediately without retrying."""
     mock_request.side_effect = requests.exceptions.ConnectionError("Timeout")
@@ -1002,7 +1003,7 @@ def test_execute_api_request_skip_behavior(mock_request):
     assert mock_request.call_count == 1  # No retries!
 
 
-@patch("requests.Session.request")
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
 def test_execute_api_request_hard_exit(mock_request):
     """Verifies that 'exit' raises a SystemExit crash on failure."""
     mock_request.side_effect = requests.exceptions.RequestException("Fatal")
@@ -1044,6 +1045,25 @@ def test_get_checkin_info_formats_opening_window_in_local_time(mock_net, base_ac
     logged = " ".join(str(c.args[0]) for c in mock_log.call_args_list)
     assert expected in logged
     assert "2027-03-26T" not in logged
+
+
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
+def test_execute_api_request_uses_configured_timeout(mock_request):
+    """Verifies the engine uses config.request_timeout when the caller passes no timeout."""
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_request.return_value = mock_response
+
+    mock_cfg = MagicMock()
+    mock_cfg.request_timeout = 77
+
+    with patch('CheckRoyalCaribbeanPrice.config', mock_cfg):
+        _execute_api_request(account_info=None, method="GET", url="https://api.royalcaribbean.com/test", on_failure="skip")
+        assert mock_request.call_args.kwargs["timeout"] == 77
+
+        # An explicit caller value still wins over the configured default
+        _execute_api_request(account_info=None, method="GET", url="https://api.royalcaribbean.com/test", timeout=10, on_failure="skip")
+        assert mock_request.call_args.kwargs["timeout"] == 10
 
 
 def test_extract_json_array_resilience_to_unclosed_strings():
@@ -1187,7 +1207,7 @@ def test_login_jwt_decoding_padding_resilience():
     # If the main script base64 logic is fragile, it may crash on clean multiples.
     # Let's ensure the application handles it or use this test to implement a robust pad-fix:
     # E.g., string1 + '=' * (-len(string1) % 4)
-    with patch('requests.Session.post', return_value=mock_resp):
+    with patch('CheckRoyalCaribbeanPrice.requests.Session.post', return_value=mock_resp):
         access_profile = login(account_info)
         assert access_profile.id == "1234567890"
 
@@ -1218,6 +1238,39 @@ def test_get_profile_handles_none_loyalty_information_safely():
         assert state == "FL"
         assert loyalty_num is None
         assert points == 0
+
+
+def test_get_profile_handles_null_loyalty_point_values():
+    """
+    Verify explicit JSON null point values (key present, value None) degrade to 0
+    instead of raising TypeError on the numeric comparisons downstream - .get(key, 0)
+    only defaults when the key is absent, not when its value is null.
+    """
+    account_info = AccountInfo(username="user", password="password", cruise_line="royal")
+    account_info.access = MagicMock(id="99999")
+
+    mock_profile_json = {
+        "payload": {
+            "contactInformation": {
+                "address": {"residencyCountryCode": "USA", "state": "FL"}
+            },
+            "loyaltyInformation": {
+                "crownAndAnchorId": "123456789",
+                "crownAndAnchorSocietyLoyaltyTier": "DIAMOND",
+                "crownAndAnchorSocietyLoyaltyIndividualPoints": None,
+                "crownAndAnchorSocietyLoyaltyRelationshipPoints": None,
+                "clubRoyaleLoyaltyIndividualPoints": None,
+            }
+        }
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = mock_profile_json
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        state, loyalty_num, points = get_profile(account_info)
+        assert loyalty_num == "123456789"
+        assert points == 0  # Null shared points must come back as int 0, not None
 
 # =====================================================================
 # ITEM 9 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
@@ -1405,7 +1458,7 @@ def test_check_if_room_is_available_network_exception_tolerance():
     url_params.cabin_class_string = "BALCONY"
 
     # Simulate a sudden socket/connection reset drop during validation loops
-    with patch('requests.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
+    with patch('CheckRoyalCaribbeanPrice.requests.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
         try:
             available, alternate_rooms = check_if_room_is_available(url_params)
             assert available is False
@@ -1424,7 +1477,7 @@ def test_get_orders_per_day_price_calculation_safety():
     the tracked paid price.
     """
     account_info = AccountInfo(username="tester@domain.com", password="SecurePassword123")
-    account_info.found_items = []
+    account_info.found_items = set()
 
     booking = {
         "bookingId": "1234567",
@@ -1661,6 +1714,34 @@ def test_load_config_objects_handles_none_values_safely(tmp_path):
         assert config.minimum_saving_alert is None
 
 
+def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch):
+    """
+    Ensure values that are exactly ${VAR_NAME} are replaced from the
+    environment (so secrets stay out of config.yaml), while partial matches,
+    unset variables, and literal passwords containing '$' pass through intact.
+    """
+    monkeypatch.setenv("RCCL_TEST_PASSWORD", "sekr$t")
+    yaml_content = """
+    accountInfo:
+      - username: "test_user"
+        password: "${RCCL_TEST_PASSWORD}"
+      - username: "literal_user"
+        password: "pa$$word"
+    reservationFriendlyNames:
+      '1234567': "prefix ${RCCL_TEST_PASSWORD} suffix"
+      '7654321': "${RCCL_TEST_UNSET_VAR}"
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml_content)
+
+    with patch('CheckRoyalCaribbeanPrice.setup_hybrid_logging'):
+        config = load_config_objects(str(config_file))
+        assert config.accounts[0].password == "sekr$t"
+        assert config.accounts[1].password == "pa$$word"
+        assert config.reservation_names['1234567'] == "prefix ${RCCL_TEST_PASSWORD} suffix"
+        assert config.reservation_names['7654321'] == "${RCCL_TEST_UNSET_VAR}"
+
+
 def test_exception_block_scoping_resilience():
     """
     Verify that an uninitialized config variable doesn't corrupt the
@@ -1713,8 +1794,11 @@ def test_calculate_passenger_metrics_partial_checkin_spec(mock_global_config):
         display_prices=False
     )
 
+    # The partial entry is wrapped in yellow ANSI codes; compare the visible text
     expected_string = "Matt: Check-in partially complete; Boarding Time 01:20"
-    assert metrics["checkin_string"] == expected_string
+    visible_text = re.sub(r'\x1B\[[0-9;]*m', '', metrics["checkin_string"])
+    assert visible_text == expected_string
+    assert metrics["checkin_string"] != expected_string, "partial check-in entry should carry color codes"
 
 
 def test_calculate_passenger_metrics_completed_checkin_regression(mock_global_config):
