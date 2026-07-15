@@ -8,6 +8,7 @@ import platform
 import re
 import requests
 import sys
+import time
 
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional, Union
@@ -47,6 +48,10 @@ RESET = '\033[0m' # Resets color to default
 
 # Environmental overrides for terminals struggling with Unicode glyphs (e.g., MobaXterm)
 PROBLEM_ENVS = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]
+
+# Transient failures worth retrying: throttling and server-side errors
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+MAX_ATTEMPTS = 3
 
 has_terminal_issues = False;
 log = None
@@ -144,7 +149,20 @@ def _execute_api_request(
 
     Centralizes connection tracking parameters, developer keys, connect timeouts,
     and handles graceful handling or program exit states during connection issues.
+
+    Transient failures (connection errors, timeouts, throttling, and server-side
+    errors) are retried with exponential backoff so a single API blip does not
+    abort or truncate a long browsing session. Definitive HTTP answers such as
+    404 are not retried: they signal terminal pagination boundaries.
     """
+    def _report_failure(error: Exception) -> Optional[requests.Response]:
+        error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{error}')"
+        if exit_on_fail:
+            log(error_msg)
+            sys.exit(1)
+        logging.warning(f"Non-critical API interaction skipped (exception: {error})")
+        return None
+
     # Start with any caller-specified override headers, or an empty base
     final_headers = headers.copy() if headers else {}
 
@@ -152,28 +170,38 @@ def _execute_api_request(
     if "appkey" not in final_headers:
         final_headers["appkey"] = APPKEY_WEB
 
-    # Fire the request dynamically using the ephemeral requests pipeline
-    try:
-        response = requests.request(
-            method=method.upper(),
-            url=url,
-            params=params,
-            data=data,
-            json=json_data,
-            headers=final_headers,
-            timeout=timeout
-        )
-        response.raise_for_status()
-        return response
-
-    except Exception as e:
-        error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{e}')"
-        if exit_on_fail:
-            log(error_msg)
-            sys.exit(1)
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        failure = None
+        try:
+            response = requests.request(
+                method=method.upper(),
+                url=url,
+                params=params,
+                data=data,
+                json=json_data,
+                headers=final_headers,
+                timeout=timeout
+            )
+        except Exception as e:
+            # Connection-level problems (unreachable, reset, timed out): retryable
+            failure = e
         else:
-            logging.warning(f"Non-critical API interaction skipped (exception: {e})")
-            return None
+            if response.status_code in RETRYABLE_STATUS_CODES:
+                failure = Exception(f"server returned {response.status_code}")
+            else:
+                try:
+                    response.raise_for_status()
+                except Exception as e:
+                    # A definitive HTTP error (e.g. 404) is an answer, not a blip
+                    return _report_failure(e)
+                return response
+
+        if attempt == MAX_ATTEMPTS:
+            return _report_failure(failure)
+
+        wait = 2 ** attempt
+        logging.warning(f"API request failed ({failure}); retrying in {wait}s (attempt {attempt} of {MAX_ATTEMPTS})")
+        time.sleep(wait)
 
 
 def print_response(response: Union[Dict[str, Any], List[Any], str, requests.Response]) -> None:
