@@ -1211,6 +1211,39 @@ def test_get_profile_handles_none_loyalty_information_safely():
         assert loyalty_num is None
         assert points == 0
 
+
+def test_get_profile_handles_null_loyalty_point_values():
+    """
+    Verify explicit JSON null point values (key present, value None) degrade to 0
+    instead of raising TypeError on the numeric comparisons downstream - .get(key, 0)
+    only defaults when the key is absent, not when its value is null.
+    """
+    account_info = AccountInfo(username="user", password="password", cruise_line="royal")
+    account_info.access = MagicMock(id="99999")
+
+    mock_profile_json = {
+        "payload": {
+            "contactInformation": {
+                "address": {"residencyCountryCode": "USA", "state": "FL"}
+            },
+            "loyaltyInformation": {
+                "crownAndAnchorId": "123456789",
+                "crownAndAnchorSocietyLoyaltyTier": "DIAMOND",
+                "crownAndAnchorSocietyLoyaltyIndividualPoints": None,
+                "crownAndAnchorSocietyLoyaltyRelationshipPoints": None,
+                "clubRoyaleLoyaltyIndividualPoints": None,
+            }
+        }
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = mock_profile_json
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        state, loyalty_num, points = get_profile(account_info)
+        assert loyalty_num == "123456789"
+        assert points == 0  # Null shared points must come back as int 0, not None
+
 # =====================================================================
 # ITEM 9 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
 # =====================================================================
