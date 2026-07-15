@@ -668,12 +668,10 @@ def get_products_graph_all_pages(
 
         temp_products = products_container.get("commerceProducts")
 
-        # If any empty list was returned, pagination is completely exhausted
-        if temp_products is None:
+        # None or an empty list both mean pagination is completely exhausted;
+        # continuing instead of breaking would fire the remaining ~99 requests
+        if not temp_products:
             break
-
-        if temp_products == []:
-            continue
 
         products.extend(temp_products)
 
