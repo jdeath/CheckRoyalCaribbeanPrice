@@ -1,5 +1,6 @@
 import base64
 import pytest
+import re
 import requests
 
 from unittest.mock import MagicMock, patch
@@ -1732,8 +1733,11 @@ def test_calculate_passenger_metrics_partial_checkin_spec(mock_global_config):
         display_prices=False
     )
 
+    # The partial entry is wrapped in yellow ANSI codes; compare the visible text
     expected_string = "Matt: Check-in partially complete; Boarding Time 01:20"
-    assert metrics["checkin_string"] == expected_string
+    visible_text = re.sub(r'\x1B\[[0-9;]*m', '', metrics["checkin_string"])
+    assert visible_text == expected_string
+    assert metrics["checkin_string"] != expected_string, "partial check-in entry should carry color codes"
 
 
 def test_calculate_passenger_metrics_completed_checkin_regression(mock_global_config):
