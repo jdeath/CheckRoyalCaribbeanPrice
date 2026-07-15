@@ -940,8 +940,11 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
     captains_club_ID = loyalty.get("captainsClubId")
     c_and_a_number = loyalty.get("crownAndAnchorId")
     c_and_a_level = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
-    c_and_a_points = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints", 0)
-    c_and_a_shared_points = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints", 0)
+    # "or 0" guards explicit JSON nulls: .get(key, 0) only defaults when the key
+    # is absent, and a null value here becomes a TypeError in the > and >=
+    # comparisons downstream (including the dp340 eligibility check)
+    c_and_a_points = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints", 0) or 0
+    c_and_a_shared_points = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints", 0) or 0
 
     # Get and display Royal Caribbean (Crown & Anchor and Club Royale) information
     if c_and_a_number and c_and_a_shared_points > 0:
@@ -953,10 +956,9 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
 
         # Club Royale tier currently is not part of the loyalty payload; use a helper to compute it
         # but keep the payload check in case it ever comes back (key name may need to change)
-        casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
+        casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0) or 0
         club_royale_loyalty_tier = loyalty.get("clubRoyaleLoyaltyTier") or get_club_royale_tier(casino_points)
         if club_royale_loyalty_tier:
-            casino_points = loyalty.get("clubRoyaleLoyaltyIndividualPoints",0)
             log(f"\tCasino Royale Tier: {club_royale_loyalty_tier} - {casino_points} Credits")
 
     # Get and display Celebrity (Captain's Club and Blue Chip) information
