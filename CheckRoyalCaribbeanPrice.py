@@ -928,12 +928,14 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
             
             # API says Boarding Time is in UTC, but I think in local time
             if guest.get("onlineCheckinStatus") == "COMPLETED":
-                boarding_hour = guest.get("arrivalTime")[9:11]
-                boarding_min = guest.get("arrivalTime")[11:13]
-                if checkinString == "":
-                    checkinString = f"{firstName} Boarding Time {boarding_hour}:{boarding_min}"
-                else:
-                    checkinString += f", {firstName} Boarding Time {boarding_hour}:{boarding_min}"
+                possibleArrivalTime = guest.get("arrivalTime",None)
+                if possibleArrivalTime is not None:
+                    boarding_hour = possibleArrivalTime[9:11]
+                    boarding_min = possibleArrivalTime[11:13]
+                    if checkinString == "":
+                        checkinString = f"{firstName} Boarding Time {boarding_hour}:{boarding_min}"
+                    else:
+                        checkinString += f", {firstName} Boarding Time {boarding_hour}:{boarding_min}"
             
             if guest.get("onlineCheckinStatus") == "IN_PROGRESS":
                 possibleArrivalTime = guest.get("arrivalTime",None)
