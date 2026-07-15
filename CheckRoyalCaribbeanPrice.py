@@ -2317,7 +2317,18 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
                 filename = lockup_media["source"].get("path", "").split("/")[-1]
                 match = re.search(r'lockup-(.+?)_[A-Z]{2}\.', filename)
                 if match:
-                    description = match.group(1).replace("-", " ").upper()
+                    # Asset filenames often end with design descriptors
+                    # (e.g. "40-early-booking-bonus-internet-green-teal-blue-text");
+                    # strip that trailing run of color/design words so only the
+                    # promotion name remains
+                    design_words = {"text", "logo", "lockup", "banner", "light", "dark",
+                                    "white", "black", "red", "green", "blue", "teal", "navy",
+                                    "yellow", "gold", "orange", "purple", "magenta", "pink",
+                                    "silver", "gray", "grey", "aqua", "cyan"}
+                    words = match.group(1).split("-")
+                    while len(words) > 2 and words[-1].lower() in design_words:
+                        words.pop()
+                    description = " ".join(words).upper()
 
             category_code = template.get("categoryCode", "")
             promo_line = f"[PROMO] {description or promo_ID}"
