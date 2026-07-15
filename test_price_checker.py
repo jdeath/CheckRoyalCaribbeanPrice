@@ -1633,6 +1633,34 @@ def test_load_config_objects_handles_none_values_safely(tmp_path):
         assert config.minimum_saving_alert is None
 
 
+def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch):
+    """
+    Ensure values that are exactly ${VAR_NAME} are replaced from the
+    environment (so secrets stay out of config.yaml), while partial matches,
+    unset variables, and literal passwords containing '$' pass through intact.
+    """
+    monkeypatch.setenv("RCCL_TEST_PASSWORD", "sekr$t")
+    yaml_content = """
+    accountInfo:
+      - username: "test_user"
+        password: "${RCCL_TEST_PASSWORD}"
+      - username: "literal_user"
+        password: "pa$$word"
+    reservationFriendlyNames:
+      '1234567': "prefix ${RCCL_TEST_PASSWORD} suffix"
+      '7654321': "${RCCL_TEST_UNSET_VAR}"
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml_content)
+
+    with patch('CheckRoyalCaribbeanPrice.setup_hybrid_logging'):
+        config = load_config_objects(str(config_file))
+        assert config.accounts[0].password == "sekr$t"
+        assert config.accounts[1].password == "pa$$word"
+        assert config.reservation_names['1234567'] == "prefix ${RCCL_TEST_PASSWORD} suffix"
+        assert config.reservation_names['7654321'] == "${RCCL_TEST_UNSET_VAR}"
+
+
 def test_exception_block_scoping_resilience():
     """
     Verify that an uninitialized config variable doesn't corrupt the
