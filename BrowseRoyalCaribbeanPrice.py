@@ -159,7 +159,7 @@ def main():
             
             numAdults = 2
             numChildren = 0
-            GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren)
+            GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren, isRoyal)
             print("")
             
             print("Gathering list of products.  This may take a few minutes; please be patient.")
@@ -807,64 +807,105 @@ def printAllActivities(activities, sortorder):
         print(f"{productTitle}\t {location} {GREEN}{offeringDate} (Day {day}) {offeringTime}{RESET}")
 
     
-def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildren):
-    cookies = {
-        'currency': currency,
-    }
+def _extract_json_array(text, key):
+    """Find "key": [ ... ] handling arbitrary nesting."""
+    m = re.search(rf'"{re.escape(key)}"\s*:\s*\[', text)
+    if not m:
+        return None
+    start = m.end() - 1  # position of opening [
+    depth, i = 0, start
+    in_string, escape = False, False
+    while i < len(text):
+        ch = text[i]
+        if escape:
+            escape = False
+        elif ch == "\\" and in_string:
+            escape = True
+        elif ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return json.loads(text[start:i + 1])
+        i += 1
+    return None
+
+
+def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildren, isRoyal):
+    # The cruiseSearch graph (www.royalcaribbean.com/cruises/graph) only indexes
+    # Royal Caribbean sailings, so Celebrity package codes came back with an empty
+    # cruises list and were mislabeled "Sailing is sold out" (issue #77). The host
+    # in that URL is ignored by the backend, so it cannot just be pointed at
+    # Celebrity. Instead price both brands off the brand-specific room-selection
+    # page - the same source the main script's checkIfRoomIsAvailable() uses. Its
+    # per-class invoice total matches the old cruiseSearch price for Royal sailings.
+    formattedSailDate = sailDate[0:4] + "-" + sailDate[4:6] + "-" + sailDate[6:8]
 
     headers = {
-        'User-Agent': user_agent_web,
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'currency': currency,
-    }
-        
-    formattedSailDate = sailDate[0:4] + "-" + sailDate[4:6] + "-" + sailDate[6:8]
-    
-    filterString = f"id:{packageCode}|adults:{numAdults}|children:{numChildren}|startDate:{formattedSailDate}~{formattedSailDate}"
-    
-    json_data = {
-        'operationName': 'cruiseSearch_Cruises',
-        'variables': {
-            'filters': filterString,
-            'qualifiers': '',
-            'enableNewCasinoExperience': False,
-            'sort': {
-                'by': 'RECOMMENDED',
-            },
-            'pagination': {
-                'count': 100,
-                'skip': 0,
-            },
-        },
-        'query': 'query cruiseSearch_Cruises($filters: String) {cruiseSearch(filters: $filters) {results {cruises {id sailings {sailDate stateroomClassPricing {price {value currency { code }} stateroomClass {id name content { code } }}}}}}}',
+        'user-agent': user_agent_web,
+        'accept': 'text/x-component',
+        'accept-language': 'en-US,en;q=0.9',
+        'RSC': '1',
     }
 
-    resp = requests.post('https://www.royalcaribbean.com/cruises/graph', cookies=cookies, headers=headers, json=json_data)
+    params = {
+        'packageCode': packageCode,
+        'sailDate': formattedSailDate,
+        'country': 'USA',
+        'selectedCurrencyCode': currency,
+        'shipCode': packageCode[0:2],
+        'cabinClassType': 'INTERIOR',  # still returns every stateroom class
+        'roomIndex': '0',
+        'r0a': numAdults,
+        'r0c': numChildren,
+        'r0b': 'n',
+        'r0r': 'n',
+        'r0s': 'n',
+        'r0q': 'n',
+        'r0t': 'n',
+        'r0d': 'INTERIOR',
+        'r0D': 'y',
+        'rgVisited': 'true',
+        'r0C': 'y',
+    }
 
-    cruises = resp.json()["data"]["cruiseSearch"]["results"]["cruises"]
-    if cruises:
-        sailings = cruises[0]["sailings"]
+    if isRoyal:
+        apiURL = 'https://www.royalcaribbean.com/room-selection/type-and-subtype'
     else:
+        apiURL = 'https://www.celebritycruises.com/room-selection/type-and-subtype'
+
+    try:
+        resp = requests.get(apiURL, params=params, headers=headers)
+        rooms = _extract_json_array(resp.text, "rooms")
+    except Exception:
+        rooms = None
+
+    stateroomTypes = rooms[0].get("options", {}).get("stateroomTypes", []) if rooms else []
+    if not stateroomTypes:
         print("         Sailing is sold out")
         return
-       
-    for sailing in sailings:
-        if sailing["sailDate"].replace("-", "") != sailDate and sailing["sailDate"] != sailDate:
-            continue
-            
-        print("Cheapest available cabins for this sailing:")
-        prices = sailing["stateroomClassPricing"]
-        for price in prices:
-            cabinCode = price["stateroomClass"]["content"]["code"]                
-            cabinType = price["stateroomClass"]["name"]
-            
-            if price["price"] is None:
-                print(f"\t{cabinType} sold out")
-            else:    
-                numPassengers = int(numAdults) + int(numChildren)
-                cabinCostPerPerson = float(price["price"]["value"]) * numPassengers
-                print(f"\t{GREEN}{cabinCostPerPerson} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
+
+    numPassengers = int(numAdults) + int(numChildren)
+    print("Cheapest available cabins for this sailing:")
+    for stateroomType in stateroomTypes:
+        cabinType = stateroomType.get("name")
+
+        # Cheapest bookable sub-category in this class (some are sold out / unpriced)
+        cheapestPrice = None
+        for stateroomSubtype in stateroomType.get("stateroomSubtypes", []):
+            pricing = stateroomSubtype.get("pricing") or {}
+            invoice = pricing.get("invoice") or {}
+            total = invoice.get("total")
+            if total is not None and (cheapestPrice is None or total < cheapestPrice):
+                cheapestPrice = total
+
+        if cheapestPrice is None:
+            print(f"\t{cabinType} sold out")
+        else:
+            print(f"\t{GREEN}{cheapestPrice} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
 
 
 # This is not needed, as dress code is in list of activities
