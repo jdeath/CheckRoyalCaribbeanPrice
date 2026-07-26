@@ -1023,127 +1023,152 @@ def print_all_activities(activities: List[Dict[str, Any]], sort_order: str) -> N
         log(f"{product_title}\t {location} {GREEN}{offering_date} (Day {day}) {offering_time}{RESET}")
 
 
+def _extract_json_array(text: str, key: str) -> Optional[List[Any]]:
+    """
+    Finds and extracts a specific JSON array buried inside raw text chunks.
+
+    Uses bracket-counting to parse nested arrays ('[' and ']') while bypassing
+    escaped quotes. Crucial for harvesting transient elements like the room
+    inventory from server responses where standard json.loads() fails on the
+    entire page text.
+
+    MAINTENANCE NOTE: The cruise line servers wrap complex background data arrays
+    inside raw HTML text pages. This bracket-counting routine slices those hidden
+    JSON objects out directly when standard 'response.json()' parsing isn't an option.
+
+    SAFETY NOTE: Because we slice raw text from HTML component fragments, the strings may contain
+    unescaped quotes or trailing data points. The bracket-counting tracker manually calculates
+    the array boundary [ ] to ensure 'json.loads' receives a perfectly valid string payload.
+    """
+    m = re.search(rf'"{re.escape(key)}"\s*:\s*\[', text)
+    if not m:
+        return None
+
+    start = m.end() - 1  # Exact string position index of the opening '['
+    depth, i = 0, start
+    in_string, escape = False, False
+
+    while i < len(text):
+        ch = text[i]
+
+        if escape:
+            escape = False
+        elif ch == "\\" and in_string:
+            escape = True
+        elif ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    # Successfully isolated the exact substring boundaries of the array
+                    try:
+                        return json.loads(text[start:i + 1])
+                    except json.JSONDecodeError:
+                        return None
+        i += 1
+    return None
+
+
 def get_cruise_price_from_API(
     currency: str,
     package_code: str,
     sail_date: str,
     num_adults: int,
-    num_children: int
+    num_children: int,
+    is_royal: bool
 ) -> None:
     """
     Fetches and displays the cheapest public stateroom cabin options
-    for a specific sailing package via the guest-facing cruise finder graph API.
+    for a specific sailing package via the brand-specific room-selection page.
+
+    The cruiseSearch graph (www.royalcaribbean.com/cruises/graph) only indexes
+    Royal Caribbean sailings, so Celebrity package codes returned an empty result
+    and were mislabeled as sold out (issue #77); the host in that URL is ignored by
+    the backend, so it cannot be pointed at Celebrity. Both brands are instead
+    priced off the room-selection/type-and-subtype page - the same source the main
+    script's checkIfRoomIsAvailable() uses - whose per-class invoice total matches
+    the old cruiseSearch price exactly for Royal sailings.
 
     Args:
         currency (str): Three-letter string designation targeting output exchange metrics.
-        package_code (str): Consolidated ship and voyage profile string (e.g., 'AL20260510').
+        package_code (str): Consolidated ship and voyage profile string (e.g., 'EG07A396').
         sail_date (str): Target departure identifier date string ('YYYYMMDD').
         num_adults (int): Total number of adult passenger units included.
         num_children (int): Total number of minor passenger units included.
+        is_royal (bool): True for Royal Caribbean, False for Celebrity Cruises.
     """
     headers = {
         'User-Agent': USER_AGENT_WEB,
-        'Accept': '*/*',
+        'Accept': 'text/x-component',
         'Accept-Language': 'en-US,en;q=0.9',
-        'currency': currency,
+        'RSC': '1',
     }
 
     # Format incoming 'YYYYMMDD' string seamlessly to standard 'YYYY-MM-DD' query compliance
     formatted_sail_date = f"{sail_date[0:4]}-{sail_date[4:6]}-{sail_date[6:8]}"
 
-    # ALGORITHM: Strict query filter construction required by the Cruise Search backend engine.
-    filter_string = f"id:{package_code}|adults:{num_adults}|children:{num_children}|startDate:{formatted_sail_date}~{formatted_sail_date}"
+    # A single cabinClassType/r0d still makes the endpoint return every stateroom class
+    params = {
+        'packageCode': package_code,
+        'sailDate': formatted_sail_date,
+        'country': 'USA',
+        'selectedCurrencyCode': currency,
+        'shipCode': package_code[0:2],
+        'cabinClassType': 'INTERIOR',
+        'roomIndex': '0',
+        'r0a': num_adults,
+        'r0c': num_children,
+        'r0b': 'n',
+        'r0r': 'n',
+        'r0s': 'n',
+        'r0q': 'n',
+        'r0t': 'n',
+        'r0d': 'INTERIOR',
+        'r0D': 'y',
+        'rgVisited': 'true',
+        'r0C': 'y',
+    }
 
-    graphql_query = """
-    query cruiseSearch_Cruises($filters: String) {
-        cruiseSearch(filters: $filters) {
-            results {
-                cruises {
-                    id
-                    sailings {
-                        sailDate
-                        stateroomClassPricing {
-                            price {
-                                value
-                                currency {
-                                    code
-                                }
-                            }
-                            stateroomClass {
-                                id
-                                name
-                                content {
-                                    code
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    """
-    json_data = {
-        'operationName': 'cruiseSearch_Cruises',
-        'variables': {
-            'filters': filter_string,
-            'qualifiers': '',
-            'enableNewCasinoExperience': False,
-            'sort': {
-                'by': 'RECOMMENDED',
-            },
-            'pagination': {
-                'count': 100,
-                'skip': 0,
-            },
-        },
-        'query': graphql_query,
-    }
+    base_host = "royalcaribbean.com" if is_royal else "celebritycruises.com"
 
     response = _execute_api_request(
-        method="POST",
-        url="https://www.royalcaribbean.com/cruises/graph",
+        method="GET",
+        url=f"https://www.{base_host}/room-selection/type-and-subtype",
+        params=params,
         headers=headers,
-        json_data=json_data
+        exit_on_fail=False
     )
 
-    if not response:
-        return
+    rooms = _extract_json_array(response.text, "rooms") if response else None
+    stateroom_types = rooms[0].get("options", {}).get("stateroomTypes", []) if rooms else []
 
-    data_container = response.json().get("data")
-    cruise_search = data_container.get("cruiseSearch") if data_container else None
-    results = cruise_search.get("results") if cruise_search else None
-    cruises = results.get("cruises", []) if results else []
-
-    # If the list is empty, it means the sailing is entirely sold out across all staterooms
-    if not cruises:
+    # An empty room list means the sailing is entirely sold out across all staterooms
+    if not stateroom_types:
         log("         Sailing is sold out")
         return
 
-    sailings = cruises[0].get("sailings", [])
+    num_passengers = int(num_adults) + int(num_children)
+    log("Cheapest available cabins for this sailing:")
+    for stateroom_type in stateroom_types:
+        cabin_type = stateroom_type.get("name")
 
-    for sailing in sailings:
-        sailing_date_raw = sailing.get("sailDate", "")
-        if sailing_date_raw.replace("-", "") != sail_date and sailing_date_raw != sail_date:
-            continue
+        # Cheapest bookable sub-category in this class (some are sold out / unpriced)
+        cheapest_price = None
+        for stateroom_subtype in stateroom_type.get("stateroomSubtypes", []):
+            pricing = stateroom_subtype.get("pricing") or {}
+            invoice = pricing.get("invoice") or {}
+            total = invoice.get("total")
+            if total is not None and (cheapest_price is None or total < cheapest_price):
+                cheapest_price = total
 
-        log("Cheapest available cabins for this sailing:")
-        prices = sailing.get("stateroomClassPricing", [])
-        for price in prices:
-            if not price:
-                continue
-            stateroom_class = price.get("stateroomClass", {}) if price else {}
-            cabin_type = stateroom_class.get("name")
-
-            if price.get("price") is None:
-                log(f"\t{cabin_type} sold out")
-            else:
-                num_passengers = int(num_adults) + int(num_children)
-                price_value = price["price"].get("value", 0)
-
-                # Math normalization to scale raw decimal numbers to total travel party size
-                cabin_cost_per_person = float(price_value) * num_passengers
-                log(f"\t{GREEN}{cabin_cost_per_person} {currency}{RESET}: Cheapest {cabin_type} Price for {num_passengers}")
+        if cheapest_price is None:
+            log(f"\t{cabin_type} sold out")
+        else:
+            # The invoice total already reflects the full travel party occupancy requested above
+            log(f"\t{GREEN}{cheapest_price} {currency}{RESET}: Cheapest {cabin_type} Price for {num_passengers}")
 
 
 ############################################################
@@ -1588,7 +1613,7 @@ def main() -> None:
 
             num_adults = 2
             num_children = 0
-            get_cruise_price_from_API(currency, ship_code + sailing['voyageCode'], sailing['date'], num_adults, num_children)
+            get_cruise_price_from_API(currency, ship_code + sailing['voyageCode'], sailing['date'], num_adults, num_children, is_royal)
             log("")
 
             log("Gathering list of products.  This may take a few minutes; please be patient.")
