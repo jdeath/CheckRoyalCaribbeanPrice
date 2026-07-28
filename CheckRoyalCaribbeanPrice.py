@@ -1883,8 +1883,16 @@ def checkIfRoomIsAvailable(session,isRoyal,countryCode,packageId,sailDate,curren
             cur_categoryCode = stateroomSubtype.get("categoryCode")
             #print("Desired: " + stateroomSubtypeCode + " " + categoryCode)
             #print("Cur:     " + cur_subTypeCode + " " + categoryCode)
-            #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}") 
-            if cur_subTypeCode == stateroomSubtypeCode and cur_categoryCode == categoryCode:
+            #print(f"{stateroomSubtype.get('name')} {cur_categoryCode} {cur_subTypeCode}")
+            # Gate on the subtype code alone (not categoryCode). Royal's room-selection
+            # page now returns a single lead-in row per subtype: its "code" still equals the
+            # booking's stateroomSubtype, but its "categoryCode" is only the subtype's lead-in
+            # category, no longer the exhaustive per-category list. So it stops equalling the
+            # booked categoryCode for cabins booked above the lead-in (e.g. a 2D booking when
+            # the endpoint now lists 4D as the D lead-in), which made those bookings read
+            # "Not For Sale". The exact price is unaffected - the checkout POST below still
+            # uses the specific booked categoryCode.
+            if cur_subTypeCode == stateroomSubtypeCode:
                 # Need to check if rooms are left.
                 # This is not always provided, so cannot use it to check inventory
                 # roomsLeft = stateroomSubtype.get("roomsLeft",0)
