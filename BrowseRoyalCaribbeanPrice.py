@@ -35,6 +35,20 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
+    # PowerShell 5.x / classic conhost also need virtual-terminal processing enabled or
+    # the ANSI color escapes print literally (e.g. a raw "<-[33m..."). Harmless if already
+    # on (Windows Terminal) or unsupported; failures are ignored.
+    try:
+        import ctypes
+        _kernel32 = ctypes.windll.kernel32
+        _handle = _kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        _mode = ctypes.c_uint32()
+        if _kernel32.GetConsoleMode(_handle, ctypes.byref(_mode)):
+            # 0x0004 = ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            _kernel32.SetConsoleMode(_handle, _mode.value | 0x0004)
+    except Exception:
+        pass
+
 # Some terminals (like MobaXterm) were having trouble with printing unicode up arrow/down arrow
 # This code detects it; add to the list as more are found (if needed)
 problem_envs = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]

@@ -49,6 +49,22 @@ GREEN = '\033[1;32m'
 YELLOW = '\033[33m'
 RESET = '\033[0m' # Resets color to default
 
+# Windows PowerShell 5.x and the classic console host do not interpret ANSI color
+# escapes by default, so the codes above print literally (e.g. a raw "<-[33m...").
+# Enable virtual-terminal processing on the console so they render as color. Harmless
+# where already enabled (Windows Terminal) or unsupported; failures are ignored.
+if sys.platform == "win32":
+    try:
+        import ctypes
+        _kernel32 = ctypes.windll.kernel32
+        _handle = _kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        _mode = ctypes.c_uint32()
+        if _kernel32.GetConsoleMode(_handle, ctypes.byref(_mode)):
+            # 0x0004 = ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            _kernel32.SetConsoleMode(_handle, _mode.value | 0x0004)
+    except Exception:
+        pass
+
 dateDisplayFormat = "%x"  # Uses the locale date format unless overridden by config
 
 shipDictionary = {}
