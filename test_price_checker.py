@@ -2114,3 +2114,48 @@ def test_availability_false_when_subtype_code_absent():
     assert available is False
     assert len(alternates) == 1
     assert alternates[0]["name"].startswith("Ocean View Balcony")
+
+
+# ITEM 17: END-OF-RUN CHECK-IN & FINAL-PAYMENT SUMMARY TABLE
+def test_checkin_payment_summary_table_renders_and_flags():
+    """print_checkin_payment_table sorts by sail date and colour-codes paid vs balance-due."""
+    import CheckRoyalCaribbeanPrice as crccl
+    from datetime import date
+
+    mock_cfg = MagicMock()
+    mock_cfg.date_display_format = "%Y-%m-%d"
+    mock_cfg.format_date = lambda d: f"{d[0:4]}-{d[4:6]}-{d[6:8]}"
+
+    crccl.checkin_payment_rows.clear()
+    crccl.checkin_payment_rows.extend([
+        # later sail date first, to prove the table sorts ascending
+        {"name": "Freedom of the Seas #8235", "sail_date": "20271018",
+         "checkin_label": "Opens 2027-09-02", "final_payment": date(2027, 7, 20),
+         "past_final_payment": False, "balance_due": True},
+        {"name": "Icon of the Seas #11521", "sail_date": "20260822",
+         "checkin_label": "Boarding 10:30", "final_payment": date(2026, 5, 24),
+         "past_final_payment": True, "balance_due": False},
+    ])
+
+    with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.log", MagicMock()) as mock_log:
+        crccl.print_checkin_payment_table()
+
+    out = "\n".join(str(call[0][0]) for call in mock_log.call_args_list)
+    assert "Upcoming Check-In & Final Payment Dates" in out
+    assert "Icon of the Seas #11521" in out and "Freedom of the Seas #8235" in out
+    assert "Boarding 10:30" in out                       # assigned boarding time shown
+    assert "(paid)" in out                               # no balance due -> paid
+    assert "(balance due)" in out                        # owed, before deadline
+    assert out.index("Icon of the Seas") < out.index("Freedom of the Seas")  # sorted by sail date
+
+    crccl.checkin_payment_rows.clear()
+
+
+def test_checkin_payment_summary_table_empty_is_silent():
+    """No booked sailings -> the summary prints nothing (no noise on watchlist-only runs)."""
+    import CheckRoyalCaribbeanPrice as crccl
+    crccl.checkin_payment_rows.clear()
+    with patch("CheckRoyalCaribbeanPrice.log", MagicMock()) as mock_log:
+        crccl.print_checkin_payment_table()
+    assert mock_log.call_count == 0
