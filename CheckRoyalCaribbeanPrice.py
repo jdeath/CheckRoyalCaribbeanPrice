@@ -65,6 +65,10 @@ log = None
 log_warn = None
 log_err = None
 
+# Rows collected across all accounts/bookings during a run, printed at the end as a
+# compact check-in + final-payment summary table (see print_checkin_payment_table)
+checkin_payment_rows: List[Dict[str, Any]] = []
+
 ##################################
 # Classes (Structural and Logging)
 ##################################
@@ -1016,24 +1020,29 @@ def get_checkin_info(account_info: AccountInfo,
                      ship_code: str,
                      sail_date: str,
                      apobj: Optional[Apprise]
-) -> None:
+) -> Tuple[str, Optional[datetime]]:
     """
     Retrieves mandatory pre-cruise check-in statuses and digital health manifest timelines.
 
     Queries check-in tracking endpoints to verify if passengers have completed passport data entry,
     selected their physical arrival times, or if their profile documents are still pending review.
+
+    Returns:
+        Tuple[str, Optional[datetime]]: A short check-in label for the end-of-run summary
+        table (e.g. the opening date, "Open now", or "") and a datetime to sort it by
+        (the check-in opening moment, or None when there is nothing dated to show).
     """
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v3/ships/voyages/{ship_code}{sail_date}/enriched'
     response = _execute_api_request(account_info, "GET", url, timeout=10)
     if response is None:
-        return
+        return "", None
     payload = response.json().get("payload")
     if not payload:
-        return
+        return "", None
 
     sailing_info = payload.get("sailingInfo")
     if not sailing_info:
-        return
+        return "", None
 
     is_checkin_available = sailing_info[0].get("isCheckinAvailable")
     check_window_open_start_date_time = sailing_info[0].get("checkWindowOpenStartDateTime")
@@ -1043,26 +1052,36 @@ def get_checkin_info(account_info: AccountInfo,
 
         checkin_statuses = get_checkin_statuses(account_info, reservationId, passenger_ID)
 
+        assigned_window = "Not Selected"
         for guest in checkin_statuses:
             if str(guest.get("guestId")) == str(passenger_ID):
                 arrival_time = guest.get("appointmentTime") or guest.get("appointmentDepartureTime") or "Not Selected"
+                assigned_window = arrival_time
                 status = guest.get("onlineCheckinStatus", "NOT_STARTED")
                 log(f"\tPassenger Check-In Status: {status}")
                 log(f"\tAssigned Boarding Window: {arrival_time}")
-    else:
-        # Log the future check-in window opening date if check-in is not yet open
-        if check_window_open_start_date_time:
-            # The API gives a UTC timestamp like "2027-03-26T00:00:00.000Z";
-            # convert it to local time and show date + time in the configured
-            # display format, falling back to the raw date if parsing fails
-            try:
-                dt = datetime.fromisoformat(check_window_open_start_date_time.replace("Z", "+00:00"))
-                opening_date = dt.astimezone().strftime(config.date_display_format + " %X %Z")
-            except Exception:
-                opening_date = check_window_open_start_date_time.split('T')[0]
+
+        summary = "Open now" if assigned_window == "Not Selected" else f"Open (window {assigned_window})"
+        return summary, None
+
+    # Check-in not yet open: surface the future opening date if the API has released it
+    if check_window_open_start_date_time:
+        # The API gives a UTC timestamp like "2027-03-26T00:00:00.000Z";
+        # convert it to local time and show date + time in the configured
+        # display format, falling back to the raw date if parsing fails
+        try:
+            dt = datetime.fromisoformat(check_window_open_start_date_time.replace("Z", "+00:00"))
+            local_dt = dt.astimezone()
+            opening_date = local_dt.strftime(config.date_display_format + " %X %Z")
             log(f"\tCheck-In opens on: {opening_date}")
-        else:
-            log(f"\tCheck-In window opening date not yet released.")
+            return f"Opens {local_dt.strftime(config.date_display_format + ' %I:%M %p')}", local_dt
+        except Exception:
+            opening_date = check_window_open_start_date_time.split('T')[0]
+            log(f"\tCheck-In opens on: {opening_date}")
+            return f"Opens {opening_date}", None
+
+    log(f"\tCheck-In window opening date not yet released.")
+    return "Not released", None
 
 
 #
@@ -1134,11 +1153,13 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
 
         log(f"{config.format_date(sail_date)} {ship_dictionary.get_ship(ship_code)} Room {stateroom_number} (In this cabin: {metrics['passenger_names']})")
 
-        # log Boarding Info or call fallback check-in handler
+        # log Boarding Info or call fallback check-in handler, capturing a short
+        # check-in label for the end-of-run summary table
         if metrics['checkin_string']:
             log(metrics['checkin_string'])
+            checkin_label = f"Boarding {metrics.get('boarding_time')}" if metrics.get('boarding_time') else "Checked in"
         else:
-            get_checkin_info(account_info, reservation_ID, passenger_ID, ship_code, sail_date, apobj)
+            checkin_label, _ = get_checkin_info(account_info, reservation_ID, passenger_ID, ship_code, sail_date, apobj)
 
         # Process Dining Setup
         result = get_dining_and_prices(account_info, booking)
@@ -1197,6 +1218,22 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
 
         final_payment_date = get_final_payment_date(number_of_nights, sail_date)
         final_payment_date_display = final_payment_date.strftime(date_display_format)
+
+        # Record this booking for the end-of-run check-in / final-payment summary table.
+        # Include the room number so multiple cabins on the same sailing are distinct.
+        summary_name = ship_dictionary.get_ship(ship_code)
+        if stateroom_number:
+            summary_name += f" #{stateroom_number}"
+        if str(reservation_ID) in reservation_friendly_names:
+            summary_name += f" ({reservation_friendly_names.get(str(reservation_ID))})"
+        checkin_payment_rows.append({
+            "name": summary_name,
+            "sail_date": sail_date,
+            "checkin_label": checkin_label or "TBD",
+            "final_payment": final_payment_date,
+            "past_final_payment": date.today() > final_payment_date,
+            "balance_due": booking.get("balanceDue") is True,
+        })
 
         if booking.get("balanceDue") is True:
             log(YELLOW + f"Remaining Cruise Payment Balance is {booking.get('balanceDueAmount'):.2f} due {final_payment_date_display}" + RESET)
@@ -1822,10 +1859,18 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
             cur_category_code = stateroom_subtype.get("categoryCode")
 
             # --- INVENTORY GATE SHORT-CIRCUIT ---
-            # If our exact target cabin style is found, return True immediately.
-            # An alternative room array [] isn't needed because the caller function
-            # will proceed to execute a heavy POST request for this specific room's pricing.
-            if cur_subtype_code == params.stateroom_subtype and cur_category_code == params.stateroom_category_code:
+            # If our target cabin style is found, return True immediately. An alternative
+            # room array [] isn't needed because the caller function will proceed to execute
+            # a heavy POST request for this specific room's pricing.
+            #
+            # Gate on the subtype `code` alone (not categoryCode). Royal's room-selection
+            # page now returns a single lead-in row per subtype; that row's `code` still
+            # equals the booking's stateroomSubtype, but its `categoryCode` is only the
+            # subtype's lead-in category - no longer the exhaustive per-category list. So it
+            # stops equalling the booked stateroomCategoryCode for any cabin booked above the
+            # lead-in, which made every such booking read as "Not For Sale". The precise
+            # price is unaffected: the checkout POST below still uses the booked category.
+            if cur_subtype_code == params.stateroom_subtype:
                 return True, []
 
             # Defensively extract pricing trees to protect against missing API sub-keys
@@ -2615,6 +2660,7 @@ def _calculate_passenger_metrics(
     """
     passenger_names = []
     checkin_strings = []
+    boarding_time = ""
     num_adults = 0
     num_children = 0
     have_a_senior = False
@@ -2661,6 +2707,8 @@ def _calculate_passenger_metrics(
             boarding_hour = arrival_time[9:11]
             boarding_min = arrival_time[11:13]
             formatted_time = f"{boarding_hour}:{boarding_min}"
+            if not boarding_time:
+                boarding_time = formatted_time
 
             if status == "COMPLETED":
                 checkin_strings.append(f"{first_name}: Boarding Time {formatted_time}")
@@ -2675,6 +2723,7 @@ def _calculate_passenger_metrics(
     return {
         "passenger_names": ", ".join(passenger_names),
         "checkin_string": ", ".join(checkin_strings),
+        "boarding_time": boarding_time,
         "num_adults": num_adults,
         "num_children": num_children,
         "have_a_senior": have_a_senior,
@@ -3039,6 +3088,22 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     preserving live ANSI text colors, and an optional plaintext file log tracking
     run milestones with ANSI styling expressions filtered out.
     """
+    # On Windows consoles (notably Windows PowerShell 5.x / classic conhost) ANSI color
+    # escapes are printed literally (e.g. a raw "<-[33m...") unless virtual-terminal
+    # processing is enabled. Turn it on so the color codes render as colors. Harmless if
+    # already enabled (Windows Terminal) or unsupported - failures are ignored.
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            mode = ctypes.c_uint32()
+            if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                # 0x0004 = ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+        except Exception:
+            pass
+
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.handlers.clear()  # Avoid handler duplication
@@ -3202,6 +3267,67 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     return config
 
 
+def print_checkin_payment_table() -> None:
+    """
+    Prints a compact end-of-run summary of upcoming check-in openings / boarding
+    times and final payment dates for every booked sailing, sorted by sail date.
+
+    Nothing is printed when no booked sailings were gathered (e.g. a watchlist-only
+    run), so it never adds noise to runs that have nothing to summarize.
+    """
+    if not checkin_payment_rows:
+        return
+
+    rows = sorted(checkin_payment_rows, key=lambda r: r["sail_date"] or "")
+
+    headers = ("Sail Date", "Ship (Room)", "Check-In", "Final Payment")
+    table = []
+    pay_colors = []
+    for r in rows:
+        sail = config.format_date(r["sail_date"]) if r["sail_date"] else "?"
+        if r["final_payment"] is not None:
+            pay = r["final_payment"].strftime(config.date_display_format)
+            # Green when settled, yellow when a balance is still owed, red when that
+            # balance is now past the final payment deadline. A booking with no balance
+            # due is paid in full regardless of whether the deadline has passed.
+            if r["balance_due"]:
+                if r["past_final_payment"]:
+                    pay += " (PAST DUE)"
+                    pay_colors.append(RED)
+                else:
+                    pay += " (balance due)"
+                    pay_colors.append(YELLOW)
+            else:
+                pay += " (paid)"
+                pay_colors.append(GREEN)
+        else:
+            pay = "-"
+            pay_colors.append("")
+        table.append((sail, r["name"], r["checkin_label"], pay))
+
+    # Size each column to the widest of its header/cells. The stored values are ANSI-free;
+    # color is applied only at print time so it never skews this width math.
+    widths = [max(len(str(row[i])) for row in ([headers] + table)) for i in range(len(headers))]
+
+    def fmt(cells: Tuple[str, ...], pay_color: str = "") -> str:
+        padded = [str(c).ljust(widths[i]) for i, c in enumerate(cells)]
+        if pay_color:
+            padded[-1] = f"{pay_color}{padded[-1]}{RESET}"
+        return "  ".join(padded)
+
+    log(f"\n{BLUE}Upcoming Check-In & Final Payment Dates{RESET}")
+    log(fmt(headers))
+    log("  ".join("-" * w for w in widths))
+    prev_sail = None
+    for row, pay_color in zip(table, pay_colors):
+        # Blank the sail date when it repeats the row above (linked cruises / multiple
+        # cabins on one sailing) so each date prints once. Rows are sorted by date, so
+        # same-date rows are always adjacent.
+        display_row = ("" if row[0] == prev_sail else row[0],) + row[1:]
+        prev_sail = row[0]
+        log(fmt(display_row, pay_color))
+
+
 def main() -> None:
     """
     Primary orchestration engine for the cruise pricing validation suite.
@@ -3212,6 +3338,9 @@ def main() -> None:
     unbooked prospective vacation watchlists.
     """
     try:
+        # Start each run with an empty check-in / payment summary collector
+        checkin_payment_rows.clear()
+
         # Set Time with AM/PM or 24h based on locale
         locale.setlocale(locale.LC_TIME,'')
         timestamp = datetime.now()
@@ -3317,6 +3446,9 @@ def main() -> None:
 
             # Safely release the connection socket resources back to the OS
             anon_session.close()
+
+        # Summary table of upcoming check-in and final-payment dates for booked sailings
+        print_checkin_payment_table()
 
     except Exception as e:
         # Let the global catch-all at the module entry point handle unexpected execution faults
