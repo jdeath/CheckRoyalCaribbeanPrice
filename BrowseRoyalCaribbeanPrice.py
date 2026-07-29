@@ -1469,6 +1469,20 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
             # Fallback for legacy Python installations lacking reconfigure hooks
             has_terminal_issues = True
 
+        # Enable ANSI color rendering. On Windows PowerShell 5.x / classic conhost the
+        # color escapes are otherwise printed literally (e.g. a raw "<-[33m..."). Harmless
+        # if already enabled (Windows Terminal) or unsupported - failures are ignored.
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            mode = ctypes.c_uint32()
+            if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                # 0x0004 = ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+        except Exception:
+            pass
+
     # 3. Construct and clear out the active root logging context
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)

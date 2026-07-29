@@ -3047,6 +3047,22 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     preserving live ANSI text colors, and an optional plaintext file log tracking
     run milestones with ANSI styling expressions filtered out.
     """
+    # On Windows consoles (notably Windows PowerShell 5.x / classic conhost) ANSI color
+    # escapes are printed literally (e.g. a raw "<-[33m...") unless virtual-terminal
+    # processing is enabled. Turn it on so the color codes render as colors. Harmless if
+    # already enabled (Windows Terminal) or unsupported - failures are ignored.
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            mode = ctypes.c_uint32()
+            if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                # 0x0004 = ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+        except Exception:
+            pass
+
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.handlers.clear()  # Avoid handler duplication
