@@ -203,12 +203,19 @@ def _execute_api_request(
 
         except requests.exceptions.HTTPError as e:
             failure = e
-            # Extract status code from exception response, or fall back to local response object if mock is sparse
-            resp_obj = e.response if e.response is not None else response
-            status_code = resp_obj.status_code if resp_obj is not None else None
+
+            # 1. Try to get status_code from attached response object or local response variable
+            resp_obj = getattr(e, "response", None) or response
+            status_code = getattr(resp_obj, "status_code", None)
+
+            # 2. Fallback: If status_code is missing (e.g. sparse test mock), extract status code from exception string
+            if status_code is None:
+                match = re.search(r"\b([45]\d\d)\b", str(e))
+                if match:
+                    status_code = int(match.group(1))
 
             # A 4xx client error (e.g. 404 Not Found) is terminal/definitive and must not retry
-            if status_code is not None and status_code < 500:
+            if status_code is not None and 400 <= status_code < 500:
                 return _report_failure(e)
         except Exception as e:
             # Connection-level problems are transient and retryable
