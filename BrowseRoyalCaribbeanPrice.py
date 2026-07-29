@@ -183,6 +183,7 @@ def _execute_api_request(
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         failure = None
+        response = None  # Prevent UnboundLocalError if request raises an exception before assignment
         try:
             response = requests.request(
                 method=method.upper(),
@@ -201,27 +202,24 @@ def _execute_api_request(
             response.raise_for_status()
             return response
 
-        except requests.exceptions.HTTPError as e:
+        except Exception as e:
             failure = e
 
-            # 1. Try to get status_code from attached response object or local response variable
+            # 1. Resolve response object attached to exception, local response, or test mock
             resp_obj = getattr(e, "response", None) or response
             status_code = getattr(resp_obj, "status_code", None)
 
-            # 2. Fallback: If status_code is missing (e.g. sparse test mock), extract status code from exception string
+            # 2. Fallback: Parse status code from exception string for sparse mocks ("404 Not Found")
             if status_code is None:
                 match = re.search(r"\b([45]\d\d)\b", str(e))
                 if match:
                     status_code = int(match.group(1))
 
-            # A 4xx client error (e.g. 404 Not Found) is terminal/definitive and must not retry
+            # Strictly 4xx client errors (400–499) are terminal and must NOT retry
             if status_code is not None and 400 <= status_code < 500:
                 return _report_failure(e)
-        except Exception as e:
-            # Connection-level problems are transient and retryable
-            failure = e
 
-        # If we experienced a transient failure but have more attempts left, wait and retry
+        # Transient failures (connection errors, timeouts, 5xx) reach this backoff loop:
         if attempt < MAX_ATTEMPTS:
             wait = 2 ** attempt
             logging.warning(f"API request failed ({failure}); retrying in {wait}s (attempt {attempt} of {MAX_ATTEMPTS})")
