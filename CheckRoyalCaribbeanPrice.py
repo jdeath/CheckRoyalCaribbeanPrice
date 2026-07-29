@@ -1157,7 +1157,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         # check-in label for the end-of-run summary table
         if metrics['checkin_string']:
             log(metrics['checkin_string'])
-            checkin_label = f"Boarding {metrics['boarding_time']}" if metrics['boarding_time'] else "Checked in"
+            checkin_label = f"Boarding {metrics.get('boarding_time')}" if metrics.get('boarding_time') else "Checked in"
         else:
             checkin_label, _ = get_checkin_info(account_info, reservation_ID, passenger_ID, ship_code, sail_date, apobj)
 
