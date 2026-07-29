@@ -1822,10 +1822,18 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
             cur_category_code = stateroom_subtype.get("categoryCode")
 
             # --- INVENTORY GATE SHORT-CIRCUIT ---
-            # If our exact target cabin style is found, return True immediately.
-            # An alternative room array [] isn't needed because the caller function
-            # will proceed to execute a heavy POST request for this specific room's pricing.
-            if cur_subtype_code == params.stateroom_subtype and cur_category_code == params.stateroom_category_code:
+            # If our target cabin style is found, return True immediately. An alternative
+            # room array [] isn't needed because the caller function will proceed to execute
+            # a heavy POST request for this specific room's pricing.
+            #
+            # Gate on the subtype `code` alone (not categoryCode). Royal's room-selection
+            # page now returns a single lead-in row per subtype; that row's `code` still
+            # equals the booking's stateroomSubtype, but its `categoryCode` is only the
+            # subtype's lead-in category - no longer the exhaustive per-category list. So it
+            # stops equalling the booked stateroomCategoryCode for any cabin booked above the
+            # lead-in, which made every such booking read as "Not For Sale". The precise
+            # price is unaffected: the checkout POST below still uses the booked category.
+            if cur_subtype_code == params.stateroom_subtype:
                 return True, []
 
             # Defensively extract pricing trees to protect against missing API sub-keys
