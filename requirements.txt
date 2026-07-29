@@ -1,3 +1,6 @@
 Apprise
 pyinstaller
 curl_cffi
+# The scripts import yaml directly (config parsing); today it only arrives
+# transitively through Apprise's dependencies, so pin it explicitly.
+PyYAML

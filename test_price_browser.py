@@ -5,6 +5,7 @@ import requests
 # Import the targets from your script module
 from BrowseRoyalCaribbeanPrice import (
     _execute_api_request,
+    get_cruise_price_from_API,
     get_ships_web,
     get_sailings_web,
     get_web_categories,
@@ -220,3 +221,68 @@ class TestCommerceCatalogGraphQL:
         # one terminal page. Without this assertion the loop can silently burn
         # through all 100 pagination slots and this test still passes.
         assert mock_execute.call_count == 2
+
+# ==============================================================================
+# CRUISE PRICE BRAND ROUTING (issue #77 regression guards)
+# ==============================================================================
+class TestCruisePriceBrandRouting:
+    """get_cruise_price_from_API must price via the brand-specific room-selection
+    page: the old cruiseSearch graph only indexed Royal sailings, so Celebrity
+    packages were mislabeled 'Sailing is sold out' (jdeath issue #77)."""
+
+    @staticmethod
+    def _room_selection_text(cheap=1503.43, expensive=2200.00):
+        import json
+        return json.dumps({"rooms": [{"options": {"stateroomTypes": [
+            {"name": "Interior", "stateroomSubtypes": [
+                {"code": "ZI", "categoryCode": "ZI",
+                 "pricing": {"invoice": {"total": expensive}}},
+                {"code": "V4", "categoryCode": "V4",
+                 "pricing": {"invoice": {"total": cheap}}},
+            ]}
+        ]}}]})
+
+    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    def test_celebrity_routes_to_celebrity_host(self, mock_exec, mock_global_dependencies):
+        mock_resp = MagicMock()
+        mock_resp.text = self._room_selection_text()
+        mock_exec.return_value = mock_resp
+
+        get_cruise_price_from_API("USD", "EG12K185", "20270102", 2, 0, is_royal=False)
+
+        called_url = mock_exec.call_args[1]["url"]
+        assert "celebritycruises.com" in called_url
+        assert "room-selection/type-and-subtype" in called_url
+
+    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    def test_royal_routes_to_royal_host(self, mock_exec, mock_global_dependencies):
+        mock_resp = MagicMock()
+        mock_resp.text = self._room_selection_text()
+        mock_exec.return_value = mock_resp
+
+        get_cruise_price_from_API("USD", "IC07E484", "20270102", 2, 0, is_royal=True)
+
+        assert "royalcaribbean.com" in mock_exec.call_args[1]["url"]
+
+    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    def test_reports_cheapest_subtype_total_per_class(self, mock_exec, mock_global_dependencies):
+        mock_resp = MagicMock()
+        mock_resp.text = self._room_selection_text(cheap=1503.43, expensive=2200.00)
+        mock_exec.return_value = mock_resp
+
+        get_cruise_price_from_API("USD", "IC07E484", "20270102", 2, 0, is_royal=True)
+
+        logged = "\n".join(str(c[0][0]) for c in mock_global_dependencies.call_args_list)
+        assert "1503.43" in logged      # cheapest subtype wins
+        assert "2200.0" not in logged   # pricier subtype in the same class not reported
+
+    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    def test_no_rooms_reports_sold_out(self, mock_exec, mock_global_dependencies):
+        mock_resp = MagicMock()
+        mock_resp.text = "no rooms payload here"
+        mock_exec.return_value = mock_resp
+
+        get_cruise_price_from_API("USD", "EG99Z999", "20200101", 2, 0, is_royal=False)
+
+        logged = "\n".join(str(c[0][0]) for c in mock_global_dependencies.call_args_list)
+        assert "Sailing is sold out" in logged
