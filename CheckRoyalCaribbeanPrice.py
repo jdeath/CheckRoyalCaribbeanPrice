@@ -1226,17 +1226,21 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             summary_name += f" #{stateroom_number}"
         if str(reservation_ID) in reservation_friendly_names:
             summary_name += f" ({reservation_friendly_names.get(str(reservation_ID))})"
+        balance_due = derive_balance_due(booking)
+        balance_due_amount = booking.get("balanceDueAmount")
         checkin_payment_rows.append({
             "name": summary_name,
             "sail_date": sail_date,
             "checkin_label": checkin_label or "TBD",
             "final_payment": final_payment_date,
             "past_final_payment": date.today() > final_payment_date,
-            "balance_due": booking.get("balanceDue") is True,
+            "balance_due": balance_due,
         })
 
-        if booking.get("balanceDue") is True:
-            log(YELLOW + f"Remaining Cruise Payment Balance is {booking.get('balanceDueAmount'):.2f} due {final_payment_date_display}" + RESET)
+        if balance_due is True:
+            owed = (f"{balance_due_amount:.2f}" if isinstance(balance_due_amount, (int, float))
+                    else "unknown")
+            log(YELLOW + f"Remaining Cruise Payment Balance is {owed} due {final_payment_date_display}" + RESET)
 
         paid_price_struct['booked_obc'] = get_OBC(account_info, booking)
 
@@ -3267,6 +3271,21 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     return config
 
 
+def derive_balance_due(booking: dict) -> Optional[bool]:
+    """
+    Whether a booking still owes money: True / False, or None when the API
+    doesn't say. balanceDue is True/False on most bookings but null/absent on
+    some, so only an explicit False proves the booking is settled; when it's
+    missing, a numeric balanceDueAmount decides instead.
+    """
+    balance_due = booking.get("balanceDue")
+    if balance_due is None:
+        amount = booking.get("balanceDueAmount")
+        if isinstance(amount, (int, float)):
+            return amount > 0
+    return balance_due
+
+
 def print_checkin_payment_table() -> None:
     """
     Prints a compact end-of-run summary of upcoming check-in openings / boarding
@@ -3288,8 +3307,9 @@ def print_checkin_payment_table() -> None:
         if r["final_payment"] is not None:
             pay = r["final_payment"].strftime(config.date_display_format)
             # Green when settled, yellow when a balance is still owed, red when that
-            # balance is now past the final payment deadline. A booking with no balance
-            # due is paid in full regardless of whether the deadline has passed.
+            # balance is now past the final payment deadline. "(paid)" is only shown
+            # when the API explicitly said the balance is settled - a missing/null
+            # balanceDue must not masquerade as paid in full.
             if r["balance_due"]:
                 if r["past_final_payment"]:
                     pay += " (PAST DUE)"
@@ -3297,9 +3317,12 @@ def print_checkin_payment_table() -> None:
                 else:
                     pay += " (balance due)"
                     pay_colors.append(YELLOW)
-            else:
+            elif r["balance_due"] is False:
                 pay += " (paid)"
                 pay_colors.append(GREEN)
+            else:
+                pay += " (status unknown)"
+                pay_colors.append(YELLOW)
         else:
             pay = "-"
             pay_colors.append("")
