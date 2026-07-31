@@ -2209,7 +2209,13 @@ def test_derive_balance_due_states():
     from CheckRoyalCaribbeanPrice import derive_balance_due
     assert derive_balance_due({"balanceDue": True}) is True
     assert derive_balance_due({"balanceDue": False}) is False
-    # null balanceDue: a numeric amount decides
+    # agency/TA bookings omit balanceDue but carry paidInFull (observed live)
+    assert derive_balance_due({"paidInFull": False}) is True
+    assert derive_balance_due({"paidInFull": True}) is False
+    # explicit balanceDue outranks paidInFull; paidInFull outranks the amount
+    assert derive_balance_due({"balanceDue": False, "paidInFull": False}) is False
+    assert derive_balance_due({"paidInFull": True, "balanceDueAmount": 100.0}) is False
+    # null balanceDue and no paidInFull: a numeric amount decides
     assert derive_balance_due({"balanceDue": None, "balanceDueAmount": 250.0}) is True
     assert derive_balance_due({"balanceDueAmount": 0}) is False
     # nothing to go on -> unknown, never "paid"

@@ -3274,12 +3274,16 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
 def derive_balance_due(booking: dict) -> Optional[bool]:
     """
     Whether a booking still owes money: True / False, or None when the API
-    doesn't say. balanceDue is True/False on most bookings but null/absent on
-    some, so only an explicit False proves the booking is settled; when it's
-    missing, a numeric balanceDueAmount decides instead.
+    doesn't say. balanceDue is True/False on direct bookings but omitted on
+    agency/TA ones, so only an explicit False proves the booking is settled;
+    when it's missing, the paidInFull flag (which agency bookings do carry)
+    decides, then a numeric balanceDueAmount.
     """
     balance_due = booking.get("balanceDue")
     if balance_due is None:
+        paid_in_full = booking.get("paidInFull")
+        if isinstance(paid_in_full, bool):
+            return not paid_in_full
         amount = booking.get("balanceDueAmount")
         if isinstance(amount, (int, float)):
             return amount > 0
