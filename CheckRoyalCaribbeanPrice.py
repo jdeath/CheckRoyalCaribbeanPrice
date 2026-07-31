@@ -472,6 +472,9 @@ class CruiseAppConfig:
     # Mapping Dictionaries
     reservation_prices: Dict[str, float] = field(default_factory=dict)
     reservation_names: Dict[str, str] = field(default_factory=dict)
+    # Reservations the user has verified as settled (agency/TA bookings often
+    # expose no payment state at all, so the API can't confirm it)
+    paid_reservations: Set[str] = field(default_factory=set)
 
     # Live Runtime Objects (Excluded from the initial YAML mapping)
     apobj: Optional[Apprise] = None
@@ -1228,6 +1231,8 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             summary_name += f" ({reservation_friendly_names.get(str(reservation_ID))})"
         balance_due = derive_balance_due(booking)
         balance_due_amount = booking.get("balanceDueAmount")
+        if str(reservation_ID) in config.paid_reservations:
+            balance_due = False   # user vouches for it (reservationsPaidInFull)
         checkin_payment_rows.append({
             "name": summary_name,
             "sail_date": sail_date,
@@ -3262,7 +3267,8 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         prospective_cruises=prospective_cruises,
         apprise_urls=apprise_urls,
         reservation_prices=data.get("reservationPricePaid", {}),
-        reservation_names=data.get("reservationFriendlyNames", {})
+        reservation_names=data.get("reservationFriendlyNames", {}),
+        paid_reservations={str(r) for r in (data.get("reservationsPaidInFull") or [])}
     )
 
     # Set up the custom logger
@@ -3275,15 +3281,15 @@ def derive_balance_due(booking: dict) -> Optional[bool]:
     """
     Whether a booking still owes money: True / False, or None when the API
     doesn't say. balanceDue is True/False on direct bookings but omitted on
-    agency/TA ones, so only an explicit False proves the booking is settled;
-    when it's missing, the paidInFull flag (which agency bookings do carry)
-    decides, then a numeric balanceDueAmount.
+    agency/TA ones. paidInFull is only trusted when True: on agency bookings
+    the web channel has no payment data at all and paidInFull comes back False
+    even on settled bookings (verified against a paid-in-full TA booking), so
+    False is the serializer's default there, not a real assertion of debt.
     """
     balance_due = booking.get("balanceDue")
     if balance_due is None:
-        paid_in_full = booking.get("paidInFull")
-        if isinstance(paid_in_full, bool):
-            return not paid_in_full
+        if booking.get("paidInFull") is True:
+            return False
         amount = booking.get("balanceDueAmount")
         if isinstance(amount, (int, float)):
             return amount > 0
