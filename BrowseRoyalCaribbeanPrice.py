@@ -323,7 +323,7 @@ def get_ships_web() -> List[Dict[str, str]]:
         return []
 
     ship_names = []
-    payload = response.json().get("payload", {})
+    payload = (_safe_json(response) or {}).get("payload", {})
     ships = payload.get("ships", []) if payload else []
 
     for ship in ships:
@@ -338,6 +338,14 @@ def get_ships_web() -> List[Dict[str, str]]:
             ship_names.append({'code': 'HE', 'name': 'Hero of the Seas'})
 
     return ship_names
+
+
+def _safe_json(response) -> Optional[dict]:
+    """response.json() that returns None on a non-JSON body instead of raising."""
+    try:
+        return response.json()
+    except ValueError:
+        return None
 
 
 def get_sailings_web(ship_code: str) -> List[Dict[str, Any]]:
@@ -463,7 +471,9 @@ def get_sailing_details_web(ship_code: str, sail_date: str) -> Dict[int, str]:
         departure_date_time = port_data.get("departureDateTime")
 
         port_type = port_data.get("portType", "Unknown")
-        day = port.get("day", "Unknown")
+        day = port.get("day")
+        if day is None:
+            continue   # can't place a port with no day number
 
         # Save port names for later
         ports[int(day)] = title
@@ -551,7 +561,7 @@ def get_web_categories(ship: str, saildate: str) -> Dict[str, str]:
     if not response:
         return product_map
 
-    data_container = response.json().get("data")
+    data_container = (_safe_json(response) or {}).get("data")
     categories_container = data_container.get("categories") if data_container else None
     if categories_container is None:
         log("No Items for Sale")
@@ -714,7 +724,7 @@ def get_products_graph_all_pages(
         if not response:
             break
 
-        data_container = response.json().get("data") if response else None
+        data_container = (_safe_json(response) or {}).get("data") if response else None
         products_container = data_container.get("products") if data_container else None
         if products_container is None:
             break
@@ -762,9 +772,9 @@ def print_and_sort_products(
     # Ultimate dining package always starts with a " ", so this removes any leading spaces
     if sort_key == 'alpha':
         if sort_order == 'desc':
-            sorted_products = sorted(products, key=lambda product: product.get('title', '').lstrip(), reverse=True)
+            sorted_products = sorted(products, key=lambda product: (product.get('title') or '').lstrip(), reverse=True)
         else:
-            sorted_products = sorted(products, key=lambda product: product.get('title', '').lstrip())
+            sorted_products = sorted(products, key=lambda product: (product.get('title') or '').lstrip())
     else:
         sorted_products = products
 
@@ -867,7 +877,7 @@ def print_all_products(
 
         # Display Shore Excursions by day sequentially
         if key == "shorex":
-            for day in range(1, duration + 2):
+            for day in range(1, int(duration or 7) + 2):
                 products = get_products_graph_all_pages(
                     ship_code, sail_date, duration, currency, sort_key, sort_order, key, str(day)
                 )
@@ -963,6 +973,8 @@ def get_all_activities_web(ship_code: str, sail_date: str) -> List[Dict[str, Any
                 if offer is not None:
                     offering_date = offer.get("offeringDate")
                     offering_time = offer.get("offeringTime")
+                    if not offering_date:
+                        continue   # days_between would slice None
                     day = days_between(sail_date, offering_date)
 
                     products.append({
@@ -1270,7 +1282,7 @@ def get_MDR_locations(ship_code: str, sail_date: str, is_royal: bool) -> List[st
     if not response:
         return venue_ids
 
-    data_container = response.json().get("data")
+    data_container = (_safe_json(response) or {}).get("data")
     products_by_venue_categories = data_container.get("productsByVenueCategories") if data_container else None
     if products_by_venue_categories is None:
         return venue_ids
@@ -1376,7 +1388,7 @@ def print_MDR_menus(ship_code: str, sail_date: str, venue_ids: List[str], ports:
         return
 
     # Standardized nested safe parsing strategy
-    resp_json = response.json()
+    resp_json = _safe_json(response)
     data_container = resp_json.get("data") if resp_json else None
     venues_container = data_container.get('venues') if data_container else None
     venues = venues_container.get('venues', []) if venues_container else []
@@ -1392,7 +1404,9 @@ def print_MDR_menus(ship_code: str, sail_date: str, venue_ids: List[str], ports:
         menus = venue.get("menus", [])
         if not menus:
             log("Menus not yet populated; please check again later")
-            return
+            # continue, not return: Celebrity lists every venue here, and one
+            # unpublished venue must not discard all the remaining menus
+            continue
 
         for menu in menus:
             if not menu:
@@ -1534,11 +1548,13 @@ def main() -> None:
     parser.add_argument('-l', '--logfile', type=str, nargs='?', const='output.txt', dest="log_file", help='optional logfile, eg. output.txt')
     args = parser.parse_args()
 
+    # Logging must exist before get_system_currency: its locale-failure branch
+    # calls log(), which is None until setup_hybrid_logging has run
+    setup_hybrid_logging(args.log_file)
+
     currency = args.currency
     if currency == "System":
         currency = get_system_currency()
-
-    setup_hybrid_logging(args.log_file)
     if args.log_file:
         log(f"Logging run to file: {args.log_file}")
 
@@ -1649,10 +1665,15 @@ def main() -> None:
             log("Gathering list of Main Dining Room Menus.  This may take a few minutes; please be patient.")
             mdr_names = get_MDR_locations(ship_code, sailing['date'], is_royal)
             print_MDR_menus(ship_code, sailing['date'], mdr_names, ports)
+        else:
+            log("Invalid sailing selection")
     else:
         log("Invalid ship selection")
 
-    input("Hit ENTER to quit: ")
+    if sys.stdin.isatty():
+        # skip under cron/pipes: a blocking prompt (or EOFError) after all the
+        # work is done defeats the -s/-d/-l automation flags
+        input("Hit ENTER to quit: ")
     log("Have a nice day!")
 
 
