@@ -3322,7 +3322,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         apprise_urls=apprise_urls,
         reservation_prices=data.get("reservationPricePaid", {}),
         reservation_names=data.get("reservationFriendlyNames", {}),
-        apprise_test=data.get("appriseTest", False)   # was never populated: the test path could not run
+        apprise_test=data.get("appriseTest", False),   # was never populated: the test path could not run
         paid_reservations={str(r) for r in (data.get("reservationsPaidInFull") or [])}
     )
 
