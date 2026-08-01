@@ -246,16 +246,19 @@ class CruiseURLParams:
         """Safely maps profile values without dropping asymmetric keys."""
         self.loyalty_number = profile.loyalty_number
         self.state = profile.state
-        self.senior = "y" if profile.senior else "n"
-        self.military = "y" if profile.military else "n"
-        self.police = "y" if profile.police else "n"
-        self.fire = "y" if profile.fire else "n"
+        # Keep these boolean like the dataclass declares: a "n" STRING here is
+        # truthy, which would silently invert 'y' if params.police else 'n' checks
+        self.senior = bool(profile.senior)
+        self.military = bool(profile.military)
+        self.police = bool(profile.police)
+        self.fire = bool(profile.fire)
         self.dp340 = profile.dp340
 
 
     @property
     def api_brand(self) -> str:
-        return "celebrity" if self.is_celebrity else "royal"
+        # CruiseURLParams has no is_celebrity attribute - derive from is_royal
+        return "royal" if self.is_royal else "celebrity"
 
 
     @property
@@ -493,7 +496,10 @@ class CruiseAppConfig:
 
         # Strip potential legacy hyphens if they leak from web parameters
         clean_str = date_str.replace("-", "").replace("/", "")
-        return datetime.strptime(clean_str, "%Y%m%d").strftime(self.date_display_format)
+        try:
+            return datetime.strptime(clean_str, "%Y%m%d").strftime(self.date_display_format)
+        except ValueError:
+            return str(date_str)   # malformed API date: show it raw, don't crash the run
 
 
 ############################################
@@ -684,6 +690,14 @@ def above_age_on_sail_date(birth_date: str, sail_date: str, age_threshold: int) 
         age -= 1
 
     return age >= age_threshold
+
+
+def _discount_flag_on(value: Any) -> bool:
+    """Normalize a senior/military/police/fire flag: booleans from URL parsing,
+    'y'/'yes'/'true' strings from configs; anything else (incl. 'n') is off."""
+    if value is True:
+        return True
+    return str(value).strip().lower() in ("y", "yes", "true")
 
 
 def get_final_payment_date(number_of_nights: int, sail_date: Union[str, date, datetime]) -> date:
@@ -930,7 +944,8 @@ def login(account_info: AccountInfo) -> APIAccess:
         decoded_bytes = base64.b64decode(string1 + '==')
         auth_info = json.loads(decoded_bytes.decode('utf-8'))
         account_ID = auth_info["sub"]
-    except(IndexError, ValueError, KeyError) as parse_err:
+    except(IndexError, ValueError, KeyError, AttributeError, TypeError) as parse_err:
+        # AttributeError/TypeError: a 200 with no access_token leaves it None
         log(f"Error parsing authentication token structure: {parse_err}")
         sys.exit(1)
 
@@ -955,7 +970,7 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
     if response is None:
         log(f"{YELLOW}Could not retrieve profile after retries; continuing without residency/loyalty discounts{RESET}")
         return None, None, 0
-    payload = response.json().get("payload")
+    payload = response.json().get("payload") or {}
 
     state = None
     loyalty_number = None
@@ -1127,7 +1142,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         reservation_ID = booking.get("bookingId")
         passenger_ID = booking.get("passengerId")
         sail_date = booking.get("sailDate")
-        number_of_nights = int(booking.get("numberOfNights", 0))
+        number_of_nights = int(booking.get("numberOfNights") or 0)
         ship_code = booking.get("shipCode")
         guests = booking.get("passengersInStateroom", [])
         package_code = booking.get("packageCode")
@@ -1255,7 +1270,9 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                         paid_price_struct['paid_price'] = float(paid_price)
             elif isinstance(reservation_price_paid, list):
                 for reservation in reservation_price_paid:
-                    if int(reservation_ID) == int(reservation.get("reservation")):
+                    # str-compare: a missing/non-numeric 'reservation' key must
+                    # not crash the whole booking loop
+                    if str(reservation_ID) == str(reservation.get("reservation")):
                         for item in reservation:
                             paid_price_struct[item] = reservation.get(item)
 
@@ -1336,7 +1353,7 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
 
 def get_cruise_price(account_info: AccountInfo,
                      booking: Dict[str, Any],
-                     ship_dictionary: ShipDictionary,
+                     ship_dictionary: ShipRegistry,
                      automatic_URL: bool = True,
                      paid_price_struct: Dict[str, Any] = None,
                      discounts: Optional[DiscountProfile] = None
@@ -1474,7 +1491,12 @@ def get_cruise_price(account_info: AccountInfo,
         api_nights = results.get("sailing_nights")
         resolved_nights = int(api_nights) if (api_nights and int(api_nights) > 0) else 7
 
-    final_payment_date = get_final_payment_date(resolved_nights, url_params.sail_date)
+    # A watchlist URL can omit or mangle sailDate; a far-future fallback keeps
+    # the "past final payment" comparisons meaning "not past" instead of crashing
+    try:
+        final_payment_date = get_final_payment_date(resolved_nights, url_params.sail_date)
+    except (TypeError, ValueError):
+        final_payment_date = date.max
 
     # Reach into the global ship mapper object natively
     ship_name = ship_dictionary.get_ship(url_params.ship_code)
@@ -1485,9 +1507,12 @@ def get_cruise_price(account_info: AccountInfo,
     used_discounts = ""
     if url_params.loyalty_number is not None: used_discounts += "Loyalty, "
     if url_params.state is not None:          used_discounts += "Residency, "
-    if url_params.senior == "y":              used_discounts += "Senior, "
-    if url_params.police == "y":              used_discounts += "Police, "
-    if url_params.military == "y":            used_discounts += "Military, "
+    # These flags arrive as booleans from parse_provided_URL (a "== 'y'" test
+    # here never matched, so the labels silently never printed)
+    if _discount_flag_on(getattr(url_params, 'senior', False)):   used_discounts += "Senior, "
+    if _discount_flag_on(getattr(url_params, 'police', False)):   used_discounts += "Police, "
+    if _discount_flag_on(getattr(url_params, 'military', False)): used_discounts += "Military, "
+    if _discount_flag_on(getattr(url_params, 'fire', False)):     used_discounts += "Fire, "
     if url_params.coupon_code is not None:    used_discounts += f"Coupon {url_params.coupon_code}, "
 
     if used_discounts != "":
@@ -1511,9 +1536,15 @@ def get_cruise_price(account_info: AccountInfo,
             log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
             return
 
-        price = fare_struct.get("fare", 0.0)
-        grats = fare_struct.get("gratuities", 0.0)
-        ins = fare_struct.get("insurance", 0.0)
+        # The keys always exist (so .get defaults never apply) but their values
+        # can be JSON null - treat a null fare like missing fare data instead of
+        # crashing on the first {price:.2f} format below
+        if fare_struct.get("fare") is None:
+            log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
+            return
+        price = fare_struct.get("fare") or 0.0
+        grats = fare_struct.get("gratuities") or 0.0
+        ins = fare_struct.get("insurance") or 0.0
 
         live_obc = float(fare_struct.get("obc", 0.0) or 0.0)
         booked_obc = float(paid_price_struct.get("booked_obc", 0.0) if paid_price_struct else 0.0)
@@ -1531,11 +1562,11 @@ def get_cruise_price(account_info: AccountInfo,
             desire_refund_price = True
             addons += "Refundable Deposit, "
             fare_struct = results.get(refund_fare_string)
-            if fare_struct is not None:
-                price = fare_struct.get("fare", 0.0)
-                grats = fare_struct.get("gratuities", 0.0)
-                ins = fare_struct.get("insurance", 0.0)
-                obc = fare_struct.get("obc", "0.0")
+            if fare_struct is not None and fare_struct.get("fare") is not None:
+                price = fare_struct.get("fare") or 0.0
+                grats = fare_struct.get("gratuities") or 0.0
+                ins = fare_struct.get("insurance") or 0.0
+                obc = fare_struct.get("obc") or "0.0"
             else:
                 refund_not_found = True
 
@@ -1587,9 +1618,11 @@ def get_cruise_price(account_info: AccountInfo,
         if url_params.package_code and not automatic_URL:
             log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
             for available_room in results.get("available_rooms", []):
-                rooms_left = available_room.get('roomsLeft')
-                if rooms_left is not None and rooms_left > 0:
-                    log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {rooms_left}")
+                # key is 'rooms_left' (as produced above); price may be None
+                rooms_left = available_room.get('rooms_left')
+                room_price = available_room.get('price')
+                if rooms_left is not None and rooms_left > 0 and room_price is not None:
+                    log(f"\t{available_room.get('name')} {room_price:.2f} - Rooms Left {rooms_left}")
         return
 
     obc_value = float(obc or 0.0)
@@ -1835,9 +1868,10 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     # scope completely isolated and test-stabilized.
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
     try:
-        response = requests.get(api_URL, params=request_params, headers=headers)
+        response = requests.get(api_URL, params=request_params, headers=headers,
+                                timeout=config.request_timeout if config else 30)
     except Exception as err:
-        log (f"Unable to check room availability with server")
+        log (f"Unable to check room availability with server ({err})")
         return False, []
 
     # Extract structural array matrix out of the component text stream
@@ -1913,13 +1947,14 @@ def get_new_order_price(
     # Explicit check: If this context item targets specific bookings, enforce isolation
     # Fall back to using extracting the ID from booking if not listed in the ctx structure
     reservation_ID = ctx.reservation_id or booking.get("bookingId")
-    if ctx.reservations and reservation_ID not in ctx.reservations:
+    # str-coerce both sides: YAML ints vs API string bookingIds must still match
+    if ctx.reservations and str(reservation_ID) not in {str(r) for r in ctx.reservations}:
         return
 
     # Unpack voyage identifiers from the booking entity
     ship = booking.get("shipCode", "")
     start_date = booking.get("sailDate", "")
-    number_of_nights = int(booking.get("numberOfNights", 0))
+    number_of_nights = int(booking.get("numberOfNights") or 0)
 
     currency = config.currency_override if config.currency_override else ctx.currency
     prefix = ctx.prefix or ""
@@ -1992,7 +2027,11 @@ def get_new_order_price(
         current_price = new_price_payload.get(f"{guest_age_string}ShipboardPrice")
 
     if not current_price:
-        current_price = 0
+        # No price returned at all: don't fabricate a 0.00 - comparing it below
+        # would fire a false "price is lower / Book!" alert (same failure mode
+        # already guarded for cruise fares)
+        log(YELLOW + f"\t{title}: no current price returned; cannot compare" + RESET)
+        return
 
     # Process Deal Alerts
     if current_price < paid_price:
@@ -2105,7 +2144,8 @@ def process_watch_list_for_booking(
         reservation_ID = booking.get("bookingId")
 
         if reservation_list:
-            if reservation_ID not in reservation_list:
+            # str-coerce both sides: YAML ints vs API string bookingIds must still match
+            if str(reservation_ID) not in {str(r) for r in reservation_list}:
                 continue
 
         # Skip disabled watchlist items
@@ -2150,7 +2190,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
     # Extract voyage characteristics from booking payload
     ship = booking.get("shipCode", "")
     start_date = booking.get("sailDate", "")
-    number_of_nights = int(booking.get("numberOfNights", 0))
+    number_of_nights = int(booking.get("numberOfNights") or 0)
 
     # Handle global currency overrides cleanly
     if config.currency_override:
@@ -2208,24 +2248,29 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
         response = _execute_api_request(account_info, "GET", url_history, params=params)
 
         # If this particular reservation has no orders, skip to the next room
-        if not response or not response.json().get("payload"):
+        if not response:
             continue
-
-        payload = response.json().get("payload")
+        try:
+            payload = response.json().get("payload")
+        except ValueError:
+            continue
         if not payload:
-            return
+            continue   # a bare 'return' here would silently drop every remaining cabin
 
         # Merge my orders and orders booked on my behalf
         all_orders = (payload.get("myOrders") or []) + (payload.get("ordersOthersHaveBookedForMe") or [])
 
         for order in all_orders:
             order_code = order.get("orderCode")
-            date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
-            order_date = date_obj.strftime(config.date_display_format)
+            try:
+                date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
+                order_date = date_obj.strftime(config.date_display_format)
+            except (TypeError, ValueError):
+                order_date = order.get("orderDate") or "Unknown"
             owner = order.get("owner")
 
             # Only process valid paid orders
-            if order.get("orderTotals", {}).get("total", 0) > 0:
+            if (order.get("orderTotals", {}).get("total", 0) or 0) > 0:
                 url_detail = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/calendar/v1/{ship}/orderHistory/{order_code}'
                 response = _execute_api_request(account_info, "GET", url_detail, params=params)
                 if response is None:
@@ -2382,8 +2427,8 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
             continue
         seen_IDs.add(promo_ID)
 
-        promo_start = promo.get("startDate", "")[:10]
-        promo_end = promo.get("endDate", "")[:10]
+        promo_start = (promo.get("startDate") or "")[:10]
+        promo_end = (promo.get("endDate") or "")[:10]
         date_range = f"(Valid {promo_start} to {promo_end})"
 
         banner = banner_by_id.get(promo_ID)
@@ -2422,7 +2467,7 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
         log(YELLOW + promo_line + RESET)
 
 
-def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
+def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> float:
     """
     Extracts Onboard Credit (OBC) balances and promotional credit allocations for a booking.
 
@@ -2668,6 +2713,7 @@ def _calculate_passenger_metrics(
     # Track distinct room tracking variables to safely prevent outer loop corruption
     stateroom_type = booking.get("stateroomType")
     stateroom_subtype = booking.get("stateroomSubtype")
+    stateroom_category_code = None   # a booking with no guests must not leave this unbound
 
     for guest in guests:
         stateroom_category_code = guest.get("stateroomCategoryCode")
@@ -3109,7 +3155,13 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     root_logger.handlers.clear()  # Avoid handler duplication
 
     # Terminal Stream Handler (Keeps original ANSI terminal colors)
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Use the REAL stdout: on a second in-process call sys.stdout is already the
+    # PrintRedirector, and a StreamHandler wrapping it would recurse
+    # (emit -> write -> logger.info -> emit ...)
+    real_stdout = sys.stdout
+    while isinstance(real_stdout, PrintRedirector):
+        real_stdout = getattr(real_stdout, '_wrapped_stream', None) or sys.__stdout__
+    console_handler = logging.StreamHandler(real_stdout)
     console_handler.setFormatter(logging.Formatter('%(message)s'))
     if platform.system() == "iOS":
         console_handler.addFilter(StripAnsiFilter())
@@ -3177,7 +3229,9 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     and handles fractional logic safely (like differentiating a 0.0 value alert from None).
     """
     with open(config_path, 'r') as file:
-        data = expand_env_vars(yaml.safe_load(file))    # Parse accounts
+        # an empty config.yaml parses to None - fail with clear messages below,
+        # not an AttributeError on data.get
+        data = expand_env_vars(yaml.safe_load(file)) or {}    # Parse accounts
 
     # Parse accounts
     accounts = [
@@ -3258,7 +3312,8 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         prospective_cruises=prospective_cruises,
         apprise_urls=apprise_urls,
         reservation_prices=data.get("reservationPricePaid", {}),
-        reservation_names=data.get("reservationFriendlyNames", {})
+        reservation_names=data.get("reservationFriendlyNames", {}),
+        apprise_test=data.get("appriseTest", False)   # was never populated: the test path could not run
     )
 
     # Set up the custom logger
@@ -3354,7 +3409,7 @@ def main() -> None:
         if config.apobj is not None and config.apprise_test:
             config.apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
             log("Apprise Notification Sent...quitting")
-            quit()
+            sys.exit(0)   # quit() is a site-builtin, absent in frozen builds
 
         if config.minimum_saving_alert is not None:
             log(YELLOW + f"Only alerting for savings >= {config.minimum_saving_alert:.2f}" + RESET)
@@ -3399,10 +3454,12 @@ def main() -> None:
             )
 
             # Gather the information on all voyages under the current account
-            get_voyages(account_info, discounts, ship_dictionary)
-
-            # Close the account session and prepare for the next one
-            account_info.access.session.close()
+            try:
+                get_voyages(account_info, discounts, ship_dictionary)
+            finally:
+                # Close the account session even when a booking raises, so
+                # sessions don't leak across the remaining accounts
+                account_info.access.session.close()
             if len(config.accounts) > 1:
                 log("Sleeping for 5 seconds to allow API to cool down between accounts")
                 time.sleep(5)
@@ -3478,8 +3535,7 @@ if __name__ == "__main__":
             # Default to yes for non-interactive operation
             user_choice = "y"
 
-        user_input = input("Enter y if want me to make the file: ")
-        if user_input == "y":
+        if user_choice == "y":
             try:
                 print("Downloading sample configuaration file...")
                 url = 'https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/SAMPLE-SIMPLE-config.yaml'
@@ -3493,7 +3549,7 @@ if __name__ == "__main__":
                 with open(local_file_name, "wb") as f:
                     f.write(response.content)
 
-                print(f"\n[+] Success: Created '{localFileName}' in the current directory.")
+                print(f"\n[+] Success: Created '{local_file_name}' in the current directory.")
                 print("--> Please edit Username/password then run the tool again")
 
             except requests.RequestException as req_err:
