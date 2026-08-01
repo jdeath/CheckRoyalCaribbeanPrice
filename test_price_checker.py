@@ -1932,7 +1932,13 @@ def test_discount_profile_to_url_params_alignment():
     # Ensure your mapper or assignment handles it cleanly
     url_params.apply_discount_profile(profile)
 
-    assert url_params.fire == "y"
+    # Booleans, not "y"/"n" strings: the dataclass declares bool, and a "n"
+    # string is truthy - it would silently invert 'y' if params.fire else 'n'
+    # translations downstream (audit fix)
+    assert url_params.fire is True
+    assert url_params.senior is True
+    assert url_params.military is False
+    assert url_params.police is False
     assert hasattr(url_params, "dp340") and url_params.dp340 is True
 
 # =====================================================================
