@@ -1610,28 +1610,19 @@ def get_cruise_price(account_info: AccountInfo,
 
         # TODO: This code block will print the "Available Rooms" line even if the count is 0;
         #       do we want to use this commented-out block instead
-#        if url_params.package_code and not automatic_URL:
-#            # Pre-filter rooms that actually have inventory available
-#            valid_rooms = [
-#                r for r in results.get("available_rooms", [])
-#                if r.get('roomsLeft') is not None and r.get('roomsLeft') > 0
-#            ]
-#
-#            if valid_rooms:
-#                log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
-#                for available_room in valid_rooms:
-#                    log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {available_room.get('roomsLeft')}")
-#            else:
-#                log(f"\tNo alternative room inventory returned by the booking engine.")
-#        return
         if url_params.package_code and not automatic_URL:
-            log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
-            for available_room in results.get("available_rooms", []):
-                # key is 'rooms_left' (as produced above); price may be None
-                rooms_left = available_room.get('rooms_left')
-                room_price = available_room.get('price')
-                if rooms_left is not None and rooms_left > 0 and room_price is not None:
-                    log(f"\t{available_room.get('name')} {room_price:.2f} - Rooms Left {rooms_left}")
+            # Pre-filter rooms that actually have inventory available
+            valid_rooms = [
+                r for r in results.get("available_rooms", [])
+                if r.get('roomsLeft') is not None and r.get('roomsLeft') > 0
+            ]
+
+            if valid_rooms:
+                log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
+                for available_room in valid_rooms:
+                    log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {available_room.get('roomsLeft')}")
+            else:
+                log(f"\tNo alternative room inventory returned by the booking engine.")
         return
 
     obc_value = float(obc or 0.0)
