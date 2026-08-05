@@ -1189,9 +1189,10 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 sitting_type = selection.get('sittingType', '')
                 sitting_time = selection.get('sittingTime', '')
                 dining_string = f"\tDining: {sitting_type} {sitting_time}"
-                raw_table_size = selection.get("tableSize", "")
-                if raw_table_size and str(raw_table_size) != "00":
-                    padded_table = str(raw_table_size).zfill(2)
+                raw_table_size = str(selection.get("tableSize", "") or "")
+                # tableSize can be a non-numeric code (e.g. "S") - only zero-pad digits
+                padded_table = raw_table_size.zfill(2) if raw_table_size.isdigit() else raw_table_size
+                if padded_table and padded_table != "00":
                     dining_string += f" Table Size: {padded_table}"
                 log(dining_string)
 
