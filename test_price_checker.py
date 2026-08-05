@@ -197,6 +197,41 @@ def test_watchlist_cruise_not_for_sale_sends_notification(mock_global_config, ba
     assert "Not For Sale" in mock_global_config.notify.call_args[1]['body']
 
 
+def test_available_rooms_listed_when_sold_out(mock_global_config, base_account_info):
+    """
+    The 'Available Rooms' fallback must actually print the alternatives:
+    check_if_room_is_available produces records keyed 'rooms_left' (snake_case),
+    so the consumer must filter on that key - a camelCase 'roomsLeft' lookup
+    leaves the list permanently empty. Rooms with no inventory are skipped, and
+    a record with price None is skipped rather than crashing the ':.2f' format.
+    """
+    mock_watchlist_payload = {
+        "url": "https://www.royalcaribbean.com/booking/landing?shipCode=WN&sailDate=2026-11-15&packageCode=WN07X123&r0d=SUITE",
+        "stateroomType": "SUITE"
+    }
+    alternates = [
+        {"name": "Grand Suite GS", "price": 4321.0, "rooms_left": 3},
+        {"name": "Junior Suite J3", "price": 2222.0, "rooms_left": 0},  # sold out - skipped
+        {"name": "Owner Suite OS", "price": None, "rooms_left": 2},     # no price - skipped, not crashed
+    ]
+    real_registry = ShipRegistry()
+
+    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(False, alternates)), \
+         patch('CheckRoyalCaribbeanPrice.log') as mock_log:
+        get_cruise_price(
+            account_info=base_account_info,
+            booking=mock_watchlist_payload,
+            ship_dictionary=real_registry,
+            automatic_URL=False
+        )
+
+    out = "\n".join(str(call[0][0]) for call in mock_log.call_args_list)
+    assert "Available Rooms" in out, f"Available Rooms header missing. Logs: {out}"
+    assert "Grand Suite GS 4321.00 - Rooms Left 3" in out
+    assert "Junior Suite J3" not in out
+    assert "Owner Suite OS" not in out
+
+
 # =====================================================================
 # ITEM 2 TESTS: get_orders() Context Instantiation Scope Verification
 # =====================================================================
