@@ -36,6 +36,23 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 USER_AGENT_WEB = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
 APPKEY_WEB = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 
+# API timeout / retry behavior
+# Seconds before giving up on an API call so a stalled connection cannot hang the run
+# forever. Override with requestTimeout in config.yaml if the API is slow for you.
+REQUEST_TIMEOUT = 30
+# Shorter timeout for quick auxiliary endpoints (check-in status, loyalty summary,
+# sample-config download) where a long wait is not worth it
+SHORT_REQUEST_TIMEOUT = 10
+# How API failures are handled when a call site does not choose explicitly:
+# "retry" (back off and try again), "skip" (log and move on), "exit" (stop the run)
+DEFAULT_ON_FAILURE = "retry"
+# Retry attempts and exponential backoff base for on_failure="retry" calls
+# (sleep = RETRY_BACKOFF_BASE ** attempt seconds between attempts: 2s, 4s)
+MAX_RETRIES = 3
+RETRY_BACKOFF_BASE = 2
+# Cool-down between accounts when checking more than one, to avoid hammering the API
+ACCOUNT_COOLDOWN_SECONDS = 5
+
 # ANSI color codes
 RESET = '\033[0m' # Resets color to default
 
@@ -456,7 +473,7 @@ class CruiseAppConfig:
     """
     # Global Settings
     date_display_format: Optional[str] = "%x"
-    request_timeout: int = 30
+    request_timeout: int = REQUEST_TIMEOUT
     log_file: Optional[str] = None
     apprise_urls: List[str] = field(default_factory=list)
     notify_on_error: bool = False
@@ -524,8 +541,8 @@ def _execute_api_request(
     data: Optional[Union[str, dict]] = None,
     headers: Optional[dict] = None,
     timeout: Optional[int] = None,
-    on_failure: str = "retry",
-    max_retries: int = 3
+    on_failure: str = DEFAULT_ON_FAILURE,
+    max_retries: int = MAX_RETRIES
 ) -> Optional[requests.Response]:
     """
     Unified API execution engine for all cruise line network interactions.
@@ -542,7 +559,7 @@ def _execute_api_request(
     # Resolve the effective timeout: an explicit caller override wins, then the
     # user-configured requestTimeout, then the 30-second baseline default
     if timeout is None:
-        timeout = config.request_timeout if config else 30
+        timeout = config.request_timeout if config else REQUEST_TIMEOUT
 
     # Start with any caller-specified override headers, or an empty base
     final_headers = headers.copy() if headers else {}
@@ -579,7 +596,7 @@ def _execute_api_request(
                 return response  # Success!
             except Exception as e:
                 if attempt < max_retries:
-                    backoff_time = 2 ** attempt
+                    backoff_time = RETRY_BACKOFF_BASE ** attempt
                     logging.warning(f"Attempt {attempt}/{max_retries} failed for {url}: {e}. Retrying in {backoff_time}s...")
                     time.sleep(backoff_time)
                 else:
@@ -926,7 +943,7 @@ def login(account_info: AccountInfo) -> APIAccess:
     # login cookie container and initial OAuth handshakes are preserved perfectly
     # without running into downstream fallback session side-effects.
     try:
-        response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data, timeout=30)
+        response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data, timeout=REQUEST_TIMEOUT)
     except Exception as e:
         log(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
         sys.exit(1)
@@ -1051,7 +1068,7 @@ def get_checkin_info(account_info: AccountInfo,
         (the check-in opening moment, or None when there is nothing dated to show).
     """
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v3/ships/voyages/{ship_code}{sail_date}/enriched'
-    response = _execute_api_request(account_info, "GET", url, timeout=10)
+    response = _execute_api_request(account_info, "GET", url, timeout=SHORT_REQUEST_TIMEOUT)
     if response is None:
         return "", None
     payload = response.json().get("payload")
@@ -1872,7 +1889,7 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
     try:
         response = requests.get(api_URL, params=request_params, headers=headers,
-                                timeout=config.request_timeout if config else 30)
+                                timeout=config.request_timeout if config else REQUEST_TIMEOUT)
     except Exception as err:
         log (f"Unable to check room availability with server ({err})")
         return False, []
@@ -2610,7 +2627,7 @@ def get_checkin_statuses(account_info: AccountInfo, reservation_id: str, guest_I
             url=api_url,
             data=json.dumps(payload),
             headers=headers,
-            timeout=10,
+            timeout=SHORT_REQUEST_TIMEOUT,
             on_failure="retry"
     )
 
@@ -2655,7 +2672,7 @@ def get_boarding_pass(account_info: AccountInfo, booking: Dict[str, Any], guest_
             url=api_url,
             data=json.dumps(payload),
             headers=headers,
-            timeout=10,
+            timeout=SHORT_REQUEST_TIMEOUT,
             on_failure="retry"
     )
 
@@ -2681,7 +2698,7 @@ def get_number_of_nights(account_info: AccountInfo, loyalty_number: str) -> Tupl
     response = _execute_api_request(
         account_info, "GET", url,
         params={'loyaltyNumber': loyalty_number},
-        timeout=10,
+        timeout=SHORT_REQUEST_TIMEOUT,
         on_failure="retry"
     )
 
@@ -3306,7 +3323,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         minimum_saving_alert=minimum_saving_alert,
         notify_on_error=data.get("notifyOnError", False),
         show_promos=data.get("showPromos", True),
-        request_timeout=int(data.get("requestTimeout", 30)),
+        request_timeout=int(data.get("requestTimeout", REQUEST_TIMEOUT)),
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
         apobj=apobj,
@@ -3489,7 +3506,7 @@ def main() -> None:
                 account_info.access.session.close()
             if len(config.accounts) > 1:
                 log("Sleeping for 5 seconds to allow API to cool down between accounts")
-                time.sleep(5)
+                time.sleep(ACCOUNT_COOLDOWN_SECONDS)
 
         # Process the anonymous prospective cruise watchlist using the config dataclass property
         if getattr(config, 'prospective_cruises', None):
@@ -3566,7 +3583,7 @@ if __name__ == "__main__":
             try:
                 print("Downloading sample configuaration file...")
                 url = 'https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/SAMPLE-SIMPLE-config.yaml'
-                response = requests.get(url, timeout=10)
+                response = requests.get(url, timeout=SHORT_REQUEST_TIMEOUT)
                 response.raise_for_status()
 
                 local_file_name = "config.yaml"

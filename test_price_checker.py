@@ -2246,3 +2246,19 @@ def test_derive_balance_due_states():
     # nothing to go on -> unknown, never "paid"
     assert derive_balance_due({"balanceDue": None, "balanceDueAmount": None}) is None
     assert derive_balance_due({}) is None
+
+
+# =====================================================================
+# API TIMEOUT / RETRY CONSTANTS
+# Tunables live in the constants section rather than as scattered
+# magic numbers; pin their values so a change is a conscious decision.
+# =====================================================================
+
+def test_timeout_retry_constants():
+    import CheckRoyalCaribbeanPrice as crccl
+    assert crccl.REQUEST_TIMEOUT == 30
+    assert crccl.SHORT_REQUEST_TIMEOUT == 10
+    assert crccl.MAX_RETRIES == 3
+    assert crccl.RETRY_BACKOFF_BASE == 2
+    assert crccl.DEFAULT_ON_FAILURE == "retry"
+    assert crccl.ACCOUNT_COOLDOWN_SECONDS == 5
