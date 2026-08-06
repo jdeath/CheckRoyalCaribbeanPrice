@@ -184,6 +184,10 @@ class TestCruiseFareAlerts:
         body = apobj.notify.call_args.kwargs["body"]
         assert "Rebook!" in body
         assert "2500.00" in body and "3000.00" in body
+        # Bodies are declared plain text so Apprise converts \n per-service
+        # (HTML email would otherwise collapse them to one line - issue #76)
+        from apprise import NotifyFormat
+        assert apobj.notify.call_args.kwargs.get("body_format") == NotifyFormat.TEXT
 
     def test_equal_price_stays_silent(self):
         apobj, logged = run_cruise_scenario(results={**AVAILABLE, "base_fare": fare(3000.0)}, paid=3000.0)
