@@ -2145,10 +2145,12 @@ def test_checkin_payment_summary_table_renders_and_flags():
     crccl.checkin_payment_rows.clear()
     crccl.checkin_payment_rows.extend([
         # later sail date first, to prove the table sorts ascending
-        {"name": "Freedom of the Seas #8235", "sail_date": "20271018",
+        {"name": "Freedom of the Seas (8487)", "reservation": "1234567 (Anniversary)",
+         "sail_date": "20271018",
          "checkin_label": "Opens 2027-09-02", "final_payment": date(2027, 7, 20),
          "past_final_payment": False, "balance_due": True},
-        {"name": "Icon of the Seas #11521", "sail_date": "20260822",
+        {"name": "Icon of the Seas (11418)", "reservation": "7654321",
+         "sail_date": "20260822",
          "checkin_label": "Boarding 10:30", "final_payment": date(2026, 5, 24),
          "past_final_payment": True, "balance_due": False},
     ])
@@ -2159,7 +2161,10 @@ def test_checkin_payment_summary_table_renders_and_flags():
 
     out = "\n".join(str(call[0][0]) for call in mock_log.call_args_list)
     assert "Upcoming Check-In & Final Payment Dates" in out
-    assert "Icon of the Seas #11521" in out and "Freedom of the Seas #8235" in out
+    assert "Reservation" in out                          # new column header present
+    assert "Icon of the Seas (11418)" in out and "Freedom of the Seas (8487)" in out
+    assert "7654321" in out                              # reservation number shown
+    assert "1234567 (Anniversary)" in out                # friendly name rides with the reservation
     assert "Boarding 10:30" in out                       # assigned boarding time shown
     assert "(paid)" in out                               # no balance due -> paid
     assert "(balance due)" in out                        # owed, before deadline

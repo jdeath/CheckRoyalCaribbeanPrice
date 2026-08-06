@@ -1242,15 +1242,17 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         # Include the room number so multiple cabins on the same sailing are distinct.
         summary_name = ship_dictionary.get_ship(ship_code)
         if stateroom_number:
-            summary_name += f" #{stateroom_number}"
-        if str(reservation_ID) in reservation_friendly_names:
-            summary_name += f" ({reservation_friendly_names.get(str(reservation_ID))})"
+            summary_name += f" ({stateroom_number})"
+        summary_reservation = str(reservation_ID)
+        if summary_reservation in reservation_friendly_names:
+            summary_reservation += f" ({reservation_friendly_names.get(summary_reservation)})"
         balance_due = derive_balance_due(booking)
         balance_due_amount = booking.get("balanceDueAmount")
         if str(reservation_ID) in config.paid_reservations:
             balance_due = False   # user vouches for it (reservationsPaidInFull)
         checkin_payment_rows.append({
             "name": summary_name,
+            "reservation": summary_reservation,
             "sail_date": sail_date,
             "checkin_label": checkin_label or "TBD",
             "final_payment": final_payment_date,
@@ -3356,7 +3358,7 @@ def print_checkin_payment_table() -> None:
 
     rows = sorted(checkin_payment_rows, key=lambda r: r["sail_date"] or "")
 
-    headers = ("Sail Date", "Ship (Room)", "Check-In", "Final Payment")
+    headers = ("Sail Date", "Ship (Room)", "Reservation", "Check-In", "Final Payment")
     table = []
     pay_colors = []
     for r in rows:
@@ -3383,7 +3385,7 @@ def print_checkin_payment_table() -> None:
         else:
             pay = "-"
             pay_colors.append("")
-        table.append((sail, r["name"], r["checkin_label"], pay))
+        table.append((sail, r["name"], r.get("reservation", "-"), r["checkin_label"], pay))
 
     # Size each column to the widest of its header/cells. The stored values are ANSI-free;
     # color is applied only at print time so it never skews this width math.
