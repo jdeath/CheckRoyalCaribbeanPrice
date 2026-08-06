@@ -329,13 +329,14 @@ def get_ships_web() -> List[Dict[str, str]]:
     for ship in ships:
         ship_code = ship.get("shipCode")
         name = ship.get("name")
-        ship_names.append({'code': ship_code, 'name': name})
+        ship_names.append({'code': ship_code, 'name': name.title()})
 
+        # Hero now listed
         # HARDCODING GUARD: The server-side staging environment utilizes 'HE' for
         # preliminary vessel mapping profiles before they hit the global catalog.
-        if ship_code == "HM":
-            # Force Hero until it is added to the API
-            ship_names.append({'code': 'HE', 'name': 'Hero of the Seas'})
+        #if ship_code == "HM":
+        #    # Force Hero until it is added to the API
+        #    ship_names.append({'code': 'HE', 'name': 'Hero of the Seas'})
 
     return ship_names
 
