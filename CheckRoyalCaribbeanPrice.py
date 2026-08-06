@@ -1632,15 +1632,17 @@ def get_cruise_price(account_info: AccountInfo,
         #       do we want to use this commented-out block instead
         if url_params.package_code and not automatic_URL:
             # Pre-filter rooms that actually have inventory available
+            # (key is 'rooms_left' as produced by check_if_room_is_available; price may be None)
             valid_rooms = [
                 r for r in results.get("available_rooms", [])
-                if r.get('roomsLeft') is not None and r.get('roomsLeft') > 0
+                if r.get('rooms_left') is not None and r.get('rooms_left') > 0
+                and r.get('price') is not None
             ]
 
             if valid_rooms:
                 log(f"\tAvailable Rooms (non-discounted price) for {url_params.number_of_adults} Adult and {url_params.number_of_children} Child on This Sailing Are:")
                 for available_room in valid_rooms:
-                    log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {available_room.get('roomsLeft')}")
+                    log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {available_room.get('rooms_left')}")
             else:
                 log(f"\tNo alternative room inventory returned by the booking engine.")
         return
