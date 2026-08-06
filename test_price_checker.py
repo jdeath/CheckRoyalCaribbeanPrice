@@ -500,10 +500,12 @@ def test_unpack_ledger_pricing_casing():
     assert prepaid_grats_flag is True
 
 def test_dining_table_zero_padding():
-    """Verify table size integers are correctly zero-padded for the display string."""
+    """Verify numeric table sizes are zero-padded while non-numeric codes pass through as-is."""
     mock_selections = [
         {"sittingType": "TRADITIONAL", "sittingTime": "05:00 PM", "tableSize": 4},
-        {"sittingType": "TRADITIONAL", "sittingTime": "08:30 PM", "table_size": "06"}
+        {"sittingType": "TRADITIONAL", "sittingTime": "08:30 PM", "table_size": "06"},
+        {"sittingType": "TRADITIONAL", "sittingTime": "05:00 PM", "tableSize": "S"},
+        {"sittingType": "TRADITIONAL", "sittingTime": "05:00 PM", "tableSize": "0"},
     ]
 
     formatted_strings = []
@@ -512,14 +514,18 @@ def test_dining_table_zero_padding():
         sitting_time = selection.get('sittingTime') or selection.get('sitting_time', '')
         dining_string = f"Dining: {sitting_type} {sitting_time}".strip()
 
-        raw_table_size = selection.get("table_size") or selection.get("tableSize", "")
-        if raw_table_size and str(raw_table_size) != "00":
-            padded_table = str(raw_table_size).zfill(2)
+        raw_table_size = str(selection.get("table_size") or selection.get("tableSize", "") or "")
+        padded_table = raw_table_size.zfill(2) if raw_table_size.isdigit() else raw_table_size
+        if padded_table and padded_table != "00":
             dining_string += f" Table Size: {padded_table}"
         formatted_strings.append(dining_string)
 
     assert formatted_strings[0] == "Dining: TRADITIONAL 05:00 PM Table Size: 04"
     assert formatted_strings[1] == "Dining: TRADITIONAL 08:30 PM Table Size: 06"
+    # Non-numeric codes must not be zero-padded ("S" was rendering as "0S")
+    assert formatted_strings[2] == "Dining: TRADITIONAL 05:00 PM Table Size: S"
+    # A bare "0" means no table size, same as the "00" sentinel
+    assert formatted_strings[3] == "Dining: TRADITIONAL 05:00 PM"
 
 def test_login_token_decoding_resilience():
     """Verify script breaks predictably if JWT token format is corrupt."""
@@ -856,7 +862,9 @@ def test_parse_dining_includes_table_size(mock_booking_with_dining_and_checkin):
                 "sittingType": mock_booking_with_dining_and_checkin["dining"]["type"],
                 "sittingTime": mock_booking_with_dining_and_checkin["dining"]["time"],
                 "tableSize": mock_booking_with_dining_and_checkin["dining"]["tableSize"]
-            }
+            },
+            # Non-numeric table-size code straight from the API - must not be zero-padded
+            {"sittingType": "TRADITIONAL", "sittingTime": "08:30 PM", "tableSize": "S"}
         ],
         "prices": [{"priceTypeCode": "GROSS_TOTALS", "amount": 2662.96}]
     }
@@ -871,6 +879,8 @@ def test_parse_dining_includes_table_size(mock_booking_with_dining_and_checkin):
 
         log_outputs = [call[0][0] for call in mock_log.call_args_list]
         assert any("Table Size: 04" in s for s in log_outputs), "Table size formatting parameter missing from output logs!"
+        assert any("Table Size: S" in s for s in log_outputs), "Non-numeric table-size code missing from output logs!"
+        assert not any("Table Size: 0S" in s for s in log_outputs), "Non-numeric table-size code was wrongly zero-padded!"
 
 
 def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_checkin):
