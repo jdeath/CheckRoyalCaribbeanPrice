@@ -1752,6 +1752,26 @@ def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch
         assert config.reservation_names['7654321'] == "${RCCL_TEST_UNSET_VAR}"
 
 
+def test_load_config_objects_accepts_both_apprise_test_spellings(tmp_path):
+    """
+    appriseTest is this codebase's spelling, but the original code and README
+    document apprise_test - both must enable the apprise test path so configs
+    migrated from the original keep working.
+    """
+    for key in ("appriseTest", "apprise_test"):
+        yaml_content = f"""
+    accountInfo:
+      - username: "test_user"
+        password: "password123"
+    {key}: true
+    """
+        config_file = tmp_path / f"config_{key}.yaml"
+        config_file.write_text(yaml_content)
+        with patch('CheckRoyalCaribbeanPrice.setup_hybrid_logging'):
+            config = load_config_objects(str(config_file))
+            assert config.apprise_test is True, f"{key} was not honored"
+
+
 def test_exception_block_scoping_resilience():
     """
     Verify that an uninitialized config variable doesn't corrupt the

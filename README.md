@@ -60,20 +60,21 @@ If the code saved you money or correctly predicted your cabin number, star the r
 ## Install (Recommended Option, any Operating System Windows/Linux/Mac, and you can edit code to your liking)
 1. Install python3 (3.12 works fine) `https://www.python.org/downloads/`
 1. Download the [CheckRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/CheckRoyalCaribbeanPrice.py) from this repo or `git clone https://github.com/jdeath/CheckRoyalCaribbeanPrice.git`
-1. `pip install requests Apprise`
+1. `pip install requests Apprise curl_cffi` (curl_cffi is optional but recommended) 
 
 ## Install (Greasemonkey script, runs in your browser, no Python needed)
-This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox and iOS using userscripts extension for Safari and Gear Browser. 
+This only runs cruise addon price checking (no notifcation or cabin price checking). Coded with AI, so be warned. Only tested on Windows Firefox, Windows Chrome, and iOS using userscripts extension for Safari and Gear Browser. 
 
 1. Install Greasemonkey/TamperMonkey Extension for your specific browser. Follow only step 1 at: [https://greasyfork.org](https://greasyfork.org)
    - For iOS, recommend installing the free Gear Browser option in link above. Much easier to get working than the userscripts extension. The paid TamperMonkey options have not been tested.
+   - For Computer, Firefox with Greasemonkey is recommended. Chrome requires extra steps. If use TamperMoneky on Chrome, you must right click Tampermonkey icon, click manage, and turn on "Allow User Scripts". You will also need to click "Always Allow" when run for first time.
 1. Once browser or browser extension installed, click [this](https://github.com/jdeath/CheckRoyalCaribbeanPrice/raw/refs/heads/main/CheckRoyalCaribbeanPrice.user.js) link to install userscript from this repo. If using iOS Gear Browser, must click in that browser.
 1. Log into Royal/Celebrity website in browser with extension installed
-1. Click "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
-1. You need to watch the logs for any price drops
+1. Click blue "Price Check" button that now appears at bottom right of page when logged into Royal Caribbean website.
+1. You need to watch the logs for any price drops.
   
 ## Install (iOS / iPhone)
-iOS can run a stripped down version or an almost full version that supports everything except apprise! Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
+iOS can run a stripped down version or an almost full version that supports everything except apprise! You can also run the GreaseMonkey version above. Stripped down version is a little easier to setup, but setup must be repeated if code needs an upgrade. Full version is harder to setup, but much simpler to upgrade.
 
 ### Stripped down version
 This will run a stripped down version to work on the free Python iPhone app. It is a little easier to setup, but need to repeat setup if a new version comes out.
@@ -343,7 +344,7 @@ If you would like to assign names to cruise reservation numbers to more easily c
 ```yaml
 reservationFriendlyNames:
   '1234567': "Summer Cruise"
-  '8912345': "Winter Cruise
+  '8912345': "Winter Cruise"
 ```
 
 To override the system's default date format, set the dateDisplayFormat config value to your desired format:
@@ -369,6 +370,25 @@ notifyOnError: true
 To display active sitewide promotions (flash sales, percentage-off deals) for each of your sailings, set showPromos to true. This queries the Royal Caribbean promotions API and shows any current deals with their discount, valid dates, and countdown timers.
 ```yaml
 showPromos: true
+```
+
+If you see timeout errors because the Royal Caribbean API is slow for you, set requestTimeout to raise the number of seconds the script waits for each API response before retrying/giving up. If not set, defaults to 30 seconds.
+```yaml
+requestTimeout: 60
+```
+
+The end-of-run summary table (see Output section) shows whether each cruise is paid in full. Travel agent bookings often expose no payment status via the API, so those show as "status unknown". If you have verified with your travel agent that a reservation is paid in full, list it here to show it as paid:
+```yaml
+reservationsPaidInFull:
+  - '1234567'
+  - '8912345'
+```
+
+To keep passwords out of your config file, any config value that is exactly `${VAR_NAME}` is replaced with that environment variable when the config is loaded. Useful for Docker/Home Assistant setups or shared machines.
+```yaml
+accountInfo:
+  - username: "user@gmail.com"
+    password: "${RCCL_PASSWORD}" # reads the RCCL_PASSWORD environment variable
 ```
 
 
@@ -482,6 +502,15 @@ Mary   (1234) has best price for VOOM SURF + STREAM Internet Package of: 16.99 (
 8/28/2026 Ovation of the Seas BALCONY XB (Loyalty, Residency Discount): You have best price of 1000.0 USD (now 1613.08 USD) #Impact of discounts 
 ```
 If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel. Notice on the 2nd reservation, the official room is GTY but the excursions show the currently assigned room in the Royal backend system. This room is likely what you will get!
+
+At the end of the run, a summary table shows the check-in opening/boarding time and final payment date for every booked sailing, sorted by sail date. The final payment column is color coded: green if paid in full, yellow if a balance is still due (or the API does not report a status, common for travel agent bookings - see reservationsPaidInFull above), and red if a balance is due past the final payment date.
+```
+Upcoming Check-In & Final Payment Dates
+Sail Date  Ship (Room)                  Reservation             Check-In        Final Payment
+---------  ---------------------------  ----------------------  --------------  -----------------------
+09/11/25   Quantum of the Seas (1234)   1234567 (Summer Cruise) Boarding 11:30  06/12/25 (paid)
+09/15/25   Brilliance of the Seas (GTY) 8912345                 Opens 08/28/25  06/16/25 (balance due)
+```
 
 ## Automating
 1. Linux: Put in a cron job, if running in linux, I am sure you know how! Be sure to either provide optional argument for the `config.yaml` path or be sure to execute the script from within the directory where the configuration script is present.
