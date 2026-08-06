@@ -1,0 +1,3 @@
+# Only needed for building standalone executables, not for running the script
+-r requirements.txt
+pyinstaller

@@ -219,11 +219,24 @@ def _execute_api_request(
             if status_code is not None and 400 <= status_code < 500:
                 return _report_failure(e)
 
-        # Transient failures (connection errors, timeouts, 5xx) reach this backoff loop:
-        if attempt < MAX_ATTEMPTS:
-            wait = 2 ** attempt
-            logging.warning(f"API request failed ({failure}); retrying in {wait}s (attempt {attempt} of {MAX_ATTEMPTS})")
-            time.sleep(wait)
+    # PowerShell 5.x / classic conhost also need virtual-terminal processing enabled or
+    # the ANSI color escapes print literally (e.g. a raw "<-[33m..."). Harmless if already
+    # on (Windows Terminal) or unsupported; failures are ignored.
+    try:
+        import ctypes
+        _kernel32 = ctypes.windll.kernel32
+        _handle = _kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        _mode = ctypes.c_uint32()
+        if _kernel32.GetConsoleMode(_handle, ctypes.byref(_mode)):
+            # 0x0004 = ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            _kernel32.SetConsoleMode(_handle, _mode.value | 0x0004)
+    except Exception:
+        pass
+
+# Some terminals (like MobaXterm) were having trouble with printing unicode up arrow/down arrow
+# This code detects it; add to the list as more are found (if needed)
+problem_envs = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]
+has_terminal_issues = any(k in os.environ for k in problem_envs)
 
     # --- We only reach this point if the loop finished and ALL attempts failed ---
     return _report_failure(failure)
@@ -233,12 +246,53 @@ def print_response(response: Union[Dict[str, Any], List[Any], str, requests.Resp
     """
     Debug utility to format and display raw API responses.
 
-    Transforms nested API response JSON payloads or dictionary objects into standard,
-    indented strings for readable terminal diagnosis during live testing.
-    """
-    json_resp = json.dumps(response, indent=2)
-    log("API returned output:")
-    log(json_resp)
+        user_input = int(user_input)    
+        if user_input < numSailings and user_input >= 0:
+            sailing = sailings[user_input]
+            print("")
+            print(f"Browsing for {shipname} sailing on {sailing['displayDate']} ({sailing['description']})")
+            print("")
+            
+            flush_print_buffer()
+            ports = getSailingDetailsWeb(shipcode,sailing['date'])
+            print("")
+            
+            isRoyal = "of the Seas" in shipname
+            
+            if isRoyal:
+                print("Direct Link To Royal Caribbean Cruise Planner Website: ")
+                linkRoot = "https://www.royalcaribbean.com/account/cruise-planner/category/beverage"
+            else:
+                print("Direct Link To Celebrity Cruise Planner Website: ")
+                linkRoot = "https://www.celebritycruises.com/account/cruise-planner/category/drinks"
+                
+            print(f"{linkRoot}?bookingId=123456&shipCode={shipcode}&sailDate={sailing['date']}")
+            print("")
+            
+            
+            numAdults = 2
+            numChildren = 0
+            GetCruisePriceFromAPI(currency, shipcode+sailing['voyageCode'], sailing['date'],numAdults, numChildren, isRoyal)
+            print("")
+            
+            print("Gathering list of products.  This may take a few minutes; please be patient.")
+            print("These are public prices, sale prices for you could be less")
+            print("")
+            printAllProducts(shipcode,sailing['date'],sailing['duration'],currency,args.sortkey,args.sortorder,args.watchlistcodes,ports)
+            
+            print("")
+            print("Gathering list of activities.  This may take a few minutes; please be patient.")
+            flush_print_buffer()
+            activities = getAllActivitiesWeb(shipcode,sailing['date'])
+            printAllActivities(activities, args.activitysort)
+            
+            print("")
+            print("Gathering list of Main Dining Room Menus.  This may take a few minutes; please be patient.")
+            flush_print_buffer()
+            mdrName = getMDRLocations(shipcode,sailing['date'],isRoyal)
+            printMDRMenus(shipcode, sailing['date'],mdrName,ports)
+    else:
+        print("Invalid ship selection")
 
 
 def days_between(sail_date: str, activity_date: str) -> str:
@@ -1022,8 +1076,50 @@ def print_all_activities(activities: List[Dict[str, Any]], sort_order: str) -> N
         sorted_activities = activities
 
     for activity in sorted_activities:
-        if not activity:
-            continue
+        productTitle = sanitizeString(activity.get("productTitle"))
+        location = sanitizeString(activity.get("location"))
+        offeringDate = datetime.strptime(activity.get("offeringDate"), "%Y%m%d").strftime("%B %d, %Y")
+        offeringTime = activity.get("offeringTime")
+        day = activity.get("day")
+        print(f"{productTitle}\t {location} {GREEN}{offeringDate} (Day {day}) {offeringTime}{RESET}")
+
+    
+def _extract_json_array(text, key):
+    """Find "key": [ ... ] handling arbitrary nesting."""
+    m = re.search(rf'"{re.escape(key)}"\s*:\s*\[', text)
+    if not m:
+        return None
+    start = m.end() - 1  # position of opening [
+    depth, i = 0, start
+    in_string, escape = False, False
+    while i < len(text):
+        ch = text[i]
+        if escape:
+            escape = False
+        elif ch == "\\" and in_string:
+            escape = True
+        elif ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return json.loads(text[start:i + 1])
+        i += 1
+    return None
+
+
+def GetCruisePriceFromAPI(currency, packageCode, sailDate, numAdults, numChildren, isRoyal):
+    # The cruiseSearch graph (www.royalcaribbean.com/cruises/graph) only indexes
+    # Royal Caribbean sailings, so Celebrity package codes came back with an empty
+    # cruises list and were mislabeled "Sailing is sold out" (issue #77). The host
+    # in that URL is ignored by the backend, so it cannot just be pointed at
+    # Celebrity. Instead price both brands off the brand-specific room-selection
+    # page - the same source the main script's checkIfRoomIsAvailable() uses. Its
+    # per-class invoice total matches the old cruiseSearch price for Royal sailings.
+    formattedSailDate = sailDate[0:4] + "-" + sailDate[4:6] + "-" + sailDate[6:8]
 
         product_title = sanitize_string(activity.get("productTitle", ""))
         location = sanitize_string(activity.get("location", ""))
@@ -1118,14 +1214,67 @@ def get_cruise_price_from_API(
         is_royal (bool): True for Royal Caribbean, False for Celebrity Cruises.
     """
     headers = {
-        'User-Agent': USER_AGENT_WEB,
-        'Accept': 'text/x-component',
-        'Accept-Language': 'en-US,en;q=0.9',
+        'user-agent': user_agent_web,
+        'accept': 'text/x-component',
+        'accept-language': 'en-US,en;q=0.9',
         'RSC': '1',
     }
 
-    # Format incoming 'YYYYMMDD' string seamlessly to standard 'YYYY-MM-DD' query compliance
-    formatted_sail_date = f"{sail_date[0:4]}-{sail_date[4:6]}-{sail_date[6:8]}"
+    params = {
+        'packageCode': packageCode,
+        'sailDate': formattedSailDate,
+        'country': 'USA',
+        'selectedCurrencyCode': currency,
+        'shipCode': packageCode[0:2],
+        'cabinClassType': 'INTERIOR',  # still returns every stateroom class
+        'roomIndex': '0',
+        'r0a': numAdults,
+        'r0c': numChildren,
+        'r0b': 'n',
+        'r0r': 'n',
+        'r0s': 'n',
+        'r0q': 'n',
+        'r0t': 'n',
+        'r0d': 'INTERIOR',
+        'r0D': 'y',
+        'rgVisited': 'true',
+        'r0C': 'y',
+    }
+
+    if isRoyal:
+        apiURL = 'https://www.royalcaribbean.com/room-selection/type-and-subtype'
+    else:
+        apiURL = 'https://www.celebritycruises.com/room-selection/type-and-subtype'
+
+    try:
+        resp = requests.get(apiURL, params=params, headers=headers)
+        rooms = _extract_json_array(resp.text, "rooms")
+    except Exception:
+        rooms = None
+
+    stateroomTypes = rooms[0].get("options", {}).get("stateroomTypes", []) if rooms else []
+    if not stateroomTypes:
+        print("         Sailing is sold out")
+        return
+
+    numPassengers = int(numAdults) + int(numChildren)
+    print("Cheapest available cabins for this sailing:")
+    for stateroomType in stateroomTypes:
+        cabinType = stateroomType.get("name")
+
+        # Cheapest bookable sub-category in this class (some are sold out / unpriced)
+        cheapestPrice = None
+        for stateroomSubtype in stateroomType.get("stateroomSubtypes", []):
+            pricing = stateroomSubtype.get("pricing") or {}
+            invoice = pricing.get("invoice") or {}
+            total = invoice.get("total")
+            if total is not None and (cheapestPrice is None or total < cheapestPrice):
+                cheapestPrice = total
+
+        if cheapestPrice is None:
+            print(f"\t{cabinType} sold out")
+        else:
+            print(f"\t{GREEN}{cheapestPrice} {currency}{RESET}: Cheapest {cabinType} Price for {numPassengers}")
 
     # A single cabinClassType/r0d still makes the endpoint return every stateroom class
     params = {
