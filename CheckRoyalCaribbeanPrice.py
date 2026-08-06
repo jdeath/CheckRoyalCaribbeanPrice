@@ -1184,7 +1184,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         reservation_display = f"Reservation #{reservation_ID}"
         if str(reservation_ID) in reservation_friendly_names:
             reservation_display += f" ({reservation_friendly_names.get(str(reservation_ID))})"
-        log(f"\n{reservation_display}")
+        log(f"\n{BLUE}{reservation_display}{RESET}")
 
         log(f"{config.format_date(sail_date)} {ship_dictionary.get_ship(ship_code)} Room {stateroom_number} (In this cabin: {metrics['passenger_names']})")
 
@@ -3510,7 +3510,7 @@ def main() -> None:
 
         # Process the anonymous prospective cruise watchlist using the config dataclass property
         if getattr(config, 'prospective_cruises', None):
-            log("\nProcessing Prospective Cruise Watchlist...")
+            log(f"\n{BLUE}Processing Prospective Cruise Watchlist...{RESET}")
 
             # Establish a clean, isolated session for tracking
             anon_session = new_api_session()
