@@ -2237,6 +2237,58 @@ def test_checkin_payment_summary_table_empty_is_silent():
     assert mock_log.call_count == 0
 
 
+def _summary_row(**overrides):
+    from datetime import date as _date
+    row = {
+        "name": "Mock Ship (7123)",
+        "sail_date": "20270815",
+        "checkin_label": "TBD",
+        "final_payment": _date(2027, 5, 20),
+        "past_final_payment": False,
+        "balance_due": None,
+        "dedupe_key": "1234567|20270815",
+    }
+    row.update(overrides)
+    return row
+
+
+def test_summary_table_dedupes_linked_reservations():
+    """A reservation linked between two accounts is seen once per account but
+    must appear once in the table - regardless of which account came first."""
+    import CheckRoyalCaribbeanPrice as crccl
+
+    # Owner's view first (has payment data), linked view second (has none)
+    crccl.checkin_payment_rows.clear()
+    crccl.record_checkin_payment_row(_summary_row(balance_due=False, checkin_label="Boarding 10:30"))
+    crccl.record_checkin_payment_row(_summary_row())
+    assert len(crccl.checkin_payment_rows) == 1
+    assert crccl.checkin_payment_rows[0]["balance_due"] is False
+    assert crccl.checkin_payment_rows[0]["checkin_label"] == "Boarding 10:30"
+
+    # Reverse order: the linked account's empty view must not mask the owner's
+    crccl.checkin_payment_rows.clear()
+    crccl.record_checkin_payment_row(_summary_row())
+    crccl.record_checkin_payment_row(_summary_row(balance_due=True, past_final_payment=True,
+                                                  checkin_label="Opens 2027-06-01"))
+    assert len(crccl.checkin_payment_rows) == 1
+    assert crccl.checkin_payment_rows[0]["balance_due"] is True
+    assert crccl.checkin_payment_rows[0]["past_final_payment"] is True
+    assert crccl.checkin_payment_rows[0]["checkin_label"] == "Opens 2027-06-01"
+
+    crccl.checkin_payment_rows.clear()
+
+
+def test_summary_table_keeps_distinct_reservations():
+    """Different reservations (e.g. two cabins on one sailing) are never merged."""
+    import CheckRoyalCaribbeanPrice as crccl
+    crccl.checkin_payment_rows.clear()
+    crccl.record_checkin_payment_row(_summary_row(dedupe_key="1234567|20270815"))
+    crccl.record_checkin_payment_row(_summary_row(dedupe_key="8912345|20270815",
+                                                  name="Mock Ship (7125)"))
+    assert len(crccl.checkin_payment_rows) == 2
+    crccl.checkin_payment_rows.clear()
+
+
 # =====================================================================
 # ITEM 19: PAYMENT TABLE BALANCE-DUE TRI-STATE
 # A null/absent balanceDue must never render as "(paid)"; only an explicit

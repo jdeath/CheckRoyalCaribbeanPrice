@@ -1267,7 +1267,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         balance_due_amount = booking.get("balanceDueAmount")
         if str(reservation_ID) in config.paid_reservations:
             balance_due = False   # user vouches for it (reservationsPaidInFull)
-        checkin_payment_rows.append({
+        record_checkin_payment_row({
             "name": summary_name,
             "reservation": summary_reservation,
             "sail_date": sail_date,
@@ -1275,6 +1275,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             "final_payment": final_payment_date,
             "past_final_payment": date.today() > final_payment_date,
             "balance_due": balance_due,
+            "dedupe_key": f"{reservation_ID}|{sail_date}",
         })
 
         if balance_due is True:
@@ -3363,6 +3364,30 @@ def derive_balance_due(booking: dict) -> Optional[bool]:
         if isinstance(amount, (int, float)):
             return amount > 0
     return balance_due
+
+
+def record_checkin_payment_row(row: Dict[str, Any]) -> None:
+    """
+    Adds a booking to the end-of-run summary table, merging duplicates.
+
+    Linked reservations appear in every linked account's booking list, so a
+    multi-account run sees the same reservation once per account. Rows are
+    keyed on reservation id + sail date ("dedupe_key"); when a duplicate
+    arrives, the more informative fields win - a definitive balance_due
+    (True/False) beats None, and a real check-in label beats the "TBD"
+    placeholder - because only the owning account's view reliably carries
+    payment data. This keeps the outcome independent of the accountInfo order.
+    """
+    key = row.get("dedupe_key")
+    for existing in checkin_payment_rows:
+        if key is not None and existing.get("dedupe_key") == key:
+            if existing.get("balance_due") is None and row.get("balance_due") is not None:
+                existing["balance_due"] = row["balance_due"]
+                existing["past_final_payment"] = row["past_final_payment"]
+            if existing.get("checkin_label") in (None, "TBD") and row.get("checkin_label") not in (None, "TBD"):
+                existing["checkin_label"] = row["checkin_label"]
+            return
+    checkin_payment_rows.append(row)
 
 
 def print_checkin_payment_table() -> None:
