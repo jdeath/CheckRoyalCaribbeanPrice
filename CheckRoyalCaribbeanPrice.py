@@ -22,14 +22,10 @@ import traceback
 import time
 import yaml
 
-# Apprise is optional (e.g. the iOS full install runs without it): when the
-# package is missing, notifications are disabled and everything else works
-# normally. apobj is only ever constructed when the import succeeded.
-try:
-    from apprise import Apprise, NotifyFormat
-except ImportError:
-    Apprise = None
-    NotifyFormat = None
+# NotifyFormat.TEXT declares notification bodies as plain text so Apprise converts
+# them per-service: HTML email renders the \n line breaks instead of collapsing
+# them to one line (issue #76); plain-text services are passed through unchanged
+from apprise import Apprise, NotifyFormat
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -1634,7 +1630,7 @@ def get_cruise_price(account_info: AccountInfo,
 
         # Only notify if it's a watchlist item (automatic_URL is False)
         if not automatic_URL and apobj is not None:
-            apobj.notify(body=text_string, title='Cruise Room Not Available')
+            apobj.notify(body=text_string, title='Cruise Room Not Available', body_format=NotifyFormat.TEXT)
 
         # TODO: This code block will print the "Available Rooms" line even if the count is 0;
         #       do we want to use this commented-out block instead
@@ -1679,7 +1675,7 @@ def get_cruise_price(account_info: AccountInfo,
             else:
                 log(RED + text_string + RESET)
                 if apobj is not None:
-                    apobj.notify(body=text_string, title='Cruise Price Alert')
+                    apobj.notify(body=text_string, title='Cruise Price Alert', body_format=NotifyFormat.TEXT)
 
         # Sub-branch 2: Booked drop but locked behind final lock dates
         if automatic_URL and past_final_payment_date:
@@ -1702,7 +1698,7 @@ def get_cruise_price(account_info: AccountInfo,
             else:
                 log(RED + text_string + RESET)
                 if apobj is not None:
-                    apobj.notify(body=text_string, title='Cruise Price Alert')
+                    apobj.notify(body=text_string, title='Cruise Price Alert', body_format=NotifyFormat.TEXT)
     else:
         # Current catalog price is equal to or higher than target price thresholds
         temp_string = GREEN + f"{pre_string}: You have the best price of {paid_price:.2f} {url_params.currency_code}" + RESET
@@ -2113,7 +2109,7 @@ def get_new_order_price(
         else:
             log(RED + text + RESET)
             if apobj is not None:
-                apobj.notify(body=text, title='Cruise Addon Price Alert')
+                apobj.notify(body=text, title='Cruise Addon Price Alert', body_format=NotifyFormat.TEXT)
     else:
         # Current price on server is higher than the paid price ("currently best price" path)
         if for_watch:
@@ -3489,7 +3485,7 @@ def main() -> None:
         log(f"Report generated {config.format_date(timestamp.strftime('%Y%m%d'))} {timestamp.strftime('%X')}")
 
         if config.apobj is not None and config.apprise_test:
-            config.apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test')
+            config.apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test', body_format=NotifyFormat.TEXT)
             log("Apprise Notification Sent...quitting")
             sys.exit(0)   # quit() is a site-builtin, absent in frozen builds
 
@@ -3659,6 +3655,6 @@ if __name__ == "__main__":
         if config is not None and config.notify_on_error and config.apobj:
             if len(config.apobj) > 0:
                 body = f"Script failed at {timestamp}\n{error_summary}"
-                config.apobj.notify(body=body, title='Cruise Price Script Error')
+                config.apobj.notify(body=body, title='Cruise Price Script Error', body_format=NotifyFormat.TEXT)
 
         sys.exit(1)

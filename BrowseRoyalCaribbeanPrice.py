@@ -329,7 +329,9 @@ def get_ships_web() -> List[Dict[str, str]]:
     for ship in ships:
         ship_code = ship.get("shipCode")
         name = ship.get("name")
-        ship_names.append({'code': ship_code, 'name': name.title()})
+        # New ships arrive ALL CAPS ("HERO OF THE SEAS"); keep "of the" lowercase so
+        # the --ship matcher below ("<arg> of the Seas") still finds every ship
+        ship_names.append({'code': ship_code, 'name': (name or "").title().replace(" Of The ", " of the ")})
 
         # Hero now listed
         # HARDCODING GUARD: The server-side staging environment utilizes 'HE' for
