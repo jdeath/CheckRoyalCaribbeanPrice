@@ -2369,3 +2369,23 @@ def test_timeout_retry_constants():
     assert crccl.RETRY_BACKOFF_BASE == 2
     assert crccl.DEFAULT_ON_FAILURE == "retry"
     assert crccl.ACCOUNT_COOLDOWN_SECONDS == 5
+
+
+def test_config_parses_without_apprise_package(tmp_path, monkeypatch):
+    """apprise is an optional dependency: a config with an apprise: block must
+    still parse when the package is absent - notifications just turn off."""
+    import CheckRoyalCaribbeanPrice as crccl
+    monkeypatch.setattr(crccl, "Apprise", None)
+    yaml_content = """
+    accountInfo:
+      - username: "test_user"
+        password: "password123"
+    apprise:
+      - url: "mailto://user:password@example.com"
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml_content)
+    with patch('CheckRoyalCaribbeanPrice.setup_hybrid_logging'):
+        config = load_config_objects(str(config_file))
+    assert config.apobj is None                    # disabled, not crashed
+    assert config.accounts[0].username == "test_user"
