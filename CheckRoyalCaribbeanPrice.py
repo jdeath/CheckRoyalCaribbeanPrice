@@ -7,6 +7,7 @@ import logging
 import os
 import platform
 import re
+
 # curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
 # edge servers do not reject some IPs/systems as bots with 403 Access Denied
 # (see jdeath/CheckRoyalCaribbeanPrice issue #64). Fall back to plain requests
@@ -17,6 +18,7 @@ try:
 except ImportError:
     import requests
     impersonate_args = {}
+
 import sys
 import traceback
 import time
@@ -43,16 +45,20 @@ APPKEY_WEB = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 # Seconds before giving up on an API call so a stalled connection cannot hang the run
 # forever. Override with requestTimeout in config.yaml if the API is slow for you.
 REQUEST_TIMEOUT = 30
+
 # Shorter timeout for quick auxiliary endpoints (check-in status, loyalty summary,
 # sample-config download) where a long wait is not worth it
 SHORT_REQUEST_TIMEOUT = 10
+
 # How API failures are handled when a call site does not choose explicitly:
 # "retry" (back off and try again), "skip" (log and move on), "exit" (stop the run)
 DEFAULT_ON_FAILURE = "retry"
+
 # Retry attempts and exponential backoff base for on_failure="retry" calls
 # (sleep = RETRY_BACKOFF_BASE ** attempt seconds between attempts: 2s, 4s)
 MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 2
+
 # Cool-down between accounts when checking more than one, to avoid hammering the API
 ACCOUNT_COOLDOWN_SECONDS = 5
 
