@@ -86,6 +86,10 @@ BLUE = '\033[94m'        # Bright blue text, default background, normal weight
 # Global storage of user config read from YAML
 config: CruiseAppConfig = None
 
+# Environmental overrides for terminals struggling with Unicode glyphs such as ↑ (e.g., MobaXterm)
+PROBLEM_ENVS = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]
+has_terminal_issues = False;
+
 # Define global logging hooks so they are available everywhere in the script module
 log = None
 log_warn = None
@@ -3161,16 +3165,20 @@ def get_cruise_price_from_API(
 def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     """
     Initializes the tracking environment, functional logging aliases, and file captures.
-
-    Configures two destination tracks: a standard terminal console output stream
-    preserving live ANSI text colors, and an optional plaintext file log tracking
-    run milestones with ANSI styling expressions filtered out.
     """
-    # On Windows consoles (notably Windows PowerShell 5.x / classic conhost) ANSI color
-    # escapes are printed literally (e.g. a raw "<-[33m...") unless virtual-terminal
-    # processing is enabled. Turn it on so the color codes render as colors. Harmless if
-    # already enabled (Windows Terminal) or unsupported - failures are ignored.
+    global log, log_warn, log_err, has_terminal_issues
+
+    # 1. Determine terminal safety based on module-level configuration constant
+    has_terminal_issues = any(k in os.environ for k in PROBLEM_ENVS)
+
+    # 2. Safely attempt stream reconfiguration and ANSI enablement on Windows
     if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stderr.reconfigure(encoding='utf-8')
+        except AttributeError:
+            has_terminal_issues = True
+
         try:
             import ctypes
             kernel32 = ctypes.windll.kernel32
@@ -3182,17 +3190,17 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
         except Exception:
             pass
 
+    # 3. Construct and clear out active root logging context
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
-    root_logger.handlers.clear()  # Avoid handler duplication
+    root_logger.handlers.clear()
 
-    # Terminal Stream Handler (Keeps original ANSI terminal colors)
-    # Use the REAL stdout: on a second in-process call sys.stdout is already the
-    # PrintRedirector, and a StreamHandler wrapping it would recurse
-    # (emit -> write -> logger.info -> emit ...)
+    # 4. Terminal Stream Handler (Keeps original ANSI terminal colors)
+    # Extract underlying real stdout stream to prevent recursion on re-initialization calls
     real_stdout = sys.stdout
     while isinstance(real_stdout, PrintRedirector):
         real_stdout = getattr(real_stdout, '_wrapped_stream', None) or sys.__stdout__
+
     console_handler = logging.StreamHandler(real_stdout)
     console_handler.setFormatter(logging.Formatter('%(message)s'))
     if platform.system() == "iOS":
@@ -3200,9 +3208,8 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
 
     root_logger.addHandler(console_handler)
 
-    # Plain Text File Handler (Only built if a log file path is supplied)
+    # 5. Plain Text File Handler
     if log_file_path:
-        # Write the run execution start sequence first
         timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         delimiter = f"\n{'='*60}\n--- RUN STARTED: {timestamp_str} ---\n{'='*60}\n"
 
@@ -3212,25 +3219,18 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
 
             file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
             file_handler.setFormatter(logging.Formatter('%(message)s'))
-
-            # Keep the validated filter that strips ANSI color symbols out of text files
             file_handler.addFilter(StripAnsiFilter())
             root_logger.addHandler(file_handler)
-
         except IOError as e:
             sys.stderr.write(f"Warning: Could not open log file '{log_file_path}': {e}\n")
 
-    # Activate the Hybrid "Magic Core"
+    # 6. Initialize shortcut execution instances and map to module globals
     easy_log_instance = EasyLogger(root_logger)
-
-    # Create the "ease of use" aliases
-    global log, log_warn, log_err
     log = easy_log_instance
     log_warn = easy_log_instance.warn
     log_err = easy_log_instance.error
 
-    # Safely Intercept Standard print() System-Wide
-    # This redirects stdout to the custom logger
+    # 7. Intercept raw standard print statements system-wide
     sys.stdout = PrintRedirector(root_logger.info)
 
 
