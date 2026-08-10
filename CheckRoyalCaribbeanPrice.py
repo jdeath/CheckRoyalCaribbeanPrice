@@ -1233,7 +1233,10 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         insurance_flag = False
         all_included_flag = False
         cruise_paid_price_from_API = result.get("prices", [])
-
+        
+        final_payment_date = get_final_payment_date(number_of_nights, sail_date)
+        final_payment_date_display = final_payment_date.strftime(date_display_format)
+        
         for cur_price in cruise_paid_price_from_API:
             price_type_code = cur_price.get("priceTypeCode", "")
             amount = cur_price.get("amount")
@@ -1253,7 +1256,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 all_included_flag = True
                 payment_string += f" Including: {amount:.2f} All Included Drinks/WiFi"
             elif price_type_code == "BALANCE_DUE":
-                payment_string += f" You Still Owe: {amount:.2f}"
+                payment_string += f" {YELLOW}You Still Owe: {amount:.2f} due {final_payment_date_display}{RESET}"
 
         # Store the parsed information into a dictionary for easy passing around
         paid_price_struct = {}
@@ -1265,8 +1268,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             paid_price_struct['all_in_upgrade'] = all_included_flag
             log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
-        final_payment_date = get_final_payment_date(number_of_nights, sail_date)
-        final_payment_date_display = final_payment_date.strftime(date_display_format)
+        
 
         # Record this booking for the end-of-run check-in / final-payment summary table.
         # Include the room number so multiple cabins on the same sailing are distinct.
@@ -1294,7 +1296,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         if balance_due is True:
             owed = (f"{balance_due_amount:.2f}" if isinstance(balance_due_amount, (int, float))
                     else "unknown")
-            log(YELLOW + f"Remaining Cruise Payment Balance is {owed} due {final_payment_date_display}" + RESET)
+            log(YELLOW + f"Remaining net-to-line balance {owed} due {final_payment_date_display} (Difference is TA's commision/fronted deposit)" + RESET)
 
         paid_price_struct['booked_obc'] = get_OBC(account_info, booking)
 
