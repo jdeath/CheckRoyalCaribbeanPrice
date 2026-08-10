@@ -495,7 +495,7 @@ class CruiseAppConfig:
 
     display_cruise_prices: bool = True
     minimum_saving_alert: Optional[float] = None
-    show_promos: bool = True
+    show_promos: bool = False
 
     # Complex Objects
     accounts: List[AccountInfo] = field(default_factory=list)
@@ -3339,7 +3339,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         currency_override=data.get("currencyOverride", None),
         minimum_saving_alert=minimum_saving_alert,
         notify_on_error=data.get("notifyOnError", False),
-        show_promos=data.get("showPromos", True),
+        show_promos=data.get("showPromos", False),
         request_timeout=int(data.get("requestTimeout", REQUEST_TIMEOUT)),
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
