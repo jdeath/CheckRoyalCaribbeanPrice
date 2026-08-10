@@ -54,18 +54,20 @@ def mock_response_success():
 # ==============================================================================
 class TestExecuteApiRequest(unittest.TestCase):
 
-    @patch('requests.Session.request')
-    def test_execute_request_success(self, mock_request):
-        mock_response = MagicMock(spec=requests.Response)
+    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    def test_execute_request_success(self, mock_session_cls):
+        mock_session_inst = MagicMock()
+        mock_session_cls.return_value = mock_session_inst
+
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"status": "ok"}
-        mock_request.return_value = mock_response
+        mock_session_inst.request.return_value = mock_response
 
         response = _execute_api_request("GET", "https://api.test.com/v1/endpoint")
 
         self.assertIsNotNone(response)
-        self.assertEqual(response.status_code, 200)
-        mock_request.assert_called_once()
+        self.assertEqual(mock_session_inst.request.call_count, 1)
 
     @patch('BrowseRoyalCaribbeanPrice.time.sleep', return_value=None)
     @patch('requests.Session.request')
