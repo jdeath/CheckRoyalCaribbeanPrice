@@ -1,5 +1,5 @@
 # CheckRoyalCaribbeanPrice
-Checks if you have the cheapest price for your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  Not affiliated with Royal Caribbean Group in anyway. 
+Checks if you have the cheapest price for your **Royal Caribbean** and **Celebrity Cruises** purchases (beverage packages, excursions, internet, etc.).  Not affiliated with Royal Caribbean Group in any way. 
 - ✅ Automatically checks your purchased packages (no need to enter them manually)  
 - ✅ Alerts you if a lower price is available (email, ntfy, Home Assistant, etc) 
 - ✅ Finds deals specific to each passenger (loyalty or casino status, age-based or room specials) where other "royal price trackers" only find publicly available (often higher) prices
