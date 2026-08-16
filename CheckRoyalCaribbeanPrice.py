@@ -15,6 +15,7 @@ import re
 try:
     from curl_cffi import requests
     impersonate_args = {"impersonate": "chrome"}
+    import requests as requests_normal
 except ImportError:
     import requests
     impersonate_args = {}
@@ -27,7 +28,11 @@ import yaml
 # NotifyFormat.TEXT declares notification bodies as plain text so Apprise converts
 # them per-service: HTML email renders the \n line breaks instead of collapsing
 # them to one line (issue #76); plain-text services are passed through unchanged
-from apprise import Apprise, NotifyFormat
+try:
+    from apprise import Apprise, NotifyFormat
+except:
+    pass
+    
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -1906,7 +1911,8 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     # scope completely isolated and test-stabilized.
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
     try:
-        response = requests.get(api_URL, params=request_params, headers=headers,
+        # For using normal requests for this API call
+        response = requests_normal.get(api_URL, params=request_params, headers=headers,
                                 timeout=config.request_timeout if config else REQUEST_TIMEOUT)
     except Exception as err:
         log (f"Unable to check room availability with server ({err})")
