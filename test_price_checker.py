@@ -1503,7 +1503,7 @@ def test_check_if_room_is_available_network_exception_tolerance():
     url_params.cabin_class_string = "BALCONY"
 
     # Simulate a sudden socket/connection reset drop during validation loops
-    with patch('CheckRoyalCaribbeanPrice.requests.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
+    with patch('CheckRoyalCaribbeanPrice.requests_normal.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
         try:
             available, alternate_rooms = check_if_room_is_available(url_params)
             assert available is False
@@ -2169,7 +2169,7 @@ def test_availability_matches_on_subtype_code_even_when_category_differs():
     params = _availability_params(subtype="D", category_code="2D")  # booked above the lead-in
     mock_resp = MagicMock()
     mock_resp.text = _room_selection_rsc(code="D", category_code="4D")
-    with patch('CheckRoyalCaribbeanPrice.requests.get', return_value=mock_resp):
+    with patch('CheckRoyalCaribbeanPrice.requests_normal.get', return_value=mock_resp):
         available, alternates = check_if_room_is_available(params)
     assert available is True
     assert alternates == []
@@ -2180,7 +2180,7 @@ def test_availability_false_when_subtype_code_absent():
     params = _availability_params(subtype="Z", category_code="9Z")
     mock_resp = MagicMock()
     mock_resp.text = _room_selection_rsc(code="D", category_code="4D")
-    with patch('CheckRoyalCaribbeanPrice.requests.get', return_value=mock_resp):
+    with patch('CheckRoyalCaribbeanPrice.requests_normal.get', return_value=mock_resp):
         available, alternates = check_if_room_is_available(params)
     assert available is False
     assert len(alternates) == 1
