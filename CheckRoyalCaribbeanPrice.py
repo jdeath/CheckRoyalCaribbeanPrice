@@ -3231,6 +3231,9 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
         timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         delimiter = f"\n{'='*60}\n--- RUN STARTED: {timestamp_str} ---\n{'='*60}\n"
 
+        if platform.system() == "iOS":
+            log_file_path = os.path.expanduser('~/Documents') + "/" + log_file_path
+        
         try:
             with open(log_file_path, "a", encoding="utf-8") as f:
                 f.write(delimiter)
