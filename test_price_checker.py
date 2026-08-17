@@ -1554,7 +1554,7 @@ def test_check_if_room_is_available_network_exception_tolerance():
     url_params.cabin_class_string = "BALCONY"
 
     # Simulate a sudden socket/connection reset drop during validation loops
-    with patch('CheckRoyalCaribbeanPrice.requests.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
+    with patch('CheckRoyalCaribbeanPrice.requests_normal.get', side_effect=requests.exceptions.ConnectionError("Connection reset by peer")):
         try:
             available, alternate_rooms = check_if_room_is_available(url_params)
             assert available is False

@@ -30,7 +30,16 @@ import yaml
 # NotifyFormat.TEXT declares notification bodies as plain text so Apprise converts
 # them per-service: HTML email renders the \n line breaks instead of collapsing
 # them to one line (issue #76); plain-text services are passed through unchanged
-from apprise import Apprise, NotifyFormat
+# Apprise is optional (e.g. the iOS full install runs without it). The None
+# sentinels matter: the config parser checks "Apprise is None" to warn-and-disable
+# when apprise: is configured without the package - a bare "except: pass" leaves
+# the names undefined and turns that check into a NameError crash (issue #85).
+try:
+    from apprise import Apprise, NotifyFormat
+except ImportError:
+    Apprise = None
+    NotifyFormat = None
+
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -3249,6 +3258,9 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
         timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         delimiter = f"\n{'='*60}\n--- RUN STARTED: {timestamp_str} ---\n{'='*60}\n"
 
+        if platform.system() == "iOS":
+            log_file_path = os.path.expanduser('~/Documents') + "/" + log_file_path
+        
         try:
             with open(log_file_path, "a", encoding="utf-8") as f:
                 f.write(delimiter)

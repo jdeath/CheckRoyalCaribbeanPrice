@@ -561,9 +561,11 @@ Thanks to contributors:
   
 # Issues
 1. ~~Will not work if your password has an % in it. Change your password (replace % with ! for instance).~~ Fixed in > 3.0.1
+1. If you see a lot of API issues `Attempt 1/3 failed for https:..` just wait and run program again later. The Royal/Celeb website is being slow.
 1. OBC will display in USD even if cruise being checked in a different currency. Not fixable as this is how OBC is provided
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
 1. Double check you are cancelling the item for the correct cruise
+   
 
 # Browse RoyalCaribbean Prices
 This will browse any Royal Caribbean or Celebrity sailing and display current public prices for **every** excursion/drink package/dinning package sold on a cruise. If you book the cruise, the price could be lower than shown due to C&A or casino specials.  It will provide a link to the Royal Caribbean or Celebrity website which has the product prices for that cruise (be sure to be logged out of the website or link will not work). It will  print any scheduled activities for the cruise, such as trivia and gameshows and theme nights. It will also print the current price of cheapest room in each category (inside, oceanview, balcony, suite). It will print MDR menus. This program does **not** require a configuration file nor a Royal Caribbean/Celebrity account. Inspired by and similar functionality to `https://cruisespotlight.com/royal-caribbean-cruise-planner-price-lookup/` website. 
