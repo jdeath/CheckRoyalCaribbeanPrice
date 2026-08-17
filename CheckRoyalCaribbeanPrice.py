@@ -652,6 +652,13 @@ def _execute_api_request(
                 # Terminal 4xx client errors (e.g. 401, 403, 404) fail fast without retrying
                 resp_obj = getattr(e, "response", None)
                 status_code = getattr(resp_obj, "status_code", None)
+                # Fallback: curl_cffi's HTTPError does not always attach .response -
+                # parse the status out of the exception text ("404 Not Found") so a
+                # definitive client error is never misread as transient and retried
+                if status_code is None:
+                    match = re.search(r"\b([45]\d\d)\b", str(e))
+                    if match:
+                        status_code = int(match.group(1))
                 if status_code and 400 <= status_code < 500:
                     return _handle_terminal_failure(e)
 

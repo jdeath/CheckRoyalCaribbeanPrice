@@ -950,75 +950,6 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
 
     def api_router(*args, **kwargs):
         url_called = args[2] if len(args) > 2 else kwargs.get("url", "")
-        if "promotions/list" in url_called:
-            return MagicMock(json=lambda: mock_promo_response)
-        elif "orderHistory" in url_called:
-            return MagicMock(json=lambda: mock_order_response)
-        else:
-            return MagicMock(json=lambda: mock_bookings_response)
-
-    checkin_logs = []
-    for guest in mock_booking_with_dining_and_checkin["guests"]:
-        name = guest["firstName"]
-        status = guest["checkInStatus"]
-        b_time = guest["boardingTime"].replace(" PM", "").strip()
-        checkin_logs.append(f"{name} Check in {status}, Boarding Time {b_time}")
-
-    mock_metrics = {
-        "passenger_names": "Bob, Matt",
-        "checkin_string": ", ".join(checkin_logs)
-    }
-
-    mock_dining_and_prices = {
-        "dining_selection": [{"sittingType": "TRADITIONAL", "sittingTime": "05:00 PM", "tableSize": "04"}],
-        "prices": [{"priceTypeCode": "GROSS_TOTALS", "amount": 2662.96}]
-    }
-
-    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=api_router), \
-         patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value=mock_metrics), \
-         patch('CheckRoyalCaribbeanPrice.get_dining_and_prices', return_value=mock_dining_and_prices), \
-         patch('CheckRoyalCaribbeanPrice.get_checkin_info'), \
-         patch('CheckRoyalCaribbeanPrice.log') as mock_log:
-
-        get_voyages(account_info, discounts, ship_registry)
-
-        log_outputs = [call[0][0] for call in mock_log.call_args_list]
-        assert any("Bob Check in Partially Complete, Boarding Time 12:00" in s for s in log_outputs), \
-            "Granular passenger check-in layout contract was missed!"
-
-# =====================================================================
-# ITEM 6 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
-# =====================================================================
-def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_checkin):
-    """
-    Verify that individual passenger check-in statuses and boarding constraints
-    are clearly enumerated inside the log stream.
-    """
-    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
-    account_info.access = MagicMock()
-
-    discounts = CruiseURLParams(loyalty_number="390323599", state="FL", dp340=False)
-    ship_registry = ShipRegistry()
-
-    mock_bookings_response = {
-        "payload": {
-            "profileBookings": [{
-                "bookingId": "9999999",
-                "passengerId": "33333333",
-                "sailDate": "20270510",
-                "numberOfNights": 7,
-                "shipCode": "WN",
-                "stateroomNumber": "6574",
-                "stateroomType": "B",
-                "passengersInStateroom": [{"firstName": "Matt", "lastName": "Smith", "bookingId": "9999999"}]
-            }]
-        }
-    }
-    mock_promo_response = {"payload": []}
-    mock_order_response = {"payload": []}
-
-    def api_router(*args, **kwargs):
-        url_called = args[2] if len(args) > 2 else kwargs.get("url", "")
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -1062,6 +993,35 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
         log_outputs = [call[0][0] for call in mock_log.call_args_list]
         assert any("Bob Check in Partially Complete, Boarding Time 12:00" in s for s in log_outputs), \
             "Granular passenger check-in layout contract was missed!"
+
+
+# =====================================================================
+# ITEM 6 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
+# =====================================================================
+def test_execute_api_request_handles_uninitialized_access_context():
+    """
+    Ensure the network engine falls back cleanly to a fresh session
+    if account_info is passed but access configurations are missing.
+    """
+    # Create an AccountInfo model wrapper where access profile is explicit None
+    account_info = AccountInfo(username="tester", password="password", cruise_line="royal")
+    account_info.access = None
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status.return_value = None
+
+    # No usable account session -> the engine builds one via new_api_session();
+    # patch both engines' Session.request so the test holds with or without curl_cffi
+    with patch('CheckRoyalCaribbeanPrice.plain_requests.Session.request', return_value=mock_response), \
+         patch('CheckRoyalCaribbeanPrice.requests.Session.request', return_value=mock_response) as mock_req:
+        resp = _execute_api_request(
+            account_info=account_info,
+            method="GET",
+            url="https://aws-prd.api.rccl.com/test-endpoint",
+            on_failure="retry"
+        )
+        assert resp is not None
 
 
 @patch("time.sleep", return_value=None)  # Fast execution warp drive
@@ -1553,9 +1513,12 @@ def test_check_if_room_is_available_network_exception_tolerance():
     url_params.package_code = "SY07W115"
     url_params.cabin_class_string = "BALCONY"
 
-    # Simulate a sudden socket/connection reset drop during validation loops
+    # Simulate a sudden socket/connection reset drop during validation loops.
+    # The availability call runs through _execute_api_request with a plain
+    # (non-impersonated) session, so patch that engine's Session.request -
+    # patching requests.get would miss and the test would hit the live network.
     with patch(
-        'CheckRoyalCaribbeanPrice.requests.get',
+        'CheckRoyalCaribbeanPrice.plain_requests.Session.request',
         side_effect=requests.exceptions.ConnectionError("Connection reset by peer")
     ):
         try:
