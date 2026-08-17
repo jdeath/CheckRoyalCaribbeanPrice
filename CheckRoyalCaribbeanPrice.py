@@ -1279,11 +1279,13 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         prepaid_grats_flag = False
         insurance_flag = False
         all_included_flag = False
+        balance_due_total_flag = False
         cruise_paid_price_from_API = result.get("prices", [])
 
         final_payment_date = get_final_payment_date(number_of_nights, sail_date)
         final_payment_date_display = final_payment_date.strftime(date_display_format)
 
+        
         for cur_price in cruise_paid_price_from_API:
             price_type_code = cur_price.get("priceTypeCode", "")
             amount = cur_price.get("amount")
@@ -1303,6 +1305,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 all_included_flag = True
                 payment_string += f" Including: {amount:.2f} All Included Drinks/WiFi"
             elif price_type_code == "BALANCE_DUE":
+                balance_due_total_flag = True
                 payment_string += f" {YELLOW}You Still Owe: {amount:.2f} due {final_payment_date_display}{RESET}"
 
         # Store the parsed information into a dictionary for easy passing around
@@ -1313,6 +1316,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             paid_price_struct['gratuities'] = prepaid_grats_flag
             paid_price_struct['trip_insurance'] = insurance_flag
             paid_price_struct['all_in_upgrade'] = all_included_flag
+            paid_price_struct['balance_due_total_flag'] = balance_due_total_flag # This is for actual balance due
             log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
 
@@ -1325,7 +1329,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         summary_reservation = str(reservation_ID)
         if summary_reservation in reservation_friendly_names:
             summary_reservation += f" ({reservation_friendly_names.get(summary_reservation)})"
-        balance_due = derive_balance_due(booking)
+        balance_due = derive_balance_due(booking) # This is for net-to-line balance due
         balance_due_amount = booking.get("balanceDueAmount")
         if str(reservation_ID) in config.paid_reservations:
             balance_due = False   # user vouches for it (reservationsPaidInFull)
@@ -1336,7 +1340,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             "checkin_label": checkin_label or "TBD",
             "final_payment": final_payment_date,
             "past_final_payment": date.today() > final_payment_date,
-            "balance_due": balance_due,
+            "balance_due": balance_due or balance_due_total_flag,
             "dedupe_key": f"{reservation_ID}|{sail_date}",
         })
 
