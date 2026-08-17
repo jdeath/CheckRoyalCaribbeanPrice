@@ -8,9 +8,9 @@ from unittest.mock import patch, MagicMock
 # Import targets from module
 from BrowseRoyalCaribbeanPrice import (
     _execute_api_request,
-    get_all_activities_web,           # or get_schedulable_products_web depending on your alias
+    get_all_activities_web,
     get_cruise_price_from_API,
-    get_MDR_locations,    # or get_dining_venues_graph depending on your alias
+    get_MDR_locations,
     get_products_graph_all_pages,
     get_ships_web,
     get_sailing_details_web,

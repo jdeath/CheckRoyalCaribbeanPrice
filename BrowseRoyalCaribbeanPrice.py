@@ -11,14 +11,16 @@ import time
 
 # curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
 # edge servers do not reject some IPs/systems as bots with 403 Access Denied
-# (see jdeath/CheckRoyalCaribbeanPrice issue #64, where the Browse script was
-# confirmed affected). Fall back to plain requests where it is not installed
-# (e.g. iOS), which works fine for most people.
+# (see jdeath/CheckRoyalCaribbeanPrice issue #64). Fall back to plain requests
+# where it is not installed (e.g. iOS), which works fine for most people.
+# Keep standard requests available alongside curl_cffi for endpoints that
+# misbehave under TLS impersonation/headers on some networks (e.g. issue #88)
+import requests as plain_requests
 try:
     from curl_cffi import requests
     IMPERSONATE_ARGS = {"impersonate": "chrome"}
 except ImportError:
-    import requests
+    requests = plain_requests
     IMPERSONATE_ARGS = {}
 
 from datetime import datetime, date
@@ -168,9 +170,20 @@ class StripAnsiFilter(logging.Filter):
 ##################################
 # Helper functions
 ##################################
+def new_api_session(use_impersonation: bool = True) -> plain_requests.Session:
+    """
+    Creates a network session that impersonates a real browser's TLS fingerprint
+    when curl_cffi is available and requested, falling back to standard requests.
+    """
+    if use_impersonation and IMPERSONATE_ARGS:
+        return requests.Session(**IMPERSONATE_ARGS)
+    return plain_requests.Session()
+
+
 def _execute_api_request(
-    method: str,
-    url: str,
+    account_info: Optional[AccountInfo] = None,
+    method: str = "GET",
+    url: str = "",
     params: Optional[dict] = None,
     data: Optional[Union[str, dict]] = None,
     json_data: Optional[dict] = None,
@@ -178,37 +191,52 @@ def _execute_api_request(
     timeout: Optional[int] = None,
     on_failure: str = DEFAULT_ON_FAILURE,
     exit_on_fail: Optional[bool] = None,
-    max_retries: int = MAX_RETRIES
-) -> Optional[requests.Response]:
+    max_retries: int = MAX_RETRIES,
+    use_impersonation: bool = True
+) -> Optional[plain_requests.Response]:
     """
     Unified API execution engine for all cruise line network interactions.
 
     Centralizes tracking parameters, developer keys, and connect timeouts.
+    If an active session profile exists, it automatically injects 'Access-Token'
+    and account tracking headers into the request context.
 
     Supported strategies for on_failure:
     - "retry": Automatically retries transient errors with exponential backoff.
     - "skip" : Logs the warning and returns None on failure.
     - "exit" : Logs the error and terminates the script entirely on failure.
     """
-    # Backwards compatibility helper for existing exit_on_fail parameters
+    # Backwards compatibility helper for existing exit_on_fail parameter callers
     if exit_on_fail is not None:
         on_failure = "exit" if exit_on_fail else "skip"
 
+    # Resolve effective timeout: explicit override -> config setting -> default baseline
     if timeout is None:
-        timeout = REQUEST_TIMEOUT  # Default baseline timeout (e.g., 30s)
+        timeout = getattr(config, "request_timeout", REQUEST_TIMEOUT) if 'config' in globals() else REQUEST_TIMEOUT
 
-    # Start with any caller-specified override headers, or an empty base
+    # Start with caller override headers or an empty dictionary
     final_headers = headers.copy() if headers else {}
 
-    # Always include the baseline developer web key
+    # Inject corporate authentication layers if a live session exists
+    if account_info and getattr(account_info, "access", None):
+        if "Access-Token" not in final_headers and account_info.access.token:
+            final_headers["Access-Token"] = account_info.access.token
+        if "vds-id" not in final_headers and account_info.access.id:
+            final_headers["vds-id"] = account_info.access.id
+        if "account-id" not in final_headers and account_info.access.id:
+            final_headers["account-id"] = account_info.access.id
+
+    # Always include baseline developer web key
     if "AppKey" not in final_headers and "appkey" not in final_headers:
         final_headers["AppKey"] = APPKEY_WEB
 
-    # Create a network session that impersonates a real browser's TLS fingerprint
-    # when curl_cffi is available, falling back to a standard requests session.
-    session_context = requests.Session(**IMPERSONATE_ARGS)
+    # Target session selection: existing session token or new engine session
+    if account_info and getattr(account_info, "access", None) and account_info.access.session:
+        session_context = account_info.access.session
+    else:
+        session_context = new_api_session(use_impersonation=use_impersonation)
 
-    def _handle_terminal_failure(error: Exception) -> Optional[requests.Response]:
+    def _handle_terminal_failure(error: Exception) -> Optional[plain_requests.Response]:
         error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{error}')"
         if on_failure == "exit":
             log(error_msg)
@@ -231,17 +259,26 @@ def _execute_api_request(
                     timeout=timeout
                 )
 
-                # Treat server errors (5xx) as retriable exceptions
+                # Treat 5xx server errors as transient retriable errors
                 if response.status_code >= 500:
-                    raise requests.exceptions.HTTPError(f"Server Error {response.status_code}", response=response)
+                    raise plain_requests.exceptions.HTTPError(
+                        f"Server Error {response.status_code}", response=response
+                    )
 
                 response.raise_for_status()
                 return response  # Success!
 
             except Exception as e:
-                # Terminal 4xx client errors should fail immediately without retrying
+                # Terminal 4xx client errors (e.g. 401, 403, 404) fail fast without retrying
                 resp_obj = getattr(e, "response", None)
                 status_code = getattr(resp_obj, "status_code", None)
+                # Fallback: curl_cffi's HTTPError does not always attach .response -
+                # parse the status out of the exception text ("404 Not Found") so a
+                # definitive client error is never misread as transient and retried
+                if status_code is None:
+                    match = re.search(r"\b([45]\d\d)\b", str(e))
+                    if match:
+                        status_code = int(match.group(1))
                 if status_code and 400 <= status_code < 500:
                     return _handle_terminal_failure(e)
 

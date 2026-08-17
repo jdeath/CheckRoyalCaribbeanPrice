@@ -12,18 +12,15 @@ import re
 # edge servers do not reject some IPs/systems as bots with 403 Access Denied
 # (see jdeath/CheckRoyalCaribbeanPrice issue #64). Fall back to plain requests
 # where it is not installed (e.g. iOS), which works fine for most people.
+# Keep standard requests available alongside curl_cffi for endpoints that
+# misbehave under TLS impersonation/headers on some networks (e.g. issue #88)
+import requests as plain_requests
 try:
     from curl_cffi import requests
-    impersonate_args = {"impersonate": "chrome"}
-    # Plain requests kept alongside for the few endpoints that misbehave under
-    # curl_cffi on some networks (room availability, issue #88)
-    import requests as requests_normal
+    IMPERSONATE_ARGS = {"impersonate": "chrome"}
 except ImportError:
-    import requests
-    impersonate_args = {}
-    # Without curl_cffi, plain requests IS the only engine - alias it so the
-    # requests_normal call sites work instead of raising NameError
-    requests_normal = requests
+    requests = plain_requests
+    IMPERSONATE_ARGS = {}
 
 import sys
 import traceback
@@ -553,25 +550,30 @@ class CruiseAppConfig:
 ############################################
 # Low-level Network Engine & Data Harvesters
 ############################################
-def new_api_session() -> requests.Session:
+def new_api_session(use_impersonation: bool = True) -> plain_requests.Session:
     """
     Creates a network session that impersonates a real browser's TLS fingerprint
-    when curl_cffi is available, falling back to a standard requests session.
+    when curl_cffi is available and requested, falling back to standard requests.
     """
-    return requests.Session(**impersonate_args)
+    if use_impersonation and IMPERSONATE_ARGS:
+        return requests.Session(**IMPERSONATE_ARGS)
+    return plain_requests.Session()
 
 
 def _execute_api_request(
-    account_info: Optional[AccountInfo],
-    method: str,
-    url: str,
+    account_info: Optional[AccountInfo] = None,
+    method: str = "GET",
+    url: str = "",
     params: Optional[dict] = None,
     data: Optional[Union[str, dict]] = None,
+    json_data: Optional[dict] = None,
     headers: Optional[dict] = None,
     timeout: Optional[int] = None,
     on_failure: str = DEFAULT_ON_FAILURE,
-    max_retries: int = MAX_RETRIES
-) -> Optional[requests.Response]:
+    exit_on_fail: Optional[bool] = None,
+    max_retries: int = MAX_RETRIES,
+    use_impersonation: bool = True
+) -> Optional[plain_requests.Response]:
     """
     Unified API execution engine for all cruise line network interactions.
 
@@ -581,19 +583,22 @@ def _execute_api_request(
 
     Supported strategies for on_failure:
     - "retry": Automatically retries transient errors with exponential backoff.
-    - "skip" : Logs the warning and returns None.
-    - "exit" : Logs the error and terminates the script entirely.
+    - "skip" : Logs the warning and returns None on failure.
+    - "exit" : Logs the error and terminates the script entirely on failure.
     """
-    # Resolve the effective timeout: an explicit caller override wins, then the
-    # user-configured requestTimeout, then the 30-second baseline default
-    if timeout is None:
-        timeout = config.request_timeout if config else REQUEST_TIMEOUT
+    # Backwards compatibility helper for existing exit_on_fail parameter callers
+    if exit_on_fail is not None:
+        on_failure = "exit" if exit_on_fail else "skip"
 
-    # Start with any caller-specified override headers, or an empty base
+    # Resolve effective timeout: explicit override -> config setting -> default baseline
+    if timeout is None:
+        timeout = getattr(config, "request_timeout", REQUEST_TIMEOUT) if 'config' in globals() else REQUEST_TIMEOUT
+
+    # Start with caller override headers or an empty dictionary
     final_headers = headers.copy() if headers else {}
 
     # Inject corporate authentication layers if a live session exists
-    if account_info and account_info.access:
+    if account_info and getattr(account_info, "access", None):
         if "Access-Token" not in final_headers and account_info.access.token:
             final_headers["Access-Token"] = account_info.access.token
         if "vds-id" not in final_headers and account_info.access.id:
@@ -601,12 +606,24 @@ def _execute_api_request(
         if "account-id" not in final_headers and account_info.access.id:
             final_headers["account-id"] = account_info.access.id
 
-    # Always include the baseline developer key
-    if "AppKey" not in final_headers:
+    # Always include baseline developer web key
+    if "AppKey" not in final_headers and "appkey" not in final_headers:
         final_headers["AppKey"] = APPKEY_WEB
 
-    # Choose the target network session channel
-    session_context = account_info.access.session if (account_info and account_info.access) else new_api_session()
+    # Target session selection: existing session token or new engine session
+    if account_info and getattr(account_info, "access", None) and account_info.access.session:
+        session_context = account_info.access.session
+    else:
+        session_context = new_api_session(use_impersonation=use_impersonation)
+
+    def _handle_terminal_failure(error: Exception) -> Optional[plain_requests.Response]:
+        error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{error}')"
+        if on_failure == "exit":
+            log(error_msg)
+            sys.exit(1)
+        else:
+            logging.warning(f"Non-critical API interaction skipped (exception: {error})")
+            return None
 
     # --- STRATEGY A: RESILIENT RETRY LOOP ---
     if on_failure == "retry":
@@ -617,19 +634,41 @@ def _execute_api_request(
                     url=url,
                     params=params,
                     data=data,
+                    json=json_data,
                     headers=final_headers,
                     timeout=timeout
                 )
+
+                # Treat 5xx server errors as transient retriable errors
+                if response.status_code >= 500:
+                    raise plain_requests.exceptions.HTTPError(
+                        f"Server Error {response.status_code}", response=response
+                    )
+
                 response.raise_for_status()
                 return response  # Success!
+
             except Exception as e:
+                # Terminal 4xx client errors (e.g. 401, 403, 404) fail fast without retrying
+                resp_obj = getattr(e, "response", None)
+                status_code = getattr(resp_obj, "status_code", None)
+                # Fallback: curl_cffi's HTTPError does not always attach .response -
+                # parse the status out of the exception text ("404 Not Found") so a
+                # definitive client error is never misread as transient and retried
+                if status_code is None:
+                    match = re.search(r"\b([45]\d\d)\b", str(e))
+                    if match:
+                        status_code = int(match.group(1))
+                if status_code and 400 <= status_code < 500:
+                    return _handle_terminal_failure(e)
+
                 if attempt < max_retries:
                     backoff_time = RETRY_BACKOFF_BASE ** attempt
                     logging.warning(f"Attempt {attempt}/{max_retries} failed for {url}: {e}. Retrying in {backoff_time}s...")
                     time.sleep(backoff_time)
                 else:
-                    logging.warning(f"All {max_retries} retry attempts exhausted for {url}. Falling back to 'skip' safety.")
-                    return None
+                    logging.warning(f"All {max_retries} retry attempts exhausted for {url}.")
+                    return _handle_terminal_failure(e)
 
     # --- STRATEGY B: STATIC SINGLE-SHOT ACTIONS ("skip" or "exit") ---
     try:
@@ -638,21 +677,14 @@ def _execute_api_request(
             url=url,
             params=params,
             data=data,
+            json=json_data,
             headers=final_headers,
             timeout=timeout
         )
         response.raise_for_status()
         return response
     except Exception as e:
-        error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{e}')"
-
-        if on_failure == "exit":
-            log(error_msg)
-            sys.exit(1)
-        else:
-            # Matches legacy exit_on_fail=False behavior
-            logging.warning(f"Non-critical API interaction skipped (exception: {e})")
-            return None
+        return _handle_terminal_failure(e)
 
 
 def _extract_json_array(text: str, key: str) -> Optional[list[Any]]:
@@ -1248,10 +1280,10 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         insurance_flag = False
         all_included_flag = False
         cruise_paid_price_from_API = result.get("prices", [])
-        
+
         final_payment_date = get_final_payment_date(number_of_nights, sail_date)
         final_payment_date_display = final_payment_date.strftime(date_display_format)
-        
+
         for cur_price in cruise_paid_price_from_API:
             price_type_code = cur_price.get("priceTypeCode", "")
             amount = cur_price.get("amount")
@@ -1283,7 +1315,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             paid_price_struct['all_in_upgrade'] = all_included_flag
             log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
-        
+
 
         # Record this booking for the end-of-run check-in / final-payment summary table.
         # Include the room number so multiple cabins on the same sailing are distinct.
@@ -1915,17 +1947,19 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
         'r0C': 'y',
     }
 
-    # TODO: Migrate to _execute_api_request() with on_failure="retry".
-    # This loop lookup is an excellent candidate for our new exponential backoff
-    # engine, but is left single-shot for this PR to keep the price-tracking loop
-    # scope completely isolated and test-stabilized.
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
-    try:
-        # For using normal requests for this API call
-        response = requests_normal.get(api_URL, params=request_params, headers=headers,
-                                timeout=config.request_timeout if config else REQUEST_TIMEOUT)
-    except Exception as err:
-        log (f"Unable to check room availability with server ({err})")
+    response = _execute_api_request(
+        method="GET",
+        url=api_URL,
+        params=request_params,
+        headers=headers,
+        timeout=config.request_timeout if config else REQUEST_TIMEOUT,
+        on_failure="skip",
+        use_impersonation=False
+    )
+
+    if response is None:
+        log("Unable to check room availability with server")
         return False, []
 
     # Extract structural array matrix out of the component text stream
