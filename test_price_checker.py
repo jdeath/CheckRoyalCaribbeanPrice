@@ -13,21 +13,22 @@ from CheckRoyalCaribbeanPrice import (
 # ITEM 3 TESTS: API Resilience / Missing Keys
 # ITEM 4 TESTS: Full Branch Execution Integration Coverage
 # ITEM 5 TESTS: Client/Server Target Price Comparison Key Alignment
-# ITEM 6 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
-# ITEM 7 EXTRA DOMAIN TESTS: Fleet Discovery Data Structural Boundaries
-# ITEM 8 EXTRA PARSER & SESSION TESTS: Edge-Case Handling & Robust Fallbacks
-# ITEM 9 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
-# ITEM 10 EXTRA PRICING LOGIC TESTS: Boolean Typo & Notification Filtering
-# ITEM 11 EXTRA LIVE API TESTS: Schema Alignment & Request Resilience
-# ITEM 12 EXTRA ADD-ON ENGINE TESTS: Cost Metrics & Promotion Boundaries
-# ITEM 13 EXTRA METRIC CALCULATION TESTS: Scope Isolation & String Resiliency
-# ITEM 14 ORCHESTRATION & RUN CONTROL TESTS: Configuration Lifecycle
-# ITEM 15 PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION TESTS
-# ITEM 16 EXTRA REFACTOR & WATCHLIST ROUTING FIX TESTS
-# ITEM 17 "NOT FOR SALE" AVAILABILITY GATE (MATCH ON SUBTYPE CODE ALONE) TESTS
-# ITEM 18 END-OF-RUN CHECK-IN & FINAL-PAYMENT SUMMARY TABLE TESTS
-# ITEM 19 PAYMENT TABLE BALANCE-DUE TRI-STATE TESTS
-# ITEM 20 API TIMEOUT / RETRY CONSTANTS TEST
+# ITEM 6 TESTS: FOUNDATIONAL Low-level Network & Helper Verification
+# ITEM 7 TESTS: EXTRA DOMAIN Fleet Discovery Data Structural Boundaries
+# ITEM 8 TESTS: EXTRA PARSER & SESSION Edge-Case Handling & Robust Fallbacks
+# ITEM 9 TESTS: EXTRA TRACKING & SCRAPING Mixed Type Configs & Chunking
+# ITEM 10 TESTS: EXTRA PRICING LOGIC Boolean Typo & Notification Filtering
+# ITEM 11 TESTS: EXTRA LIVE API Schema Alignment & Request Resilience
+# ITEM 12 TESTS: EXTRA ADD-ON ENGINE Cost Metrics & Promotion Boundaries
+# ITEM 13 TESTS: EXTRA METRIC CALCULATION Scope Isolation & String Resiliency
+# ITEM 14 TESTS: ORCHESTRATION & RUN CONTROL Configuration Lifecycle
+# ITEM 15 TESTS PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION
+# ITEM 16 TESTS EXTRA REFACTOR & WATCHLIST ROUTING FIX
+# ITEM 17 TESTS "NOT FOR SALE" AVAILABILITY GATE (MATCH ON SUBTYPE CODE ALONE)
+# ITEM 18 TESTS END-OF-RUN CHECK-IN & FINAL-PAYMENT SUMMARY TABLE
+# ITEM 19 TESTS PAYMENT TABLE BALANCE-DUE TRI-STATE
+# ITEM 20 TESTS API TIMEOUT / RETRY CONSTANTS
+# ITEM 21 TESTS: TA / AGENCY BOOKING BALANCE DUE FALLBACK LOGIC
     AccountInfo,
     APIAccess,
     CruiseAppConfig,
@@ -42,6 +43,7 @@ from CheckRoyalCaribbeanPrice import (
     above_age_on_sail_date,
     check_if_room_is_available,
     config,
+    derive_balance_due,
     get_all_promotions,
     get_club_royale_tier,
     get_checkin_info,
@@ -58,9 +60,10 @@ from CheckRoyalCaribbeanPrice import (
     parse_provided_URL
 )
 
-# =====================================================================
+
+# ============================================================================
 # SYSTEM FIXTURES & DATA BUILDERS
-# =====================================================================
+# ============================================================================
 @pytest.fixture(autouse=True)
 def mock_global_config():
     """
@@ -147,9 +150,9 @@ def mock_booking_with_dining_and_checkin():
     }
 
 
-# =====================================================================
+# ============================================================================
 # ITEM 1 TESTS: Cabin "Not For Sale" Notification Logic
-# =====================================================================
+# ============================================================================
 def test_booked_cruise_not_for_sale_stays_silent(mock_global_config, base_account_info):
     """
     Scenario: An active, booked cruise goes off-market (sold out / offline).
@@ -238,9 +241,9 @@ def test_available_rooms_listed_when_sold_out(mock_global_config, base_account_i
     assert "Owner Suite OS" not in out
 
 
-# =====================================================================
+# ============================================================================
 # ITEM 2 TESTS: get_orders() Context Instantiation Scope Verification
-# =====================================================================
+# ============================================================================
 def test_get_orders_handles_item_calculations_without_scope_leak(mock_global_config, base_account_info):
     """
     Scenario: Parsing valid historical order entries from API response footprints.
@@ -442,9 +445,9 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
         assert mock_booking["bookingId"] == "PRIMARY_11111", "The primary booking dictionary state was corrupted!"
 
 
-# =====================================================================
+# ============================================================================
 # ITEM 3 TESTS: API Resilience / Missing Keys
-# =====================================================================
+# ============================================================================
 def test_get_cruise_price_handles_corrupt_fare_structure_gracefully(mock_global_config, base_account_info):
     """
     Scenario: The API returns a valid room structure, but 'gratuities' and 'insurance' keys are missing.
@@ -713,10 +716,9 @@ def test_empty_guest_filter_resilience():
     assert len(processed_manifests["9999999"]) == 0
 
 
-
-# =====================================================================
+# ============================================================================
 # ITEM 4 TESTS: Full Branch Execution Integration Coverage
-# =====================================================================
+# ============================================================================
 def test_get_voyages_complete_execution_path():
     """Exercise all logical branches inside get_voyages loop to ensure no undefined scoping or variable errors."""
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
@@ -840,9 +842,9 @@ def test_get_orders_complete_execution_path():
             pytest.fail(f"Execution path loop threw unexpected tracking exception: {exc}")
 
 
-# =====================================================================
+# ============================================================================
 # ITEM 5 TESTS: Client/Server Target Price Comparison Key Alignment
-# =====================================================================
+# ============================================================================
 def test_parse_dining_includes_table_size(mock_booking_with_dining_and_checkin):
     """
     Verify that the dining log output zero-pads and includes the table size
@@ -995,9 +997,9 @@ def test_parse_granular_checkin_per_passenger(mock_booking_with_dining_and_check
             "Granular passenger check-in layout contract was missed!"
 
 
-# =====================================================================
-# ITEM 6 FOUNDATIONAL TESTS: Low-level Network & Helper Verification
-# =====================================================================
+# ============================================================================
+# ITEM 6 TESTS: FOUNDATIONAL Low-level Network & Helper Verification
+# ============================================================================
 def test_execute_api_request_handles_uninitialized_access_context():
     """
     Ensure the network engine falls back cleanly to a fresh session
@@ -1173,9 +1175,10 @@ def test_club_royale_tier_ordering_and_boundaries():
     # Masters Tier: 100,000+ points
     assert get_club_royale_tier(100000) == "MASTERS"
 
-# =====================================================================
-# ITEM 7 EXTRA DOMAIN TESTS: Fleet Discovery Data Structural Boundaries
-# =====================================================================
+
+# ============================================================================
+# ITEM 7 TESTS: EXTRA DOMAIN Fleet Discovery Data Structural Boundaries
+# ============================================================================
 def test_get_ship_dictionary_web_handles_empty_or_missing_payload_keys():
     """
     Verify that if the corporate ships API returns a valid HTTP 200 response
@@ -1224,9 +1227,9 @@ def test_get_ship_dictionary_web_exception_handling_triggers_exit():
         assert len(registry.ships) == 0
 
 
-# =====================================================================
-# ITEM 8 EXTRA PARSER & SESSION TESTS: Edge-Case Handling & Robust Fallbacks
-# =====================================================================
+# ============================================================================
+# ITEM 8 TESTS: EXTRA PARSER & SESSION Edge-Case Handling & Robust Fallbacks
+# ============================================================================
 def test_parse_provided_url_handles_empty_or_missing_list_parameters():
     """
     Ensure the URL engine safely extracts values without throwing an IndexError
@@ -1329,9 +1332,10 @@ def test_get_profile_handles_null_loyalty_point_values():
         assert loyalty_num == "123456789"
         assert points == 0  # Null shared points must come back as int 0, not None
 
-# =====================================================================
-# ITEM 9 EXTRA TRACKING & SCRAPING TESTS: Mixed Type Configs & Chunking
-# =====================================================================
+
+# ============================================================================
+# ITEM 9 TESTS: EXTRA TRACKING & SCRAPING Mixed Type Configs & Chunking
+# ============================================================================
 def test_get_voyages_resilience_to_malformed_manual_prices_config():
     """
     Verify that if the user's manual configuration list contains an entry
@@ -1402,9 +1406,10 @@ def test_get_dining_and_prices_whitespace_and_formatting_drift():
         assert result["dining_selection"][0]["sittingType"] == "LATE"
         assert result["prices"][0]["amount"] == 1500.00
 
-# =====================================================================
-# ITEM 10 EXTRA PRICING LOGIC TESTS: Boolean Typo & Notification Filtering
-# =====================================================================
+
+# ============================================================================
+# ITEM 10 TESTS: EXTRA PRICING LOGIC Boolean Typo & Notification Filtering
+# ============================================================================
 def test_get_cruise_price_resolves_boolean_discount_labels_accurately():
     """
     Verify that the discount metric assembly handles Boolean-based parameters
@@ -1466,9 +1471,10 @@ def test_get_cruise_price_resolves_boolean_discount_labels_accurately():
         # This test documents that the script updates should check `is True` or truthiness.
         assert "Loyalty" in logged_messages or "Residency" in logged_messages
 
-# ======================================================================
-# ITEM 11 EXTRA LIVE API TESTS: Schema Alignment & Request Resilience
-# =====================================================================
+
+# ============================================================================
+# ITEM 11 TESTS: EXTRA LIVE API Schema Alignment & Request Resilience
+# ============================================================================
 def test_get_room_price_via_api_suite_schema_realignment():
     """
     Ensure the checkout payload correctly remaps suite category codes to 'SUITE'
@@ -1528,9 +1534,10 @@ def test_check_if_room_is_available_network_exception_tolerance():
         except Exception as err:
             pytest.fail(f"check_if_room_is_available leaked a raw unhandled exception: {err}")
 
-# =====================================================================
-# ITEM 12 EXTRA ADD-ON ENGINE TESTS: Cost Metrics & Promotion Boundaries
-# =====================================================================
+
+# ============================================================================
+# ITEM 12 TESTS: EXTRA ADD-ON ENGINE Cost Metrics & Promotion Boundaries
+# ============================================================================
 def test_get_orders_per_day_price_calculation_safety():
     """
     Ensure get_orders divides the package subtotal accurately without
@@ -1690,9 +1697,10 @@ def test_get_new_order_price_execution():
         # 4. Verify that execution passed cleanly through the block
         assert True
 
-# =====================================================================
-# ITEM 13 EXTRA METRIC CALCULATION TESTS: Scope Isolation & String Resiliency
-# =====================================================================
+
+# ============================================================================
+# ITEM 13 TESTS: EXTRA METRIC CALCULATION Scope Isolation & String Resiliency
+# ============================================================================
 def test_calculate_passenger_metrics_gty_scope_isolation():
     """
     Verify that guess logic for one guest's GTY category code does not
@@ -1750,9 +1758,9 @@ def test_calculate_passenger_metrics_brittle_timestamp_fallback():
         pytest.fail(f"_calculate_passenger_metrics crashed on non-standard arrival timestamp: {err}")
 
 
-# =====================================================================
-# ITEM 14 ORCHESTRATION & RUN CONTROL TESTS: Configuration Lifecycle
-# =====================================================================
+# ============================================================================
+# ITEM 14 TESTS: ORCHESTRATION & RUN CONTROL Configuration Lifecycle
+# ============================================================================
 def test_load_config_objects_handles_none_values_safely(tmp_path):
     """
     Ensure load_config_objects safely parses a YAML configuration even when
@@ -1840,9 +1848,9 @@ def test_exception_block_scoping_resilience():
     assert date_part == "07/02/2026"
 
 
-# =====================================================================
-# ITEM 15: PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION
-# =====================================================================
+# ============================================================================
+# ITEM 15 TESTS PARTIAL CHECK-IN & DP340 DISCOUNT FORWARDING VALIDATION
+# ============================================================================
 def test_calculate_passenger_metrics_partial_checkin_spec(mock_global_config):
     """
     Verify that an IN_PROGRESS or partial check-in status accompanied by an
@@ -2021,9 +2029,10 @@ def test_discount_profile_to_url_params_alignment():
     assert url_params.police is False
     assert hasattr(url_params, "dp340") and url_params.dp340 is True
 
-# =====================================================================
-# ITEM 16 EXTRA REFACTOR & WATCHLIST ROUTING FIXES
-# =====================================================================
+
+# ============================================================================
+# ITEM 16 TESTS EXTRA REFACTOR & WATCHLIST ROUTING FIX
+# ============================================================================
 class MockURLParams:
     def __init__(self):
         self.ship_code = "FR"
@@ -2142,10 +2151,9 @@ def test_exact_price_match_includes_obc(monkeypatch):
         f"OBC tracking lost on exact match. Logs: {''.join(captured_logs)}"
 
 
-
-# =====================================================================
-# ITEM 17: "NOT FOR SALE" AVAILABILITY GATE - MATCH ON SUBTYPE CODE ALONE
-# =====================================================================
+# ============================================================================
+# ITEM 17 TESTS "NOT FOR SALE" AVAILABILITY GATE (MATCH ON SUBTYPE CODE ALONE)
+# ============================================================================
 def _room_selection_rsc(code="D", category_code="4D"):
     """Minimal room-selection RSC payload exposing one stateroom subtype."""
     import json
@@ -2206,9 +2214,9 @@ def test_availability_false_when_subtype_code_absent():
     assert alternates[0]["name"].startswith("Ocean View Balcony")
 
 
-# =====================================================================
-# ITEM 18: END-OF-RUN CHECK-IN & FINAL-PAYMENT SUMMARY TABLE
-# =====================================================================
+# ============================================================================
+# ITEM 18 TESTS END-OF-RUN CHECK-IN & FINAL-PAYMENT SUMMARY TABLE
+# ============================================================================
 def test_checkin_payment_summary_table_renders_and_flags():
     """print_checkin_payment_table sorts by sail date and colour-codes paid vs balance-due."""
     import CheckRoyalCaribbeanPrice as crccl
@@ -2310,11 +2318,11 @@ def test_summary_table_keeps_distinct_reservations():
     crccl.checkin_payment_rows.clear()
 
 
-# =====================================================================
-# ITEM 19: PAYMENT TABLE BALANCE-DUE TRI-STATE
+# ============================================================================
+# ITEM 19 TESTS PAYMENT TABLE BALANCE-DUE TRI-STATE
 # A null/absent balanceDue must never render as "(paid)"; only an explicit
 # False may. Null with a positive balanceDueAmount is a balance due.
-# =====================================================================
+# ============================================================================
 def _run_payment_table(monkeypatch, row_overrides):
     import CheckRoyalCaribbeanPrice as crccl
     from datetime import date as _date
@@ -2375,11 +2383,11 @@ def test_derive_balance_due_states():
     assert derive_balance_due({}) is None
 
 
-# =====================================================================
-# ITEM 20: API TIMEOUT / RETRY CONSTANTS
+# ============================================================================
+# ITEM 20 TESTS API TIMEOUT / RETRY CONSTANTS
 # Tunables live in the constants section rather than as scattered
 # magic numbers; pin their values so a change is a conscious decision.
-# =====================================================================
+# ============================================================================
 def test_timeout_retry_constants():
     import CheckRoyalCaribbeanPrice as crccl
     assert crccl.REQUEST_TIMEOUT == 30
@@ -2408,3 +2416,62 @@ def test_config_parses_without_apprise_package(tmp_path, monkeypatch):
         config = load_config_objects(str(config_file))
     assert config.apobj is None                    # disabled, not crashed
     assert config.accounts[0].username == "test_user"
+
+
+# ============================================================================
+# ITEM 21 TESTS: TA / AGENCY BOOKING BALANCE DUE FALLBACK LOGIC
+# ============================================================================
+def test_derive_balance_due_direct_true():
+    """Direct booking explicitly marking a balance due."""
+    booking = {"balanceDue": True, "balanceDueAmount": 150.00}
+    assert derive_balance_due(booking, []) is True
+
+
+def test_derive_balance_due_direct_false():
+    """Direct booking explicitly marked paid via paidInFull."""
+    booking = {"balanceDue": None, "paidInFull": True}
+    assert derive_balance_due(booking, []) is False
+
+
+def test_derive_balance_due_ta_fallback_owes_money():
+    """TA/Group booking where primary balanceDue is None, but price ledger shows balance due."""
+    booking = {"balanceDue": None, "paidInFull": False}
+    prices = [
+        {"priceTypeCode": "GROSS_TOTALS", "amount": 2500.00},
+        {"priceTypeCode": "BALANCE_DUE", "amount": 500.00}
+    ]
+    assert derive_balance_due(booking, prices) is True
+
+
+def test_derive_balance_due_ta_fallback_settled():
+    """TA/Group booking where price ledger shows zero/negative balance due."""
+    booking = {"balanceDue": None, "paidInFull": False}
+    prices = [
+        {"priceTypeCode": "GROSS_TOTALS", "amount": 2500.00},
+        {"priceTypeCode": "BALANCE_DUE", "amount": 0.00}
+    ]
+    assert derive_balance_due(booking, prices) is False
+
+
+def test_derive_balance_due_completely_unknown():
+    """Neither primary booking fields nor price ledger contains balance information."""
+    booking = {"balanceDue": None, "paidInFull": False}
+    prices = [
+        {"priceTypeCode": "GROSS_TOTALS", "amount": 2500.00}
+    ]
+    assert derive_balance_due(booking, prices) is None
+
+
+def test_derive_balance_due_ta_agency_flagged_unknown():
+    """Missing pricing data on explicitly flagged agency bookings returns TA_UNKNOWN."""
+    # Test agencyId match (from reservation 3523878)
+    booking1 = {"balanceDue": None, "paidInFull": False, "agencyId": "265695"}
+    assert derive_balance_due(booking1, []) == "TA_UNKNOWN"
+
+    # Test isDirect: False match (from reservation 3523878)
+    booking2 = {"balanceDue": None, "paidInFull": False, "isDirect": False}
+    assert derive_balance_due(booking2, []) == "TA_UNKNOWN"
+
+    # Test bookingType: "G" match (from reservation 3523878)
+    booking3 = {"balanceDue": None, "paidInFull": False, "bookingType": "G"}
+    assert derive_balance_due(booking3, []) == "TA_UNKNOWN"
