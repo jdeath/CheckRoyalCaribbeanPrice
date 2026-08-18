@@ -1279,13 +1279,11 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         prepaid_grats_flag = False
         insurance_flag = False
         all_included_flag = False
-        balance_due_total_flag = False
         cruise_paid_price_from_API = result.get("prices", [])
 
         final_payment_date = get_final_payment_date(number_of_nights, sail_date)
         final_payment_date_display = final_payment_date.strftime(date_display_format)
 
-        
         for cur_price in cruise_paid_price_from_API:
             price_type_code = cur_price.get("priceTypeCode", "")
             amount = cur_price.get("amount")
@@ -1305,7 +1303,6 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 all_included_flag = True
                 payment_string += f" Including: {amount:.2f} All Included Drinks/WiFi"
             elif price_type_code == "BALANCE_DUE":
-                balance_due_total_flag = True
                 payment_string += f" {YELLOW}You Still Owe: {amount:.2f} due {final_payment_date_display}{RESET}"
 
         # Store the parsed information into a dictionary for easy passing around
@@ -1318,8 +1315,6 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             paid_price_struct['all_in_upgrade'] = all_included_flag
             log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
-
-
         # Record this booking for the end-of-run check-in / final-payment summary table.
         # Include the room number so multiple cabins on the same sailing are distinct.
         summary_name = ship_dictionary.get_ship(ship_code)
@@ -1328,7 +1323,8 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         summary_reservation = str(reservation_ID)
         if summary_reservation in reservation_friendly_names:
             summary_reservation += f" ({reservation_friendly_names.get(summary_reservation)})"
-        balance_due = derive_balance_due(booking) # This is for net-to-line balance due
+
+        balance_due = derive_balance_due(booking, cruise_paid_price_from_API)
         balance_due_amount = booking.get("balanceDueAmount")
         if str(reservation_ID) in config.paid_reservations:
             balance_due = False   # user vouches for it (reservationsPaidInFull)
@@ -1339,7 +1335,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             "checkin_label": checkin_label or "TBD",
             "final_payment": final_payment_date,
             "past_final_payment": date.today() > final_payment_date,
-            "balance_due": balance_due or balance_due_total_flag,
+            "balance_due": balance_due,
             "dedupe_key": f"{reservation_ID}|{sail_date}",
         })
 
@@ -3270,7 +3266,7 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
 
         if platform.system() == "iOS":
             log_file_path = os.path.expanduser('~/Documents') + "/" + log_file_path
-        
+
         try:
             with open(log_file_path, "a", encoding="utf-8") as f:
                 f.write(delimiter)
@@ -3417,23 +3413,60 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     return config
 
 
-def derive_balance_due(booking: dict) -> Optional[bool]:
+def is_agency_booking(booking: dict) -> bool:
+    """Returns True if booking payload indicates Travel Agent or Group handling."""
+    # 1. Explicit Direct flag override from RC API
+    if booking.get("isDirect") is False:
+        return True
+
+    # 2. Agency ID fields
+    if booking.get("agencyId") or booking.get("travelAgencyId") or booking.get("agencyName"):
+        return True
+
+    # 3. Booking Type codes ("G" = Group, "AGENCY", "GROUP", "TA")
+    booking_type = str(booking.get("bookingType", "")).upper()
+    if booking_type in ("G", "AGENCY", "GROUP", "TA"):
+        return True
+
+    # 4. Group boolean flags
+    if booking.get("groupBooking") is True or booking.get("groupBookingFlag") is True:
+        return True
+
+    return False
+
+
+def derive_balance_due(booking: dict, cruise_paid_price_from_api: Optional[List[dict]] = None) -> Optional[str]:
     """
-    Whether a booking still owes money: True / False, or None when the API
-    doesn't say. balanceDue is True/False on direct bookings but omitted on
-    agency/TA ones. paidInFull is only trusted when True: on agency bookings
-    the web channel has no payment data at all and paidInFull comes back False
-    even on settled bookings (verified against a paid-in-full TA booking), so
-    False is the serializer's default there, not a real assertion of debt.
+    Whether a booking still owes money: True / False, or "TA_UNKNOWN" / None.
     """
+    # 1. Direct explicit boolean check
     balance_due = booking.get("balanceDue")
-    if balance_due is None:
-        if booking.get("paidInFull") is True:
-            return False
-        amount = booking.get("balanceDueAmount")
-        if isinstance(amount, (int, float)):
-            return amount > 0
-    return balance_due
+    if balance_due is not None:
+        return balance_due
+
+    # 2. Check paidInFull
+    if booking.get("paidInFull") is True:
+        return False
+
+    # 3. Check explicit amount field
+    amount = booking.get("balanceDueAmount")
+    if isinstance(amount, (int, float)):
+        return amount > 0
+
+    # 4. Check API pricing array fallback
+    if cruise_paid_price_from_api:
+        for cur_price in cruise_paid_price_from_api:
+            if isinstance(cur_price, dict) and cur_price.get("priceTypeCode") == "BALANCE_DUE":
+                bal_amount = cur_price.get("amount")
+                if isinstance(bal_amount, (int, float)):
+                    return bal_amount > 0
+
+    # 5. If data is still missing, it's expected if explicit agency/group indicators are present,
+    #    so return "TA_UNKNOWN"
+    if is_agency_booking(booking):
+        return "TA_UNKNOWN"
+
+    return None
 
 
 def record_checkin_payment_row(row: Dict[str, Any]) -> None:
@@ -3451,7 +3484,7 @@ def record_checkin_payment_row(row: Dict[str, Any]) -> None:
     key = row.get("dedupe_key")
     for existing in checkin_payment_rows:
         if key is not None and existing.get("dedupe_key") == key:
-            if existing.get("balance_due") is None and row.get("balance_due") is not None:
+            if existing.get("balance_due") not in (True, False) and row.get("balance_due") in (True, False):
                 existing["balance_due"] = row["balance_due"]
                 existing["past_final_payment"] = row["past_final_payment"]
             if existing.get("checkin_label") in (None, "TBD") and row.get("checkin_label") not in (None, "TBD"):
@@ -3484,7 +3517,7 @@ def print_checkin_payment_table() -> None:
             # balance is now past the final payment deadline. "(paid)" is only shown
             # when the API explicitly said the balance is settled - a missing/null
             # balanceDue must not masquerade as paid in full.
-            if r["balance_due"]:
+            if r["balance_due"] is True:
                 if r["past_final_payment"]:
                     pay += " (PAST DUE)"
                     pay_colors.append(RED)
@@ -3494,7 +3527,10 @@ def print_checkin_payment_table() -> None:
             elif r["balance_due"] is False:
                 pay += " (paid)"
                 pay_colors.append(GREEN)
-            else:
+            elif r["balance_due"] == "TA_UNKNOWN":
+                pay += " (contact TA for balance)"
+                pay_colors.append(YELLOW)
+            elif r["balance_due"] is None:
                 pay += " (status unknown)"
                 pay_colors.append(YELLOW)
         else:
