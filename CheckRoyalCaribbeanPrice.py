@@ -1316,7 +1316,6 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             paid_price_struct['gratuities'] = prepaid_grats_flag
             paid_price_struct['trip_insurance'] = insurance_flag
             paid_price_struct['all_in_upgrade'] = all_included_flag
-            paid_price_struct['balance_due_total_flag'] = balance_due_total_flag # This is for actual balance due
             log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
 
