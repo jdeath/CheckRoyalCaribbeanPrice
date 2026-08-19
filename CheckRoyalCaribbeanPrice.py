@@ -1342,7 +1342,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         if balance_due is True:
             owed = (f"{balance_due_amount:.2f}" if isinstance(balance_due_amount, (int, float))
                     else "unknown")
-            log(YELLOW + f"Remaining net-to-line balance {owed} due {final_payment_date_display} (Difference is TA's commision/fronted deposit)" + RESET)
+            log(YELLOW + f"Remaining net-to-line balance {owed} due {final_payment_date_display} (Difference is TA's commission/fronted deposit)" + RESET)
 
         paid_price_struct['booked_obc'] = get_OBC(account_info, booking)
 
@@ -1364,8 +1364,11 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                     # str-compare: a missing/non-numeric 'reservation' key must
                     # not crash the whole booking loop
                     if str(reservation_ID) == str(reservation.get("reservation")):
-                        for item in reservation:
-                            paid_price_struct[item] = reservation.get(item)
+                        for key, val in reservation.items():
+                            if key == "paidPrice":
+                                paid_price_struct["paid_price"] = float(val) if val is not None else None
+                            else:
+                                paid_price_struct[key] = val
 
             if booking.get("stateroomType") != "NONE":
                 get_cruise_price(account_info,
