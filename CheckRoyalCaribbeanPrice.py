@@ -340,7 +340,7 @@ class CruiseURLParams:
         self.fire = overrides.get("fire", self.fire)
         self.loyalty_number = overrides.get("loyaltyNumber", self.loyalty_number)
         self.state = overrides.get("state", self.state)
-
+        
         # Enforce corporate structural constraints natively
         if self.all_included and self.is_royal:
             log("Royal Does Not Have All In Fare\nRemoving All In Fare. Check Documentation")
@@ -1557,7 +1557,11 @@ def get_cruise_price(account_info: AccountInfo,
     # Capture target price bounds if they exist
     # NOTE: both paid_price and paidPrice are valid keys,
     #       depending on booked vs. prospective cruises
-    paid_price = paid_price_struct.get("paid_price") or paid_price_struct.get("paidPrice") if paid_price_struct else None
+    paid_price = None
+    if paid_price_struct:
+        paid_price = paid_price_struct.get("paid_price", None) # get price retrieved from API
+        paid_price = paid_price_struct.get("paidPrice", paid_price) #override with user provided
+        
     room_number = None
 
     # Primary API pricing check pass
