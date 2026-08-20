@@ -1551,9 +1551,6 @@ def get_cruise_price(account_info: AccountInfo,
         if temp_discounts.dp340:
             url_params.coupon_code = 'DP340'
 
-#        if have_a_senior:
-#            url_params.senior = True
-#
     # Absorb any YAML overrides safely now that url_params is guaranteed to be an object
     url_params.apply_overrides(paid_price_struct)
 
@@ -2139,16 +2136,6 @@ def get_new_order_price(
         if per_day_price:
             text += "per night "
         text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
-#        if for_watch:
-#            text = f"{passenger_name}: Book! {title} Price "
-#            if per_day_price:
-#                text += "per night "
-#            text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
-#        else:
-#            text = f"{passenger_name}: Rebook! {title} Price "
-#            if per_day_price:
-#                text += "per night "
-#            text += f"is lower: {current_price} {currency} than {paid_price} {currency}"
 
         # Reaching into global config for alerts configuration
         if config.minimum_saving_alert is not None:
@@ -2177,22 +2164,16 @@ def get_new_order_price(
     else:
         # Current price on server is higher than the paid price ("currently best price" path)
         if for_watch:
-            temp_string = GREEN + f"[WATCH] {display_name} (Cabin {room}) {title} price is higher than watch price: {paid_price:.2f} {currency}" + RESET
+            if current_price == paid_price:
+                comp_string = "the same as"
+            else:
+                comp_string = "higher than"
+            temp_string = GREEN + f"[WATCH] {display_name} (Cabin {room}) {title} price is {comp_string} watch price: {paid_price:.2f} {currency}" + RESET
         else:
             temp_string = GREEN + f"{display_name} (Cabin {room}) has best price "
             if per_day_price:
                 temp_string += "per night "
             temp_string += f"for {title} of: {paid_price:.2f} {currency}" + RESET
-#        if for_watch:
-#            temp_string = GREEN + f"{passenger_name.ljust(10)} {title} price "
-#            if per_day_price:
-#                temp_string += "per night "
-#            temp_string += f"is higher than watch price: {paid_price:.2f} {currency}" + RESET
-#        else:
-#            temp_string = GREEN + f"{passenger_name.ljust(10)} (Cabin {room}) has best price "
-#            if per_day_price:
-#                temp_string += "per night "
-#            temp_string += f"for {title} of: {paid_price:.2f} {currency}" + RESET
         if current_price > paid_price:
             temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
