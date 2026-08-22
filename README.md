@@ -266,7 +266,10 @@ accountInfo:
 logFile: "output.txt"
 ```
 
-To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. If you are Diamond Plus 340+ on a solo booking, it will automatically apply. It will find any publically offered OBC and display it (but not subtract it because it is only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice. If you need any special fares or discounts, see below section to compare to the price you paid.
+To display current cabin prices for your **booked** cruise(s), set displayCruisePrices to true. This will request the current price from Royal's website. The code automatically determines the number of adults and children from your booking. If you are Diamond Plus 340+ on a solo booking, it will automatically apply. It will find any publicly offered OBC and display it (but not subtract it because it is only given in USD). The script will tell you if the cabin class (Interior, Balcony, Connecting Balcony, etc) you booked is no longer for sale, which means you cannot reprice. The script will also tell you if you are beyond the final payment date (75-120 days before departure depending on length of cruise), which also means you cannot reprice. If you need any special fares or discounts, see below section to compare to the price you paid.
+
+If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent.
+
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -274,14 +277,8 @@ accountInfo:
     cruiseLine: "royal" or "celebrity" # This is optional and defaults to royal (note the L is capitalized)
 displayCruisePrices: true
 ```
-<hr>
 
-The API should be able to look up and price check your book *booked** cruise(s). If price is lower and before the final payment date (even if you paid in full), do a mock booking on the website to confirm then call your travel agent. Add this if you want this capability
-```
-displayCruisePrices: true
-```
-
-In some cases, the API may not contain the price of your booked cruise. This is rare and may only occur for group bookings. In this case, you must provide the price you paid and any discounts. You may also want to manually set the price if there is a change fee or you lose your deposit. For instance, if it will cost you $500 to cancel/rebook, set the `pricePaid` flag to $500 less than you actually paid. Include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked a special fare, you must set the corresponding keys. You only need to set what you need, will default to false. If you booked with a refundable deposit, set `refundable = true`. If you booked with included gratitues, set `gratuities=true`. If Celebrity with All-In price, set `allInUpgrade=true`. If you booked with trip insurance, set `tripInsurance=true`. All of the others keys are optional, if you do not set them they default to false or will use the information (state, loyalty number, etc) from your account. This will let the code to request the correct new price from the API. Note some GTY rooms do not have the proper information set in your account. You may need to override the category codes, the code will print an error message if this applies to you. Post an issue if you need help.
+In some cases, the API may not contain the price of your booked cruise. This is rare and may only occur for group bookings. In this case, you must provide the price you paid and any discounts. You may also want to manually set the price if there is a change fee or you lose your deposit. For instance, if it will cost you $500 to cancel/rebook, set the `pricePaid` flag to $500 less than you actually paid. Include the following info in your config, where XXXXXX and YYYYY are your reservation ID. The price can only have a `.` or `,` for the decimal place, do not use an indicator for thousands place. Enter the price paid including taxes and subtract any OBC you received. The code will identify if new booking has OBC and display it (but not subtract it since always give in USD). If you booked a special fare, you must set the corresponding keys. You only need to set what you need, will default to false. If you booked with a refundable deposit, set `refundable = true`. If you booked with included gratuities, set `gratuities=true`. If Celebrity with All-In price, set `allInUpgrade=true`. If you booked with trip insurance, set `tripInsurance=true`. All of the others keys are optional, if you do not set them they default to false or will use the information (state, loyalty number, etc) from your account. This will let the code to request the correct new price from the API. Note some GTY rooms do not have the proper information set in your account. You may need to override the category codes, the code will print an error message if this applies to you. Post an issue if you need help.
 
 ```yaml
 accountInfo:
@@ -308,7 +305,6 @@ reservationPricePaid:
     loyaltyNumber: 12345 # Optional, defaults to loyalty number in your account
     couponCode: DP340 # Optional, defaults to none (unless your account says you are DP with 340 nights on a solo trip)
 ```
-<hr>
 
 If you only want to check cruise prices you have **not** booked yet and do not want email notifications, the account information is not needed by the tool. Config file can look like this. Do not add letters before this paidPrice.
 ```yaml
