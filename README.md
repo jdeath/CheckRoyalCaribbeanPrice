@@ -18,8 +18,6 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 
 > ⚠️ This is **not a hack**. All API calls and data are publicly available. The script simply automates what you can do on the Royal Caribbean website.
 
-[![Stargazers repo roster for @jdeath/CheckRoyalCaribbeanPrice](https://reporoster.com/stars/jdeath/CheckRoyalCaribbeanPrice)](https://github.com/jdeath/CheckRoyalCaribbeanPrice/stargazers)
-
 If the code saved you money or correctly predicted your cabin number, please star the repo or post on your favorite cruise board.
 
 ### Installation
