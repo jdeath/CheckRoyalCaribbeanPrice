@@ -34,7 +34,7 @@ If the code saved you money or correctly predicted your cabin number, star the r
 - [Install (Home Assistant Addon/App Option)](docs/install-homeassistant.md)
 - [Install (Docker Option - thanks @JDare)](docs/install-docker.md)
 
-### Configuration & Usage
+### Advanced Configuration & Usage
 - [Edit Config File](docs/config.md)
 - [Run](docs/run.md)
 - [Output](docs/output.md)
