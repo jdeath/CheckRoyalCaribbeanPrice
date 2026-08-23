@@ -48,7 +48,7 @@ A separate tool in this repo that browses **any** Royal Caribbean or Celebrity s
 - [Browse RoyalCaribbean Prices](docs/browse.md)
 
 ### Reference
-- [Other Notes](docs/other-notes.md)
+- [Other Notes - Find GTY Early and Other Tips](docs/other-notes.md)
 - [Related Tools](docs/related-tools.md)
 - [Credits](docs/credits.md)
 - [Issues](docs/issues.md)
