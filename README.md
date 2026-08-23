@@ -20,9 +20,7 @@ Checks if you have the cheapest price for your **Royal Caribbean** and **Celebri
 
 [![Stargazers repo roster for @jdeath/CheckRoyalCaribbeanPrice](https://reporoster.com/stars/jdeath/CheckRoyalCaribbeanPrice)](https://github.com/jdeath/CheckRoyalCaribbeanPrice/stargazers)
 
-If the code saved you money or correctly predicted your cabin number, star the repo and/or post your success on [r/RoyalCaribbean](https://www.reddit.com/r/royalcaribbean/) !
-
-## Table of Contents
+If the code saved you money or correctly predicted your cabin number, please star the repo or post on your favorite cruise board.
 
 ### Installation
 - [Install (Windows 10/11 Option) - Python Not Required!](docs/install-windows.md)
