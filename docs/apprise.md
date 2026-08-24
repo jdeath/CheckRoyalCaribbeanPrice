@@ -2,8 +2,12 @@
 
 ## Notification Emails/Pushbullet/etc via Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
-1. 99% of people probably have gmail, so you can use the default already setup in the sample config.yaml
-1. This will send you an email only if there is a price drop
+1. 99% of people probably have gmail, so you can use:
+```
+apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
+  - url: "mailto://user:password@gmail.com"
+```
+3. This will send you an email only if there is a price drop
 1. Change username to your gmail username
 1. Change password to your gmail password. If you use 2-factor authentication, you need to generate an app password. You cannot use use normal password
    - Documentation to generate an app password for gmail is here: https://security.google.com/settings/security/apppasswords
