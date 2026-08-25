@@ -1,2 +1,8 @@
 config.yaml
 __pycache__
+config-c.yaml
+config-r.yaml
+output-celebrity.txt
+output-json-celebrity.txt
+output-json-royal.txt
+output-royal.txt
