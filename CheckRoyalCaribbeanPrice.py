@@ -340,7 +340,7 @@ class CruiseURLParams:
         self.fire = overrides.get("fire", self.fire)
         self.loyalty_number = overrides.get("loyaltyNumber", self.loyalty_number)
         self.state = overrides.get("state", self.state)
-        
+
         # Enforce corporate structural constraints natively
         if self.all_included and self.is_royal:
             log("Royal Does Not Have All In Fare\nRemoving All In Fare. Check Documentation")
@@ -1561,7 +1561,7 @@ def get_cruise_price(account_info: AccountInfo,
     if paid_price_struct:
         paid_price = paid_price_struct.get("paid_price", None) # get price retrieved from API
         paid_price = paid_price_struct.get("paidPrice", paid_price) #override with user provided
-        
+
     room_number = None
 
     # Primary API pricing check pass
@@ -2068,7 +2068,7 @@ def get_new_order_price(
     params = {
         'reservationId': reservation_ID,
         'startDate': start_date,
-        'currencyIso': currency,
+#        'currencyIso': currency,
         'passengerId': passenger_ID,
     }
 
@@ -2315,7 +2315,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
             'passengerId': current_passenger_id,
             'reservationId': current_res_id,
             'sailingId': f"{ship}{start_date}",
-            'currencyIso': currency,
+#            'currencyIso': currency,
             'includeMedia': 'false',
         }
 
@@ -2563,7 +2563,7 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> float:
     params = {
         'passengerId': booking.get("passengerId"),
         'sailingId': f"{ship_code}{sail_date}",
-        'currencyIso': booking.get("bookingCurrency"),
+#        'currencyIso': booking.get("bookingCurrency"),
     }
 
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/cart/v1/obc/reservations/{reservation_ID}'
