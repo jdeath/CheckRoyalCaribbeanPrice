@@ -1,6 +1,5 @@
 # change "royal" to "celebrity" if needed
 logFile: "output.txt"
-output-json-watch: "output-json.text"
 accountInfo: 
   - username: "user@gmail.com"
     password: "pa$$word"

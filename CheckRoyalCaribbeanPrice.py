@@ -503,7 +503,8 @@ class CruiseAppConfig:
     date_display_format: Optional[str] = "%x"
     request_timeout: int = REQUEST_TIMEOUT
     log_file: Optional[str] = None
-    output_json_watch: Optional[str] = "output-json.txt"
+    output_watch_as_json: bool = False
+    output_json_watch_file: Optional[str] = "output-json-watch.txt"
     apprise_urls: List[str] = field(default_factory=list)
     notify_on_error: bool = False
     apprise_test: Optional[bool] = None
@@ -3409,7 +3410,8 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         request_timeout=int(data.get("requestTimeout", REQUEST_TIMEOUT)),
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
-        output_json_watch=data.get("output-json-watch"),
+        output_watch_as_json=data.get("outputWatchAsJson",False),
+        output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
         apobj=apobj,
         accounts=accounts,
         watch_list=watch_list,
@@ -3702,7 +3704,8 @@ def main() -> None:
         print_checkin_payment_table()
 
         # Write the watchlist price results to JSON for external consumption
-        write_watch_price_json(config.output_json_watch)
+        if config.output_watch_as_json: 
+            write_watch_price_json(config.output_json_watch_file)
 
     except Exception as e:
         # Let the global catch-all at the module entry point handle unexpected execution faults

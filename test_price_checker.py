@@ -1737,13 +1737,13 @@ def test_get_new_order_price_writes_json_watch_record(tmp_path):
     CheckRoyalCaribbeanPrice.write_watch_price_json(str(output_path))
 
     assert json.loads(output_path.read_text()) == [{
-        "start_date": "20270510",
-        "reservation_id": "1234567",
-        "product": "DBP01",
-        "title": "Deluxe Beverage Package",
-        "current_price": 65.0,
+        "SailDate": "20270510",
+        "ReservationID": "1234567",
+        "Passenger": "Matt",
+        "ProductID": "DBP01",
+        "ProductTitle": "Deluxe Beverage Package",
+        "CurrentPrice": 65.0,
     }]
-
 
 # ============================================================================
 # ITEM 13 TESTS: EXTRA METRIC CALCULATION Scope Isolation & String Resiliency
