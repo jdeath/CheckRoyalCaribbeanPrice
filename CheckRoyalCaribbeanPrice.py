@@ -111,6 +111,9 @@ log_err = None
 # compact check-in + final-payment summary table (see print_checkin_payment_table)
 checkin_payment_rows: List[Dict[str, Any]] = []
 
+# Add-on watch prices collected during the current run for machine-readable output
+watch_price_rows: List[Dict[str, Any]] = []
+
 ##################################
 # Classes (Structural and Logging)
 ##################################
@@ -500,6 +503,8 @@ class CruiseAppConfig:
     date_display_format: Optional[str] = "%x"
     request_timeout: int = REQUEST_TIMEOUT
     log_file: Optional[str] = None
+    output_watch_as_json: bool = False
+    output_json_watch_file: Optional[str] = "output-json-watch.txt"
     apprise_urls: List[str] = field(default_factory=list)
     notify_on_error: bool = False
     apprise_test: Optional[bool] = None
@@ -2124,6 +2129,15 @@ def get_new_order_price(
         log(YELLOW + f"\t{title}: no current price returned; cannot compare" + RESET)
         return
 
+    watch_price_rows.append({
+        "SailDate": start_date,
+        "ReservationID": reservation_ID,
+        "Passenger": passenger_name,
+        "ProductID": product,
+        "ProductTitle": title,
+        "CurrentPrice": current_price,
+    })
+
     # Process Deal Alerts
     if current_price < paid_price:
         # Current price on server is lower than the paid price (rebooking alert path)
@@ -2181,6 +2195,19 @@ def get_new_order_price(
         if current_price > paid_price:
             temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
+
+
+def write_watch_price_json(output_path: str) -> None:
+    """Write the add-on watch prices collected during this run as a JSON array."""
+    if platform.system() == "iOS":
+        output_path = os.path.expanduser('~/Documents') + "/" + output_path
+
+    try:
+        with open(output_path, "w", encoding="utf-8") as output_file:
+            json.dump(watch_price_rows, output_file, indent=2)
+            output_file.write("\n")
+    except OSError as error:
+        log(f"{YELLOW}Warning: Could not write JSON watch output '{output_path}': {error}{RESET}")
 
 
 def process_watch_list_for_booking(
@@ -3383,6 +3410,8 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         request_timeout=int(data.get("requestTimeout", REQUEST_TIMEOUT)),
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
+        output_watch_as_json=data.get("outputWatchAsJson",False),
+        output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
         apobj=apobj,
         accounts=accounts,
         watch_list=watch_list,
@@ -3561,6 +3590,7 @@ def main() -> None:
     try:
         # Start each run with an empty check-in / payment summary collector
         checkin_payment_rows.clear()
+        watch_price_rows.clear()
 
         # Set Time with AM/PM or 24h based on locale
         locale.setlocale(locale.LC_TIME,'')
@@ -3672,6 +3702,10 @@ def main() -> None:
 
         # Summary table of upcoming check-in and final-payment dates for booked sailings
         print_checkin_payment_table()
+
+        # Write the watchlist price results to JSON for external consumption
+        if config.output_watch_as_json: 
+            write_watch_price_json(config.output_json_watch_file)
 
     except Exception as e:
         # Let the global catch-all at the module entry point handle unexpected execution faults

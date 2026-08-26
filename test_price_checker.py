@@ -1,4 +1,5 @@
 import base64
+import json
 import pytest
 import re
 import requests
@@ -1698,6 +1699,52 @@ def test_get_new_order_price_execution():
         assert True
 
 
+def test_get_new_order_price_writes_json_watch_record(tmp_path):
+    """A valid catalog price is exported with the requested machine-readable fields."""
+    import CheckRoyalCaribbeanPrice
+
+    account_info = AccountInfo(username="tester", password="password")
+    booking = {
+        "bookingId": "1234567",
+        "shipCode": "AL",
+        "sailDate": "20270510",
+        "numberOfNights": 7,
+    }
+    ctx = WatchItemContext(
+        prefix="BEVERAGE",
+        product="DBP01",
+        passenger_ID="999",
+        passenger_name="Matt",
+        room="1234",
+        paid_price=70.0,
+        currency="USD",
+        guest_age_string="adult",
+    )
+    response = MagicMock()
+    response.json.return_value = {
+        "payload": {
+            "title": "Deluxe Beverage Package",
+            "startingFromPrice": {"adultPromotionalPrice": 65.0},
+        }
+    }
+
+    CheckRoyalCaribbeanPrice.watch_price_rows.clear()
+    with patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=response), \
+         patch("CheckRoyalCaribbeanPrice.log"):
+        get_new_order_price(account_info, booking, None, ctx)
+
+    output_path = tmp_path / "watch.json"
+    CheckRoyalCaribbeanPrice.write_watch_price_json(str(output_path))
+
+    assert json.loads(output_path.read_text()) == [{
+        "SailDate": "20270510",
+        "ReservationID": "1234567",
+        "Passenger": "Matt",
+        "ProductID": "DBP01",
+        "ProductTitle": "Deluxe Beverage Package",
+        "CurrentPrice": 65.0,
+    }]
+
 # ============================================================================
 # ITEM 13 TESTS: EXTRA METRIC CALCULATION Scope Isolation & String Resiliency
 # ============================================================================
@@ -1780,6 +1827,7 @@ def test_load_config_objects_handles_none_values_safely(tmp_path):
         config = load_config_objects(str(config_file))
         assert isinstance(config, CruiseAppConfig)
         assert config.minimum_saving_alert is None
+        assert config.output_json_watch == "output-json.text"
 
 
 def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch):
