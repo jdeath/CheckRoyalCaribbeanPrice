@@ -343,7 +343,7 @@ class CruiseURLParams:
         self.fire = overrides.get("fire", self.fire)
         self.loyalty_number = overrides.get("loyaltyNumber", self.loyalty_number)
         self.state = overrides.get("state", self.state)
-        
+
         # Enforce corporate structural constraints natively
         if self.all_included and self.is_royal:
             log("Royal Does Not Have All In Fare\nRemoving All In Fare. Check Documentation")
@@ -383,7 +383,7 @@ class WatchItemContext:
     passenger_name: str
     room: Optional[str]
     paid_price: float
-    currency: str
+#    currency: str
     guest_age_string: str
     sales_unit: Optional[Any] = None
     for_watch: bool = True
@@ -473,7 +473,7 @@ class WatchListItem:
     price: float
     enabled: bool = True
     guest_age_string: str = "adult"
-    currency: str = "USD"
+#    currency: str = "USD"
     reservations: Optional[List[str]] = field(default_factory=list)
 
 
@@ -508,7 +508,7 @@ class CruiseAppConfig:
     apprise_urls: List[str] = field(default_factory=list)
     notify_on_error: bool = False
     apprise_test: Optional[bool] = None
-    currency_override: Optional[str] = None
+#    currency_override: Optional[str] = None
 
     display_cruise_prices: bool = True
     minimum_saving_alert: Optional[float] = None
@@ -1566,7 +1566,7 @@ def get_cruise_price(account_info: AccountInfo,
     if paid_price_struct:
         paid_price = paid_price_struct.get("paid_price", None) # get price retrieved from API
         paid_price = paid_price_struct.get("paidPrice", paid_price) #override with user provided
-        
+
     room_number = None
 
     # Primary API pricing check pass
@@ -2052,7 +2052,8 @@ def get_new_order_price(
     start_date = booking.get("sailDate", "")
     number_of_nights = int(booking.get("numberOfNights") or 0)
 
-    currency = config.currency_override if config.currency_override else ctx.currency
+    currency = booking.get("bookingCurrency", "USD")
+#    currency = config.currency_override if config.currency_override else ctx.currency
     prefix = ctx.prefix or ""
     product = ctx.product or ""
 
@@ -2073,7 +2074,6 @@ def get_new_order_price(
     params = {
         'reservationId': reservation_ID,
         'startDate': start_date,
-        'currencyIso': currency,
         'passengerId': passenger_ID,
     }
 
@@ -2088,6 +2088,11 @@ def get_new_order_price(
             raise ValueError
     except (AttributeError, ValueError, TypeError):
         log(f"{prefix} {product} not available for passenger")
+        return
+
+    booking_eligibility = payload.get("bookingEligibility") or {}
+    if booking_eligibility.get("reason") == "NO_STARTING_FROM_PRICE":
+        log(YELLOW + f"\t{title}: Server returned no pricing data (currency mismatch or unavailable for reservation)." + RESET)
         return
 
     # Parse the returned information for analysis and display
@@ -2240,7 +2245,7 @@ def process_watch_list_for_booking(
         watch_price = float(getattr(watch_item, 'price', 0))
         enabled = getattr(watch_item, 'enabled', True)  # Default to True if not specified
         guest_age_string = str(getattr(watch_item, 'guest_age_string', "adult")).lower()
-        currency = getattr(watch_item, 'currency', "USD")
+#        currency = getattr(watch_item, 'currency', "USD")
 
         reservation_list = getattr(watch_item, 'reservations', None)
         reservation_ID = booking.get("bookingId")
@@ -2266,7 +2271,7 @@ def process_watch_list_for_booking(
             passenger_name=passenger_name,
             room=room,
             paid_price=watch_price,
-            currency=currency,
+#            currency=currency,
             guest_age_string=guest_age_string,
             sales_unit=None,
             for_watch=True,
@@ -2294,11 +2299,12 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
     start_date = booking.get("sailDate", "")
     number_of_nights = int(booking.get("numberOfNights") or 0)
 
-    # Handle global currency overrides cleanly
-    if config.currency_override:
-        currency = config.currency_override
-    else:
-        currency = booking.get("bookingCurrency", "USD")
+#    # Handle global currency overrides cleanly
+#    if config.currency_override:
+#        currency = config.currency_override
+#    else:
+#        currency = booking.get("bookingCurrency", "USD")
+    currency = booking.get("bookingCurrency", "USD")
 
     # Build dynamic guest/reservation lookups
     guest_registry = {}
@@ -2342,7 +2348,6 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
             'passengerId': current_passenger_id,
             'reservationId': current_res_id,
             'sailingId': f"{ship}{start_date}",
-            'currencyIso': currency,
             'includeMedia': 'false',
         }
 
@@ -2432,7 +2437,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             # Divide by package headcount to isolate the final per-guest daily rate
                             paid_price = round(paid_price / paid_quantity, 2)
 
-                        currency = guest.get("priceDetails", {}).get("currency")
+#                        currency = guest.get("priceDetails", {}).get("currency")
                         room = guest_registry.get(guest_passenger_ID, {}).get("cabin")
                         if not room or room == "None":
                             room = guest.get("stateroomNumber") or None
@@ -2445,7 +2450,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             passenger_name=first_name,
                             room=room,
                             paid_price=paid_price,
-                            currency=currency,
+#                            currency=currency,
                             guest_age_string=guest_age_string,
                             sales_unit=sales_unit,
                             for_watch=False,
@@ -2590,7 +2595,6 @@ def get_OBC(account_info: AccountInfo, booking: Dict[str, Any]) -> float:
     params = {
         'passengerId': booking.get("passengerId"),
         'sailingId': f"{ship_code}{sail_date}",
-        'currencyIso': booking.get("bookingCurrency"),
     }
 
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/cart/v1/obc/reservations/{reservation_ID}'
@@ -2653,7 +2657,6 @@ def _build_checkout_url(
         'r0b': 'n',
         'r0r': is_police,
         'r0s': is_fire,
-#        'r0s': 'n', # Formerly hardcoded; kept for a revert in case of problems
         'r0q': is_military,
         'r0t': is_senior,
         'r0D': 'y'
@@ -3329,6 +3332,9 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     and addon tracking lists. Pre-configures functional notification managers (Apprise)
     and handles fractional logic safely (like differentiating a 0.0 value alert from None).
     """
+    currency_present = False
+    currency_override_present = False
+
     with open(config_path, 'r') as file:
         # an empty config.yaml parses to None - fail with clear messages below,
         # not an AttributeError on data.get
@@ -3377,8 +3383,11 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         # Otherwise, fall back onto default values
         if "enabled" in w:         item_kwargs["enabled"] = w["enabled"]
         if "guestAgeString" in w:  item_kwargs["guest_age_string"] = w["guestAgeString"]
-        if "currency" in w:        item_kwargs["currency"] = w["currency"]
+#        if "currency" in w:        item_kwargs["currency"] = w["currency"]
         if "reservations" in w:    item_kwargs["reservations"] = w["reservations"]
+
+        if "currency" in w:
+            currency_present = True
 
         # Unpack into the constructor
         watch_list.append(WatchListItem(**item_kwargs))
@@ -3400,10 +3409,13 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     raw_alert = data.get("minimumSavingAlert", None)
     minimum_saving_alert = float(raw_alert) if raw_alert is not None else None
 
+    if data.get("currencyOverride", None) is not None:
+        currency_override_present = True
+
     # Build and return the global master config object using data.get() for fallback defaults
     config = CruiseAppConfig(
         display_cruise_prices=data.get("displayCruisePrices", True),
-        currency_override=data.get("currencyOverride", None),
+#        currency_override=data.get("currencyOverride", None),
         minimum_saving_alert=minimum_saving_alert,
         notify_on_error=data.get("notifyOnError", False),
         show_promos=data.get("showPromos", False),
@@ -3426,6 +3438,11 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
 
     # Set up the custom logger
     setup_hybrid_logging(config.log_file)
+
+    if currency_override_present:
+        log(YELLOW + f"Due to RCCL API updates, config file option 'currencyOverride' is deprecated" + RESET)
+    if currency_present:
+        log(YELLOW + f"Due to RCCL API updates, config file watchlist option 'currency' is deprecated" + RESET)
 
     return config
 
@@ -3610,8 +3627,8 @@ def main() -> None:
         if config.minimum_saving_alert is not None:
             log(YELLOW + f"Only alerting for savings >= {config.minimum_saving_alert:.2f}" + RESET)
 
-        if config.currency_override:
-            log(YELLOW + f"Overriding Current Price Currency to {config.currency_override}" + RESET)
+#        if config.currency_override:
+#            log(YELLOW + f"Overriding Current Price Currency to {config.currency_override}" + RESET)
 
         # Generate the list of ship codes
         ship_dictionary = ShipRegistry()

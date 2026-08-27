@@ -1663,7 +1663,7 @@ def test_get_new_order_price_execution():
         passenger_name='Matt',
         room='1234',
         paid_price=70.00,
-        currency='USD',
+#        currency='USD',
         guest_age_string='adult',
         sales_unit='PER_NIGHT',
         for_watch=False,
@@ -1717,7 +1717,7 @@ def test_get_new_order_price_writes_json_watch_record(tmp_path):
         passenger_name="Matt",
         room="1234",
         paid_price=70.0,
-        currency="USD",
+#        currency="USD",
         guest_age_string="adult",
     )
     response = MagicMock()
@@ -1730,6 +1730,7 @@ def test_get_new_order_price_writes_json_watch_record(tmp_path):
 
     CheckRoyalCaribbeanPrice.watch_price_rows.clear()
     with patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=response), \
+         patch("CheckRoyalCaribbeanPrice.config.minimum_saving_alert", None), \
          patch("CheckRoyalCaribbeanPrice.log"):
         get_new_order_price(account_info, booking, None, ctx)
 
@@ -1827,7 +1828,8 @@ def test_load_config_objects_handles_none_values_safely(tmp_path):
         config = load_config_objects(str(config_file))
         assert isinstance(config, CruiseAppConfig)
         assert config.minimum_saving_alert is None
-        assert config.output_json_watch == "output-json.text"
+        assert config.output_json_watch_file == "output-json-watch.txt"
+#        assert config.output_json_watch == "output-json.text"
 
 
 def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch):

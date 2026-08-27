@@ -149,7 +149,7 @@ def run_addon_scenario(
         passenger_name="Jim",
         room="6543",
         paid_price=paid,
-        currency="USD",
+#        currency="USD",
         guest_age_string=guest_age_string,
         sales_unit=sales_unit,
         for_watch=for_watch,
