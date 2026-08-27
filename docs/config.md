@@ -24,7 +24,11 @@ apprise:  # Optional, see https://github.com/caronc/apprise, can have as many li
   - url: "mailto://user:password@gmail.com"
   - url: "ntfy://abcfeg3839439djd"
 logFile: "output.txt"
+output-json-watch: "output-json.txt"
 ```
+
+The add-on watch prices checked during each run are also written as a JSON list. Set
+`output-json-watch` to change the output path; it defaults to `output-json.text`.
 
 If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
 ```yaml
