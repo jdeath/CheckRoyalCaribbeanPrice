@@ -1662,7 +1662,7 @@ def test_get_new_order_price_execution():
         passenger_name='Matt',
         room='1234',
         paid_price=70.00,
-        currency='USD',
+#        currency='USD',
         guest_age_string='adult',
         sales_unit='PER_NIGHT',
         for_watch=False,
