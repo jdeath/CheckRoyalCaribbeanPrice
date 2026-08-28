@@ -136,6 +136,16 @@ reservationsPaidInFull:
   - '8912345'
 ```
 
+To keep a local history of every price check (for tracking trends over time), set historyDb to a file path. It is optional and off by default - with it unset, nothing changes and no file is created. When set, every cabin fare and add-on/watchlist price check made during a run is appended as one row to a local SQLite file (a `runs` table per script run, plus a `price_points` table with the paid price, current price, and decision for each item checked).
+```yaml
+historyDb: "price_history.db"
+```
+Running in Docker? Point it at the mounted data volume so it survives container restarts, and make sure `./data:/app/data` is mounted in `docker-compose.yml` (already included by default):
+```yaml
+historyDb: "/app/data/price_history.db"
+```
+The file only ever grows (nothing is deleted automatically) - you manage it. Each row is roughly 300 bytes, so even tracking ~10 items twice a day for a 5-month sailing stays well under 2 MB.
+
 To keep passwords out of your config file, any config value that is exactly `${VAR_NAME}` is replaced with that environment variable when the config is loaded. Useful for Docker/Home Assistant setups or shared machines.
 ```yaml
 accountInfo:

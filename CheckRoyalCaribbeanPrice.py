@@ -1,12 +1,14 @@
 from __future__ import annotations
 import argparse
 import base64
+from contextlib import closing
 import json
 import locale
 import logging
 import os
 import platform
 import re
+import sqlite3
 
 # curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
 # edge servers do not reject some IPs/systems as bots with 403 Access Denied
@@ -506,6 +508,7 @@ class CruiseAppConfig:
     date_display_format: Optional[str] = "%x"
     request_timeout: int = REQUEST_TIMEOUT
     log_file: Optional[str] = None
+    history_db: Optional[str] = None
     output_watch_as_json: bool = False
     output_json_watch_file: Optional[str] = "output-json-watch.txt"
     apprise_urls: List[str] = field(default_factory=list)
@@ -530,6 +533,7 @@ class CruiseAppConfig:
 
     # Live Runtime Objects (Excluded from the initial YAML mapping)
     apobj: Optional[Apprise] = None
+    history: "PriceHistory" = field(default_factory=lambda: PriceHistory(None))
 
 
     def __str__(self):
@@ -552,6 +556,132 @@ class CruiseAppConfig:
             return datetime.strptime(clean_str, "%Y%m%d").strftime(self.date_display_format)
         except ValueError:
             return str(date_str)   # malformed API date: show it raw, don't crash the run
+
+
+_PRICE_HISTORY_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS runs (
+    run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at       TEXT NOT NULL,
+    finished_at      TEXT,
+    status           TEXT NOT NULL DEFAULT 'started',
+    error_summary    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS price_points (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id           INTEGER NOT NULL REFERENCES runs(run_id),
+    observed_at      TEXT NOT NULL,
+    account_label    TEXT,
+    reservation_id   TEXT,
+    ship_code        TEXT,
+    sail_date        TEXT,
+    nights           INTEGER,
+    item_kind        TEXT NOT NULL,
+    item_code        TEXT,
+    item_name        TEXT,
+    guest_id         TEXT,
+    guest_name       TEXT,
+    paid_price       REAL,
+    current_price    REAL,
+    currency         TEXT,
+    per_night        INTEGER NOT NULL DEFAULT 0,
+    discount_applied TEXT,
+    status           TEXT NOT NULL,
+    rebook_decision  TEXT,
+    notified         INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_points_latest
+    ON price_points (reservation_id, item_code, guest_id, observed_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_price_points_history
+    ON price_points (item_code, sail_date, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_price_points_run
+    ON price_points (run_id);
+"""
+
+
+class PriceHistory:
+    """
+    Opt-in, append-only SQLite price-history sink (config: historyDb).
+
+    Every public method is a silent no-op when db_path is falsy, so the ~10
+    call sites throughout this script never need an `if config.history:`
+    guard - the object itself absorbs "feature off" and touches the
+    filesystem not at all in that case. When enabled, each observation is
+    committed immediately (one connection per call, WAL mode) so a crash
+    mid-run loses nothing already recorded - this script is a short-lived
+    process invoked fresh per run, so there is no long-lived connection to
+    manage. A `runs` row whose finished_at is still NULL means the process
+    exited without ever finalizing it (e.g. a sys.exit() from a login
+    failure, before main()'s own error handler could run) - treat such rows
+    as an aborted run, not a currently-in-progress one.
+    """
+
+    def __init__(self, db_path: Optional[str] = None) -> None:
+        self.enabled = bool(db_path)
+        self.db_path = db_path
+        self._current_run_id: Optional[int] = None
+        if self.enabled:
+            with closing(self._connect()) as conn:
+                conn.executescript(_PRICE_HISTORY_SCHEMA_SQL)
+
+    def __repr__(self) -> str:
+        if not self.enabled:
+            return "<PriceHistory enabled=False>"
+        return f"<PriceHistory db={self.db_path!r} enabled=True run_id={self._current_run_id}>"
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=10000")
+        return conn
+
+    def start_run(self) -> Optional[int]:
+        """Opens a new `runs` row and remembers it as the active run."""
+        if not self.enabled:
+            return None
+        with closing(self._connect()) as conn:
+            cur = conn.execute(
+                "INSERT INTO runs (started_at, status) VALUES (?, 'started')",
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+            conn.commit()
+            self._current_run_id = cur.lastrowid
+            return self._current_run_id
+
+    def finish_run(self, status: str, error_summary: Optional[str] = None) -> None:
+        """Closes out the active `runs` row opened by the last start_run()."""
+        if not self.enabled or self._current_run_id is None:
+            return
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE runs SET finished_at=?, status=?, error_summary=? WHERE run_id=?",
+                (datetime.now(timezone.utc).isoformat(), status, error_summary, self._current_run_id),
+            )
+            conn.commit()
+
+    def record_cabin_fare(self, **fields: Any) -> None:
+        """Appends one `price_points` row for a cabin-fare observation."""
+        if not self.enabled or self._current_run_id is None:
+            return
+        self._insert(item_kind="cabin_fare", **fields)
+
+    def record_addon(self, **fields: Any) -> None:
+        """Appends one `price_points` row for an addon/watchlist observation."""
+        if not self.enabled or self._current_run_id is None:
+            return
+        self._insert(**fields)
+
+    def _insert(self, **fields: Any) -> None:
+        fields.setdefault("observed_at", datetime.now(timezone.utc).isoformat())
+        fields["run_id"] = self._current_run_id
+        cols = ", ".join(fields)
+        placeholders = ", ".join("?" for _ in fields)
+        with closing(self._connect()) as conn:
+            conn.execute(f"INSERT INTO price_points ({cols}) VALUES ({placeholders})", tuple(fields.values()))
+            conn.commit()
 
 
 ############################################
@@ -1483,6 +1613,8 @@ def get_cruise_price(account_info: AccountInfo,
     # Pull properties from the foundational domain entities
     session = account_info.access.session
     apobj = notifier_for(account_info)
+    # None for the synthetic prospective-cruise booking dict (no real reservation)
+    reservation_id = booking.get("bookingId")
     if paid_price_struct is None:
         paid_price_struct = booking.get("paidPriceStruct")  # Dict containing target metrics
 
@@ -1634,6 +1766,16 @@ def get_cruise_price(account_info: AccountInfo,
     if used_discounts != "":
         pre_string = f"{pre_string} ({used_discounts[:-2]} Discount)"
 
+    # Fields shared by every PriceHistory.record_cabin_fare() call below;
+    # each call site only adds current_price/status/rebook_decision/notified
+    history_common = {
+        "reservation_id": reservation_id, "account_label": account_info.username,
+        "ship_code": url_params.ship_code, "sail_date": url_params.sail_date, "nights": resolved_nights,
+        "item_code": f"{url_params.package_code}/{url_params.stateroom_category_code}",
+        "paid_price": paid_price, "currency": url_params.currency_code,
+        "discount_applied": used_discounts[:-2] if used_discounts else None,
+    }
+
     addons = ""
     refund_not_found = False
 
@@ -1650,6 +1792,8 @@ def get_cruise_price(account_info: AccountInfo,
             # No fare data at all: bail out rather than comparing against a phantom
             # 0.00 price, which would fire a false "Rebook! New price of 0.00" alert
             log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
+            config.history.record_cabin_fare(**history_common, current_price=None,
+                                              status="no_price_data", rebook_decision=None, notified=False)
             return
 
         # The keys always exist (so .get defaults never apply) but their values
@@ -1657,6 +1801,8 @@ def get_cruise_price(account_info: AccountInfo,
         # crashing on the first {price:.2f} format below
         if fare_struct.get("fare") is None:
             log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
+            config.history.record_cabin_fare(**history_common, current_price=None,
+                                              status="no_price_data", rebook_decision=None, notified=False)
             return
         price = fare_struct.get("fare") or 0.0
         grats = fare_struct.get("gratuities") or 0.0
@@ -1732,6 +1878,9 @@ def get_cruise_price(account_info: AccountInfo,
                     log(f"\t{available_room.get('name')} {available_room.get('price'):.2f} - Rooms Left {available_room.get('rooms_left')}")
             else:
                 log(f"\tNo alternative room inventory returned by the booking engine.")
+
+        config.history.record_cabin_fare(**history_common, current_price=None, status="not_for_sale",
+                                          rebook_decision=None, notified=(not automatic_URL and apobj is not None))
         return
 
     obc_value = float(obc or 0.0)
@@ -1740,7 +1889,14 @@ def get_cruise_price(account_info: AccountInfo,
     # Path 2: Standard Pricing Evaluation
     if paid_price is None:
         log(GREEN + f"{pre_string}:" + RESET + f" Current Price {price:.2f} {url_params.currency_code}")
+        config.history.record_cabin_fare(**history_common, current_price=price, status="priced",
+                                          rebook_decision=None, notified=False)
         return
+
+    # rebook_decision / notified are computed inline below, then recorded once
+    # after the branch (see B.3/C.2) - the alert logic itself is untouched.
+    rebook_decision: Optional[str] = None
+    notified = False
 
     if price < paid_price:
         saving = round(paid_price - price, 2)
@@ -1755,10 +1911,13 @@ def get_cruise_price(account_info: AccountInfo,
             if config.minimum_saving_alert is not None and saving < config.minimum_saving_alert:
                 text_string += f" (Saving {saving:.2f} < minimumSavingAlert {config.minimum_saving_alert}; no notification sent)"
                 log(YELLOW + text_string + RESET)
+                rebook_decision = "suppressed_below_threshold"
             else:
                 log(RED + text_string + RESET)
                 if apobj is not None:
                     apobj.notify(body=text_string, title='Cruise Price Alert', body_format=NotifyFormat.TEXT)
+                    notified = True
+                rebook_decision = "rebook"
 
         # Sub-branch 2: Booked drop but locked behind final lock dates
         if automatic_URL and past_final_payment_date:
@@ -1767,6 +1926,7 @@ def get_cruise_price(account_info: AccountInfo,
                 text_string += f", not including {obc_string} USD OBC,"
             text_string += f" is lower than {paid_price:.2f}"
             log(YELLOW + text_string + RESET)
+            rebook_decision = "past_final_payment"
 
         # Sub-branch 3: Speculative prospective watchlist match
         if not automatic_URL:
@@ -1778,12 +1938,16 @@ def get_cruise_price(account_info: AccountInfo,
             if config.minimum_saving_alert is not None and saving < config.minimum_saving_alert:
                 text_string += f" (Saving {saving:.2f} < minimumSavingAlert {config.minimum_saving_alert:.2f}; no notification sent)"
                 log(YELLOW + text_string + RESET)
+                rebook_decision = "suppressed_below_threshold"
             else:
                 log(RED + text_string + RESET)
                 if apobj is not None:
                     apobj.notify(body=text_string, title='Cruise Price Alert', body_format=NotifyFormat.TEXT)
+                    notified = True
+                rebook_decision = "consider_booking"
     else:
         # Current catalog price is equal to or higher than target price thresholds
+        rebook_decision = "best_price"
         temp_string = GREEN + f"{pre_string}: You have the best price of {paid_price:.2f} {url_params.currency_code}" + RESET
         if price > paid_price:
             temp_string += f" (now {price:.2f} {url_params.currency_code}"
@@ -1800,6 +1964,9 @@ def get_cruise_price(account_info: AccountInfo,
             temp_string += f" Non-refundable price is {base_price:.2f} {url_params.currency_code}"
 
         log(temp_string)
+
+    config.history.record_cabin_fare(**history_common, current_price=price, status="priced",
+                                      rebook_decision=rebook_decision, notified=notified)
 
 
 def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[str] = None) -> Dict[str, Any]:
@@ -2084,6 +2251,7 @@ def get_new_order_price(
     owner = ctx.owner
 
     display_name = passenger_name.ljust(10)
+    per_day_price = sales_unit in ['PER_NIGHT', 'PER_DAY']
 
     params = {
         'reservationId': reservation_ID,
@@ -2115,12 +2283,25 @@ def get_new_order_price(
     if "Bottles" in variant:
         title = f"{title} ({variant})"
 
+    # Fields shared by every PriceHistory.record_addon() call below (title is
+    # final as of here); each call site only adds current_price/discount_applied/
+    # status/rebook_decision/notified
+    history_common = {
+        "item_kind": "watchlist" if for_watch else "addon",
+        "reservation_id": str(reservation_ID) if reservation_ID is not None else None,
+        "account_label": account_info.username, "ship_code": ship, "sail_date": start_date,
+        "nights": number_of_nights or None, "item_code": f"{prefix}/{product}", "item_name": title,
+        "guest_id": str(passenger_ID) if passenger_ID is not None else None, "guest_name": passenger_name,
+        "paid_price": paid_price, "currency": currency, "per_night": int(per_day_price),
+    }
+
     booking_eligibility = payload.get("bookingEligibility") or {}
     if booking_eligibility.get("reason") == "NO_STARTING_FROM_PRICE":
         log(YELLOW + f"\t{title}: Server returned no pricing data (currency mismatch or unavailable for reservation)." + RESET)
+        config.history.record_addon(**history_common, current_price=None, discount_applied=None,
+                                     status="no_price_data", rebook_decision=None, notified=False)
         return
 
-    per_day_price = sales_unit in ['PER_NIGHT', 'PER_DAY']
     new_price_payload = payload.get("startingFromPrice")
 
     # Item is no longer for sale or already purchased
@@ -2134,6 +2315,8 @@ def get_new_order_price(
             temp_string = YELLOW + f"\t{title} not available or already booked for {passenger_name.ljust(10)}" + RESET
 
         log(temp_string)
+        config.history.record_addon(**history_common, current_price=None, discount_applied=None,
+                                     status="no_longer_for_sale", rebook_decision=None, notified=False)
         return
 
     # Extract age-bracket targeted metrics
@@ -2146,6 +2329,8 @@ def get_new_order_price(
         # would fire a false "price is lower / Book!" alert (same failure mode
         # already guarded for cruise fares)
         log(YELLOW + f"\t{title}: no current price returned; cannot compare" + RESET)
+        config.history.record_addon(**history_common, current_price=None, discount_applied=None,
+                                     status="no_price_data", rebook_decision=None, notified=False)
         return
 
     watch_price_rows.append({
@@ -2158,6 +2343,11 @@ def get_new_order_price(
     })
 
     # Process Deal Alerts
+    # rebook_decision / notified / history_discount_applied are computed inline below,
+    # then recorded once after the branch (see B.3/C.2) - the alert logic itself is untouched.
+    rebook_decision: Optional[str] = None
+    notified = False
+    history_discount_applied: Optional[str] = None
     if current_price < paid_price:
         # Current price on server is lower than the paid price (rebooking alert path)
         saving = round(paid_price - current_price, 2)
@@ -2182,6 +2372,7 @@ def get_new_order_price(
         if promo_description:
             promotion_title = promo_description.get("displayName")
             text += f'\n\t\tPromotion:{promotion_title}'
+            history_discount_applied = promotion_title
 
         if for_watch:
             text += f'\n\tBook at https://www.{account_info.url_brand}.com/account/cruise-planner/category/{prefix}/product/{product}?bookingId={reservation_ID}&shipCode={ship}&sailDate={start_date}'
@@ -2194,12 +2385,16 @@ def get_new_order_price(
         if config.minimum_saving_alert is not None and saving_for_alert < config.minimum_saving_alert:
             text += f" ({saving_label} < minimumSavingAlert {config.minimum_saving_alert:.2f}; no notification sent)"
             log(YELLOW + text + RESET)
+            rebook_decision = "suppressed_below_threshold"
         else:
             log(RED + text + RESET)
             if apobj is not None:
                 apobj.notify(body=text, title='Cruise Addon Price Alert', body_format=NotifyFormat.TEXT)
+                notified = True
+            rebook_decision = "consider_booking" if for_watch else "rebook"
     else:
         # Current price on server is higher than the paid price ("currently best price" path)
+        rebook_decision = "best_price"
         if for_watch:
             if current_price == paid_price:
                 comp_string = "the same as"
@@ -2214,6 +2409,10 @@ def get_new_order_price(
         if current_price > paid_price:
             temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
+
+    config.history.record_addon(**history_common, current_price=current_price,
+                                 discount_applied=history_discount_applied, status="priced",
+                                 rebook_decision=rebook_decision, notified=notified)
 
 
 def write_watch_price_json(output_path: str) -> None:
@@ -3447,6 +3646,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         request_timeout=int(data.get("requestTimeout", REQUEST_TIMEOUT)),
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
+        history_db=data.get("historyDb"),
         output_watch_as_json=data.get("outputWatchAsJson",False),
         output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
         apobj=apobj,
@@ -3463,6 +3663,12 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
 
     # Set up the custom logger
     setup_hybrid_logging(config.log_file)
+
+    # Opt-in SQLite price-history sink; PriceHistory is a no-op when history_db is unset
+    history_db_path = config.history_db
+    if history_db_path and platform.system() == "iOS":
+        history_db_path = os.path.expanduser('~/Documents') + "/" + history_db_path
+    config.history = PriceHistory(history_db_path)
 
     if currency_override_present:
         log(YELLOW + f"Due to RCCL API updates, config file option 'currencyOverride' is deprecated" + RESET)
@@ -3633,6 +3839,7 @@ def main() -> None:
         # Start each run with an empty check-in / payment summary collector
         checkin_payment_rows.clear()
         watch_price_rows.clear()
+        config.history.start_run()
 
         # Set Time with AM/PM or 24h based on locale
         locale.setlocale(locale.LC_TIME,'')
@@ -3660,6 +3867,7 @@ def main() -> None:
                     account.apobj.notify(body=f"This is only a test for account {account.username}. Apprise is set up correctly",
                                           title='Cruise Price Notification Test', body_format=NotifyFormat.TEXT)
 
+            config.history.finish_run("apprise_test")
             sys.exit(0)   # quit() is a site-builtin, absent in frozen builds
 
         if config.minimum_saving_alert is not None:
@@ -3759,9 +3967,12 @@ def main() -> None:
         if config.output_watch_as_json:
             write_watch_price_json(config.output_json_watch_file)
 
+        config.history.finish_run("ok")
+
     except Exception as e:
-        # Let the global catch-all at the module entry point handle unexpected execution faults
-        raise e
+        # Mark the price-history run as failed before the module-level handler reports it
+        config.history.finish_run("error", f"{type(e).__name__}: {e}")
+        raise
 
 
 if __name__ == "__main__":
