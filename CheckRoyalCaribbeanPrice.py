@@ -383,7 +383,6 @@ class WatchItemContext:
     passenger_name: str
     room: Optional[str]
     paid_price: float
-#    currency: str
     guest_age_string: str
     sales_unit: Optional[Any] = None
     for_watch: bool = True
@@ -473,7 +472,6 @@ class WatchListItem:
     price: float
     enabled: bool = True
     guest_age_string: str = "adult"
-#    currency: str = "USD"
     reservations: Optional[List[str]] = field(default_factory=list)
 
 
@@ -508,7 +506,6 @@ class CruiseAppConfig:
     apprise_urls: List[str] = field(default_factory=list)
     notify_on_error: bool = False
     apprise_test: Optional[bool] = None
-#    currency_override: Optional[str] = None
 
     display_cruise_prices: bool = True
     minimum_saving_alert: Optional[float] = None
@@ -926,17 +923,19 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
         cabin_string = ""
 
     # Some Countries List Cabin String as B, causing issue with room lookup
-    if cabin_string == "I":
-        cabin_string = "INTERIOR"
-    if cabin_string == "O":
-        cabin_string = "OUTSIDE"
-    if cabin_string == "B":
-        cabin_string = "BALCONY"
-    if cabin_string == "D":
-        cabin_string = "DELUXE"
-    if cabin_string == "C":
-        cabin_string = "CONCIERGE"
-    
+    parsed_cabin_string = _parse_stateroom_type(cabin_string)
+    cabin_string = parsed_cabin_string if parsed_cabin_string != "NONE" else cabin_string
+#    if cabin_string == "I":
+#        cabin_string = "INTERIOR"
+#    if cabin_string == "O":
+#        cabin_string = "OUTSIDE"
+#    if cabin_string == "B":
+#        cabin_string = "BALCONY"
+#    if cabin_string == "D":
+#        cabin_string = "DELUXE"
+#    if cabin_string == "C":
+#        cabin_string = "CONCIERGE"
+
     # Parse the URL parameters and save in a class instance
     return CruiseURLParams(
         is_royal="royal" in domain,
@@ -1816,7 +1815,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
         'accept-language': 'en-US,en;q=0.9',
         'content-type': 'application/json',
     }
-    
+
     json_data = {
         'countryCode': url_params.booking_office_country_code,
         'packageId': url_params.package_code,
@@ -1871,7 +1870,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
           headers=headers,
           on_failure="retry"
     )
-    
+
     if response is not None:
         try:
             response_json = response.json()
@@ -1966,7 +1965,7 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     }
 
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
-    
+
     response = _execute_api_request(
         method="GET",
         url=api_URL,
@@ -2064,7 +2063,6 @@ def get_new_order_price(
     number_of_nights = int(booking.get("numberOfNights") or 0)
 
     currency = booking.get("bookingCurrency", "USD")
-#    currency = config.currency_override if config.currency_override else ctx.currency
     prefix = ctx.prefix or ""
     product = ctx.product or ""
 
@@ -2101,11 +2099,6 @@ def get_new_order_price(
         log(f"{prefix} {product} not available for passenger")
         return
 
-    booking_eligibility = payload.get("bookingEligibility") or {}
-    if booking_eligibility.get("reason") == "NO_STARTING_FROM_PRICE":
-        log(YELLOW + f"\t{title}: Server returned no pricing data (currency mismatch or unavailable for reservation)." + RESET)
-        return
-
     # Parse the returned information for analysis and display
     title = payload.get("title")
     variant = ""
@@ -2116,6 +2109,11 @@ def get_new_order_price(
 
     if "Bottles" in variant:
         title = f"{title} ({variant})"
+
+    booking_eligibility = payload.get("bookingEligibility") or {}
+    if booking_eligibility.get("reason") == "NO_STARTING_FROM_PRICE":
+        log(YELLOW + f"\t{title}: Server returned no pricing data (currency mismatch or unavailable for reservation)." + RESET)
+        return
 
     per_day_price = sales_unit in ['PER_NIGHT', 'PER_DAY']
     new_price_payload = payload.get("startingFromPrice")
@@ -2256,7 +2254,6 @@ def process_watch_list_for_booking(
         watch_price = float(getattr(watch_item, 'price', 0))
         enabled = getattr(watch_item, 'enabled', True)  # Default to True if not specified
         guest_age_string = str(getattr(watch_item, 'guest_age_string', "adult")).lower()
-#        currency = getattr(watch_item, 'currency', "USD")
 
         reservation_list = getattr(watch_item, 'reservations', None)
         reservation_ID = booking.get("bookingId")
@@ -2282,7 +2279,6 @@ def process_watch_list_for_booking(
             passenger_name=passenger_name,
             room=room,
             paid_price=watch_price,
-#            currency=currency,
             guest_age_string=guest_age_string,
             sales_unit=None,
             for_watch=True,
@@ -2309,12 +2305,6 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
     ship = booking.get("shipCode", "")
     start_date = booking.get("sailDate", "")
     number_of_nights = int(booking.get("numberOfNights") or 0)
-
-#    # Handle global currency overrides cleanly
-#    if config.currency_override:
-#        currency = config.currency_override
-#    else:
-#        currency = booking.get("bookingCurrency", "USD")
     currency = booking.get("bookingCurrency", "USD")
 
     # Build dynamic guest/reservation lookups
@@ -2448,7 +2438,6 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             # Divide by package headcount to isolate the final per-guest daily rate
                             paid_price = round(paid_price / paid_quantity, 2)
 
-#                        currency = guest.get("priceDetails", {}).get("currency")
                         room = guest_registry.get(guest_passenger_ID, {}).get("cabin")
                         if not room or room == "None":
                             room = guest.get("stateroomNumber") or None
@@ -2461,7 +2450,6 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             passenger_name=first_name,
                             room=room,
                             paid_price=paid_price,
-#                            currency=currency,
                             guest_age_string=guest_age_string,
                             sales_unit=sales_unit,
                             for_watch=False,
@@ -3394,7 +3382,6 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         # Otherwise, fall back onto default values
         if "enabled" in w:         item_kwargs["enabled"] = w["enabled"]
         if "guestAgeString" in w:  item_kwargs["guest_age_string"] = w["guestAgeString"]
-#        if "currency" in w:        item_kwargs["currency"] = w["currency"]
         if "reservations" in w:    item_kwargs["reservations"] = w["reservations"]
 
         if "currency" in w:
@@ -3426,7 +3413,6 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     # Build and return the global master config object using data.get() for fallback defaults
     config = CruiseAppConfig(
         display_cruise_prices=data.get("displayCruisePrices", True),
-#        currency_override=data.get("currencyOverride", None),
         minimum_saving_alert=minimum_saving_alert,
         notify_on_error=data.get("notifyOnError", False),
         show_promos=data.get("showPromos", False),
@@ -3638,9 +3624,6 @@ def main() -> None:
         if config.minimum_saving_alert is not None:
             log(YELLOW + f"Only alerting for savings >= {config.minimum_saving_alert:.2f}" + RESET)
 
-#        if config.currency_override:
-#            log(YELLOW + f"Overriding Current Price Currency to {config.currency_override}" + RESET)
-
         # Generate the list of ship codes
         ship_dictionary = ShipRegistry()
         get_ship_dictionary_web(ship_dictionary)
@@ -3732,7 +3715,7 @@ def main() -> None:
         print_checkin_payment_table()
 
         # Write the watchlist price results to JSON for external consumption
-        if config.output_watch_as_json: 
+        if config.output_watch_as_json:
             write_watch_price_json(config.output_json_watch_file)
 
     except Exception as e:
