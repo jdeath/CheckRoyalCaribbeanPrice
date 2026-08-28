@@ -925,6 +925,18 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
     else:
         cabin_string = ""
 
+    # Some Countries List Cabin String as B, causing issue with room lookup
+    if cabin_string == "I":
+        cabin_string = "INTERIOR"
+    if cabin_string == "O":
+        cabin_string = "OUTSIDE"
+    if cabin_string == "B":
+        cabin_string = "BALCONY"
+    if cabin_string == "D":
+        cabin_string = "DELUXE"
+    if cabin_string == "C":
+        cabin_string = "CONCIERGE"
+    
     # Parse the URL parameters and save in a class instance
     return CruiseURLParams(
         is_royal="royal" in domain,
@@ -1789,7 +1801,6 @@ def get_cruise_price(account_info: AccountInfo,
 def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[str] = None) -> Dict[str, Any]:
     # Check room availability against the downstream checker
     room_available, available_rooms = check_if_room_is_available(url_params)
-
     results = {
         'sailing_nights': 0,
         'room_available': room_available
@@ -1805,13 +1816,12 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
         'accept-language': 'en-US,en;q=0.9',
         'content-type': 'application/json',
     }
-
+    
     json_data = {
         'countryCode': url_params.booking_office_country_code,
         'packageId': url_params.package_code,
         'sailDate': url_params.sail_date,
         'currencyCode': url_params.currency_code,
-        'language': 'en',
         'rooms': [
             {
                 # DO NOT Use the realigned type code here
@@ -1861,7 +1871,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
           headers=headers,
           on_failure="retry"
     )
-
+    
     if response is not None:
         try:
             response_json = response.json()
@@ -1956,6 +1966,7 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     }
 
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
+    
     response = _execute_api_request(
         method="GET",
         url=api_URL,
