@@ -2220,6 +2220,7 @@ def write_watch_price_json(output_path: str) -> None:
         with open(output_path, "w", encoding="utf-8") as output_file:
             json.dump(watch_price_rows, output_file, indent=2)
             output_file.write("\n")
+        log(f"\n{BLUE}Writing watchlist JSON to {output_path}" + RESET) 
     except OSError as error:
         log(f"{YELLOW}Warning: Could not write JSON watch output '{output_path}': {error}{RESET}")
 
