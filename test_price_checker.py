@@ -1806,6 +1806,52 @@ def test_calculate_passenger_metrics_brittle_timestamp_fallback():
         pytest.fail(f"_calculate_passenger_metrics crashed on non-standard arrival timestamp: {err}")
 
 
+def test_calculate_passenger_metrics_gty_booking_fallbacks():
+    """
+    Verify that _calculate_passenger_metrics correctly extracts stateroom
+    category codes from booking-level keys when guest-level keys are None.
+    """
+    guests = [{"guestId": "1"}]  # stateroomCategoryCode omitted/None
+    sail_date = "20270510"
+    booking = {
+        "bookingId": "1234567",
+        "categoryCode": "XB",  # Top-level GTY fallback
+    }
+
+    metrics = _calculate_passenger_metrics(
+        guests=guests,
+        sail_date=sail_date,
+        booking=booking,
+        brand_code="R",
+        display_prices=False,
+    )
+
+    assert metrics.get("category_code") == "XB"
+
+
+def test_calculate_passenger_metrics_config_override_fallback():
+    """
+    Verify that _calculate_passenger_metrics falls back to config.category_override
+    when both guest and booking category fields evaluate to None.
+    """
+    guests = [{"guestId": "1"}]
+    sail_date = "20270510"
+    booking = {"bookingId": "1234567"}  # No category fields present
+
+    with patch("CheckRoyalCaribbeanPrice.config") as mock_config:
+        mock_config.category_override = "XB"
+
+        metrics = _calculate_passenger_metrics(
+            guests=guests,
+            sail_date=sail_date,
+            booking=booking,
+            brand_code="R",
+            display_prices=False,
+        )
+
+        assert metrics.get("category_code") == "XB"
+
+
 # ============================================================================
 # ITEM 14 TESTS: ORCHESTRATION & RUN CONTROL Configuration Lifecycle
 # ============================================================================

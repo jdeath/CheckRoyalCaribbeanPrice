@@ -925,16 +925,6 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
     # Some Countries List Cabin String as B, causing issue with room lookup
     parsed_cabin_string = _parse_stateroom_type(cabin_string)
     cabin_string = parsed_cabin_string if parsed_cabin_string != "NONE" else cabin_string
-#    if cabin_string == "I":
-#        cabin_string = "INTERIOR"
-#    if cabin_string == "O":
-#        cabin_string = "OUTSIDE"
-#    if cabin_string == "B":
-#        cabin_string = "BALCONY"
-#    if cabin_string == "D":
-#        cabin_string = "DELUXE"
-#    if cabin_string == "C":
-#        cabin_string = "CONCIERGE"
 
     # Parse the URL parameters and save in a class instance
     return CruiseURLParams(
@@ -1255,6 +1245,12 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
 
         # Unpack cabin occupants & boarding windows safely
         metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
+
+        # TEST CODE
+        # Preserve resolved GTY category code for downstream pricing checks
+        if metrics.get("category_code") and not booking.get("stateroomCategoryCode"):
+            booking["stateroomCategoryCode"] = metrics["category_code"]
+        # END TEST CODE
 
         # Display Reservation Information Header
         reservation_display = f"Reservation #{reservation_ID}"
@@ -2819,8 +2815,24 @@ def _calculate_passenger_metrics(
     stateroom_subtype = booking.get("stateroomSubtype")
     stateroom_category_code = None   # a booking with no guests must not leave this unbound
 
+    # TEST CODE
+    # Check top-level booking fallbacks for GTY reservations where guest-level keys are omitted
+    booking_category_fallback = (
+        booking.get("stateroomCategoryCode")
+        or booking.get("categoryCode")
+        or booking.get("subCategoryCode")
+    )
+    # END TEST CODE
+
     for guest in guests:
-        stateroom_category_code = guest.get("stateroomCategoryCode")
+        stateroom_category_code = guest.get("stateroomCategoryCode") or booking_category_fallback
+#        stateroom_category_code = guest.get("stateroomCategoryCode")
+
+        # TEST CODE
+        # Check config override if API data is completely missing
+        if stateroom_category_code is None and getattr(config, "category_override", None):
+            stateroom_category_code = config.category_override
+        # END TEST CODE
 
         # Apply legacy GTY room structure workarounds
         if stateroom_category_code is None and stateroom_subtype is None:
