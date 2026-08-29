@@ -428,6 +428,11 @@ class AccountInfo:
     access: Optional[APIAccess] = None
     found_items: Set[str] = field(default_factory=set)
 
+    # Live Runtime Object (excluded from the YAML mapping, like config.apobj).
+    # Per-account Apprise object; falls back to the global config.apobj via
+    # notifier_for() when this account has no apprise: list of its own.
+    apobj: Optional[Apprise] = None
+
 
     @property
     def is_royal(self) -> bool:
@@ -1212,7 +1217,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
     session = account_info.access.session
 
     # Pull the needed items from the global config
-    apobj = config.apobj
+    apobj = notifier_for(account_info)
     watch_list_items = config.watch_list
     display_cruise_prices = config.display_cruise_prices
     reservation_price_paid = config.reservation_prices
@@ -1477,7 +1482,7 @@ def get_cruise_price(account_info: AccountInfo,
     """
     # Pull properties from the foundational domain entities
     session = account_info.access.session
-    apobj = config.apobj
+    apobj = notifier_for(account_info)
     if paid_price_struct is None:
         paid_price_struct = booking.get("paidPriceStruct")  # Dict containing target metrics
 
@@ -2461,7 +2466,7 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             reservation_id=guestreservation_ID
                         )
 
-                        get_new_order_price(account_info, booking, config.apobj, ctx)
+                        get_new_order_price(account_info, booking, notifier_for(account_info), ctx)
 
 
 def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
@@ -3324,6 +3329,34 @@ def expand_env_vars(value: Any) -> Any:
     return value
 
 
+def _build_apprise(items: List[Dict]) -> Optional[Apprise]:
+    """
+    Builds an Apprise object from a list of {url: ...} dicts, as found under an
+    apprise: key in config.yaml (top-level or per-account). Apprise is an
+    optional dependency, so this mirrors the existing None-sentinel handling.
+
+    Returns None when the list is empty, or when apprise: is configured but the
+    apprise package is not installed (notifications are disabled with a warning).
+    """
+    urls = [item["url"] for item in items if "url" in item]
+    apobj = None
+    if urls and Apprise is None:
+        logging.warning("apprise: is configured in config.yaml but the apprise package "
+                        "is not installed - notifications are disabled. pip install apprise")
+    elif urls:
+        apobj = Apprise()
+        for url in urls:
+            apobj.add(url)
+    return apobj
+
+
+def notifier_for(account_info: Optional[AccountInfo]) -> Optional[Apprise]:
+    """Per-account Apprise object if configured, else the global one."""
+    if account_info is not None and getattr(account_info, "apobj", None) is not None:
+        return account_info.apobj
+    return config.apobj
+
+
 def load_config_objects(config_path: str) -> CruiseAppConfig:
     """
     Loads, sanitizes, and maps YAML configuration elements into structural dataclass attributes.
@@ -3350,7 +3383,8 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
             military=a.get("military", False),
             fire=a.get("fire", False),
             police=a.get("police", False),
-            cruise_line=a.get("cruiseLine", "royalcaribbean")
+            cruise_line=a.get("cruiseLine", "royalcaribbean"),
+            apobj=_build_apprise(a.get("apprise", []))
         )
         for a in data.get("accountInfo", [])
     ]
@@ -3395,14 +3429,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     apprise_urls = [item["url"] for item in data.get("apprise", []) if "url" in item]
 
     # Build the apprise object natively (apprise is an optional dependency)
-    apobj = None
-    if apprise_urls and Apprise is None:
-        logging.warning("apprise: is configured in config.yaml but the apprise package "
-                        "is not installed - notifications are disabled. pip install apprise")
-    elif apprise_urls:
-        apobj = Apprise()
-        for url in apprise_urls:
-            apobj.add(url)
+    apobj = _build_apprise(data.get("apprise", []))
 
     # Safe initialization of minimum_saving_alert to allow None as well as 0.0
     raw_alert = data.get("minimumSavingAlert", None)
@@ -3617,9 +3644,22 @@ def main() -> None:
         # Since timestamp is a datetime object, convert it to a string or update format_date to handle both
         log(f"Report generated {config.format_date(timestamp.strftime('%Y%m%d'))} {timestamp.strftime('%X')}")
 
-        if config.apobj is not None and config.apprise_test:
-            config.apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test', body_format=NotifyFormat.TEXT)
+        # A per-account-only setup (no global apprise:) must still trigger the
+        # self-test - otherwise the script silently falls through into a real
+        # pricing pass instead of confirming notifications are wired up.
+        any_notifier = config.apobj is not None or any(a.apobj is not None for a in config.accounts)
+        if config.apprise_test and any_notifier:
+            if config.apobj is not None:
+                config.apobj.notify(body="This is only a test. Apprise is set up correctly", title='Cruise Price Notification Test', body_format=NotifyFormat.TEXT)
             log("Apprise Notification Sent...quitting")
+
+            # Also exercise each account's own notifier, so a misconfigured
+            # per-account URL is caught before a real alert is missed.
+            for account in config.accounts:
+                if account.apobj is not None:
+                    account.apobj.notify(body=f"This is only a test for account {account.username}. Apprise is set up correctly",
+                                          title='Cruise Price Notification Test', body_format=NotifyFormat.TEXT)
+
             sys.exit(0)   # quit() is a site-builtin, absent in frozen builds
 
         if config.minimum_saving_alert is not None:

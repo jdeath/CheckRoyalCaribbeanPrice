@@ -31,6 +31,28 @@ outputJsonFile: "output-json-watch.txt" # Optional, override the JSON output pat
 If `outputWatchAsJson` is true, the add-on watch prices checked during each run are also written as a JSON list.
 Set `outputJsonFile` to change the output path; it defaults to `output-json-watch.txt`.
 
+### Per-Account Apprise Notifications
+If multiple people share one config file, each `accountInfo` entry can carry its own `apprise:`
+list, in the same shape as the top-level one. Alerts produced while checking that account (price
+drops, watch-list hits, add-on/order price alerts) go only to that account's URLs. An account
+with no `apprise:` of its own falls back to the top-level `apprise:` list.
+```yaml
+accountInfo:
+  - username: "chris@example.com"
+    password: "pa$$word"
+    apprise:
+      - url: "ntfy://chris-topic"
+  - username: "friend@example.com"
+    password: "pa$$word"
+    apprise:
+      - url: "ntfy://friend-topic"
+apprise: # Optional global fallback for accounts without their own apprise: list
+  - url: "mailto://user:password@gmail.com"
+```
+The `apprise_test` self-test and the `notifyOnError` script-failure notification always use the
+top-level `apprise:` list (plus, during `apprise_test`, each configured account's own list gets a
+test message too, so a bad per-account URL is caught early).
+
 If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
 ```yaml
 accountInfo:
