@@ -37,6 +37,6 @@ reservationsPaidInFull: # Optional. Travel-agent bookings often expose no paymen
 showPromos: true # Optional, show active sitewide promotions for each sailing
 dateDisplayFormat: "%m/%d/%Y" # Optional, only needed if you want to override the system's default date display formatting
 logFile: "output.txt"
-historyDb: "price_history.db" # Optional. If set, appends every price check to a local SQLite file for history/trends
+# historyDb: "price_history.db" # Optional (off by default). Uncomment to append every price check to a local SQLite file for history/trends
 outputWatchAsJson: true # Optional, if true, will write the watchlist price results to a JSON file for external consumption
 outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file

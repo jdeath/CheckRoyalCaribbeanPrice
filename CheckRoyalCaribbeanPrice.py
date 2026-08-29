@@ -624,43 +624,68 @@ class PriceHistory:
         self.db_path = db_path
         self._current_run_id: Optional[int] = None
         if self.enabled:
-            with closing(self._connect()) as conn:
-                conn.executescript(_PRICE_HISTORY_SCHEMA_SQL)
+            try:
+                with closing(self._connect()) as conn:
+                    conn.executescript(_PRICE_HISTORY_SCHEMA_SQL)
+            except (sqlite3.Error, OSError) as e:
+                self._disable(e)
 
     def __repr__(self) -> str:
         if not self.enabled:
             return "<PriceHistory enabled=False>"
         return f"<PriceHistory db={self.db_path!r} enabled=True run_id={self._current_run_id}>"
 
+    def _disable(self, error: Exception) -> None:
+        """A history sink must never take down the price run it observes: on any
+        database error, log one warning and degrade to the no-op object the
+        disabled path already is. Price checking continues without history."""
+        self.enabled = False
+        logging.warning(
+            f"Price history disabled for the rest of this run: could not write "
+            f"{self.db_path!r} ({type(error).__name__}: {error}). Price checking "
+            f"is unaffected; check the historyDb path/permissions."
+        )
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL")
+        # busy_timeout must be armed BEFORE switching journal modes: the WAL
+        # switch itself needs a lock, and without a timeout a concurrent run
+        # (e.g. a scheduled task overlapping a manual one) fails immediately
+        # with "database is locked" on some filesystems (seen on WSL /mnt/c)
         conn.execute("PRAGMA busy_timeout=10000")
+        conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
     def start_run(self) -> Optional[int]:
         """Opens a new `runs` row and remembers it as the active run."""
         if not self.enabled:
             return None
-        with closing(self._connect()) as conn:
-            cur = conn.execute(
-                "INSERT INTO runs (started_at, status) VALUES (?, 'started')",
-                (datetime.now(timezone.utc).isoformat(),),
-            )
-            conn.commit()
-            self._current_run_id = cur.lastrowid
-            return self._current_run_id
+        try:
+            with closing(self._connect()) as conn:
+                cur = conn.execute(
+                    "INSERT INTO runs (started_at, status) VALUES (?, 'started')",
+                    (datetime.now(timezone.utc).isoformat(),),
+                )
+                conn.commit()
+                self._current_run_id = cur.lastrowid
+                return self._current_run_id
+        except (sqlite3.Error, OSError) as e:
+            self._disable(e)
+            return None
 
     def finish_run(self, status: str, error_summary: Optional[str] = None) -> None:
         """Closes out the active `runs` row opened by the last start_run()."""
         if not self.enabled or self._current_run_id is None:
             return
-        with closing(self._connect()) as conn:
-            conn.execute(
-                "UPDATE runs SET finished_at=?, status=?, error_summary=? WHERE run_id=?",
-                (datetime.now(timezone.utc).isoformat(), status, error_summary, self._current_run_id),
-            )
-            conn.commit()
+        try:
+            with closing(self._connect()) as conn:
+                conn.execute(
+                    "UPDATE runs SET finished_at=?, status=?, error_summary=? WHERE run_id=?",
+                    (datetime.now(timezone.utc).isoformat(), status, error_summary, self._current_run_id),
+                )
+                conn.commit()
+        except (sqlite3.Error, OSError) as e:
+            self._disable(e)
 
     def record_cabin_fare(self, **fields: Any) -> None:
         """Appends one `price_points` row for a cabin-fare observation."""
@@ -679,9 +704,12 @@ class PriceHistory:
         fields["run_id"] = self._current_run_id
         cols = ", ".join(fields)
         placeholders = ", ".join("?" for _ in fields)
-        with closing(self._connect()) as conn:
-            conn.execute(f"INSERT INTO price_points ({cols}) VALUES ({placeholders})", tuple(fields.values()))
-            conn.commit()
+        try:
+            with closing(self._connect()) as conn:
+                conn.execute(f"INSERT INTO price_points ({cols}) VALUES ({placeholders})", tuple(fields.values()))
+                conn.commit()
+        except (sqlite3.Error, OSError) as e:
+            self._disable(e)
 
 
 ############################################
@@ -1769,7 +1797,9 @@ def get_cruise_price(account_info: AccountInfo,
     # Fields shared by every PriceHistory.record_cabin_fare() call below;
     # each call site only adds current_price/status/rebook_decision/notified
     history_common = {
-        "reservation_id": reservation_id, "account_label": account_info.username,
+        # str-coerced to match the addon rows, so the two kinds join cleanly
+        "reservation_id": str(reservation_id) if reservation_id is not None else None,
+        "account_label": account_info.username,
         "ship_code": url_params.ship_code, "sail_date": url_params.sail_date, "nights": resolved_nights,
         "item_code": f"{url_params.package_code}/{url_params.stateroom_category_code}",
         "paid_price": paid_price, "currency": url_params.currency_code,
@@ -2270,6 +2300,18 @@ def get_new_order_price(
             raise ValueError
     except (AttributeError, ValueError, TypeError):
         log(f"{prefix} {product} not available for passenger")
+        # Record this too: for a watchlist item this is the "waiting for it to
+        # become bookable" state, exactly what a back-in-stock history query
+        # needs a row for. The payload never parsed, so item_name is unknown.
+        config.history.record_addon(
+            item_kind="watchlist" if for_watch else "addon",
+            reservation_id=str(reservation_ID) if reservation_ID is not None else None,
+            account_label=account_info.username, ship_code=ship, sail_date=start_date,
+            nights=number_of_nights or None,
+            item_code=f"{prefix}/{product}", guest_id=str(passenger_ID) if passenger_ID is not None else None,
+            guest_name=passenger_name, paid_price=paid_price, currency=currency,
+            per_night=int(per_day_price), current_price=None,
+            status="not_available_for_passenger", rebook_decision=None, notified=False)
         return
 
     # Parse the returned information for analysis and display
