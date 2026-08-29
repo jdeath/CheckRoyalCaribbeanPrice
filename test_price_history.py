@@ -446,3 +446,87 @@ def test_main_finalizes_run_on_exception():
         c for c in mock_cfg.history.method_calls if c[0] == "finish_run"
     ))
     assert start_run_order < finish_run_order
+
+
+# ---------------------------------------------------------------------------
+# Failure isolation: a broken database must never take down the price run
+# ---------------------------------------------------------------------------
+def test_price_history_survives_unwritable_path(tmp_path):
+    """A historyDb pointing at a missing directory disables history with a
+    warning instead of crashing the script at config load."""
+    bad = tmp_path / "no_such_dir" / "h.db"
+    history = PriceHistory(str(bad))
+    assert history.enabled is False
+    # and every later call is the familiar no-op
+    assert history.start_run() is None
+    history.record_cabin_fare(reservation_id="1234567", status="priced")
+    history.finish_run("ok")
+
+
+def test_price_history_survives_corrupt_db_file(tmp_path):
+    """A file that is not a SQLite database disables history, not the run."""
+    bad = tmp_path / "h.db"
+    bad.write_bytes(b"THIS IS NOT A SQLITE FILE" * 8)
+    history = PriceHistory(str(bad))
+    assert history.enabled is False
+
+
+def test_price_history_disables_on_midrun_write_failure(tmp_path):
+    """A write failure mid-run (permissions, disk) logs one warning, disables
+    the sink, and lets the run continue - rows recorded so far are kept."""
+    db_path = tmp_path / "h.db"
+    history = PriceHistory(str(db_path))
+    history.start_run()
+    history.record_cabin_fare(reservation_id="1234567", status="priced", current_price=100.0)
+
+    with patch.object(history, "_connect", side_effect=sqlite3.OperationalError("disk I/O error")):
+        history.record_cabin_fare(reservation_id="7654321", status="priced", current_price=200.0)
+
+    assert history.enabled is False
+    history.record_cabin_fare(reservation_id="8912345", status="priced")  # silent no-op now
+
+    conn = sqlite3.connect(db_path)
+    kept = conn.execute("SELECT reservation_id FROM price_points").fetchall()
+    assert kept == [("1234567",)]  # pre-failure row kept, nothing crashed
+
+
+# ---------------------------------------------------------------------------
+# The payload-failure exit of get_new_order_price is recorded too
+# ---------------------------------------------------------------------------
+def test_get_new_order_price_records_not_available_for_passenger():
+    """The 'not available for passenger' bail (payload never parsed) is the
+    back-in-stock waiting state - it must produce a row, not silence."""
+    import CheckRoyalCaribbeanPrice as crccl
+    from unittest.mock import MagicMock
+
+    account = MagicMock()
+    account.username = "user@example.com"
+    account.api_brand = "royal"
+    ctx = MagicMock()
+    ctx.reservation_id = "1234567"
+    ctx.reservations = None
+    ctx.passenger_ID = "33333333"
+    ctx.passenger_name = "Matt"
+    ctx.paid_price = 55.99
+    ctx.sales_unit = "PER_NIGHT"
+    ctx.for_watch = True
+    ctx.prefix, ctx.product = "pt_beverage", "3005"
+
+    booking = {"bookingId": "1234567", "sailDate": "20270320", "shipCode": "HM",
+               "numberOfNights": 7, "bookingCurrency": "USD"}
+
+    bad_response = MagicMock()
+    bad_response.json.return_value = {"payload": None}
+
+    mock_cfg = MagicMock()
+    with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=bad_response), \
+         patch("CheckRoyalCaribbeanPrice.log"):
+        crccl.get_new_order_price(account, booking, None, ctx)
+
+    mock_cfg.history.record_addon.assert_called_once()
+    kwargs = mock_cfg.history.record_addon.call_args.kwargs
+    assert kwargs["status"] == "not_available_for_passenger"
+    assert kwargs["item_kind"] == "watchlist"
+    assert kwargs["item_code"] == "pt_beverage/3005"
+    assert kwargs["current_price"] is None and kwargs["notified"] is False
