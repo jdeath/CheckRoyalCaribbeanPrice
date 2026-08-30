@@ -1008,12 +1008,14 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
         sail_date=params.get("sailDate", [None])[0],
         currency_code=params.get("selectedCurrencyCode", ["USD"])[0],
         booking_office_country_code=params.get("country", ["USA"])[0],
-        ship_code=params.get("ship_code", [None])[0],
+        ship_code=params.get("shipCode", [None])[0],
+#        ship_code=params.get("ship_code", [None])[0],
         cabin_class_string=cabin_string,
         stateroom_type_name=r0d_list[0] if r0d_list else None,
         stateroom_subtype=params.get("r0e", [None])[0],
         stateroom_category_code=params.get("r0f", [None])[0],
-        package_code=params.get("package_code", [None])[0],
+        package_code=params.get("packageCode", [None])[0],
+#        package_code=params.get("package_code", [None])[0],
         number_of_adults=params.get("r0a", ["2"])[0],
         number_of_children=params.get("r0c", ["0"])[0],
         loyalty_number=params.get("r0l", [None])[0],
@@ -1572,6 +1574,7 @@ def get_cruise_price(account_info: AccountInfo,
     if provided_url:
         # Path A: Standard tracking via an external web marketing link string
         # Parse the provided URL
+        log(f"TEST CODE: get_cruise price provided_url was {provided_url}")
         url_params = parse_provided_URL(provided_url)
 
         # FAIL-SAFE PATCH: If the URL parser missed ship/package codes,
@@ -1640,6 +1643,7 @@ def get_cruise_price(account_info: AccountInfo,
         cruise_price_URL = _build_checkout_url(booking, metrics, account_info, temp_discounts)
 
         # 3. Parse the dummy URL, jsut as path A!
+        log(f"TEST CODE: get_cruise_price built URL was {cruise_price_URL}")
         url_params = parse_provided_URL(cruise_price_URL)
 
         # 4. Fix the parser/override omissions immediately while we are safely inside Path B scope

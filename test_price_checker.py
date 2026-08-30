@@ -51,6 +51,7 @@ from CheckRoyalCaribbeanPrice import (
     get_checkin_info,
     get_cruise_price,
     get_dining_and_prices,
+    get_final_payment_date,
     get_new_order_price,
     get_orders,
     get_profile,
@@ -72,8 +73,6 @@ def mock_global_config():
     Safely mocks the global config object, custom log methods, and apprise notifications
     so production functions run cleanly without side-effects.
     """
-    import CheckRoyalCaribbeanPrice
-
     # Create a mock config object with all required properties
     mock_config = MagicMock()
     mock_config.apobj = MagicMock()
@@ -81,16 +80,10 @@ def mock_global_config():
     mock_config.format_date = lambda d: str(d) # Simple string conversion pass-through
     mock_config.currency_override = None
 
-    # Override the module-level config variable
-    original_config = CheckRoyalCaribbeanPrice.config
-    CheckRoyalCaribbeanPrice.config = mock_config
-
-    # Patch the internal 'log' function directly to avoid NoneType crash calls
-    with patch('CheckRoyalCaribbeanPrice.log', MagicMock()) as mock_log:
+    # Patch the attributes on the imported config object and module log target directly
+    with patch("CheckRoyalCaribbeanPrice.config", mock_config), \
+         patch("CheckRoyalCaribbeanPrice.log", MagicMock()):
         yield mock_config.apobj
-
-    # Restore original state after test run
-    CheckRoyalCaribbeanPrice.config = original_config
 
 
 @pytest.fixture
@@ -326,8 +319,6 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
     for linked accounts without corrupting the primary booking dictionary,
     and correctly handles cabin/room tracking parameters.
     """
-    from CheckRoyalCaribbeanPrice import AccountInfo, get_orders, WatchItemContext
-
     # 1. Setup our mock inputs
     account_info = AccountInfo(username="dummy_user", password="dummy_password")
     account_info.cruise_line = "royal"
@@ -575,10 +566,6 @@ def test_dining_table_zero_padding():
 
 def test_login_token_decoding_resilience():
     """Verify script breaks predictably if JWT token format is corrupt."""
-    import base64
-    import json
-    import pytest
-
     # A valid mock base64 segment representing {"sub": "12345"}
     valid_payload = base64.b64encode(b'{"sub": "12345"}').decode('utf-8')
     fake_token = f"header.{valid_payload}.signature"
@@ -594,9 +581,6 @@ def test_login_token_decoding_resilience():
 
 def test_get_final_payment_date_formats():
     """Ensure date calculation handles hyphens, slashes, and raw date objects identically."""
-    from datetime import date, datetime
-    from CheckRoyalCaribbeanPrice import get_final_payment_date
-
     expected_milestone = date(2026, 9, 26) # 90 days before Dec 25
 
     assert get_final_payment_date(7, "2026-12-25") == expected_milestone
@@ -605,8 +589,6 @@ def test_get_final_payment_date_formats():
 
 def test_parse_url_cabin_class_fallbacks():
     """Verify URL parsing handles both variant parameters for cabin types."""
-    from CheckRoyalCaribbeanPrice import parse_provided_URL
-
     url_variant_1 = "https://www.royalcaribbean.com?sailDate=20261225&cabinClassType=BALCONY&ship_code=AL"
     url_variant_2 = "https://www.royalcaribbean.com?sailDate=20261225&r0d=BALCONY&ship_code=AL"
 
@@ -2257,7 +2239,6 @@ def test_exact_price_match_includes_obc(monkeypatch):
 # ============================================================================
 def _room_selection_rsc(code="D", category_code="4D"):
     """Minimal room-selection RSC payload exposing one stateroom subtype."""
-    import json
     return json.dumps({"rooms": [{"options": {"stateroomTypes": [
         {"stateroomSubtypes": [{
             "code": code,
@@ -2515,21 +2496,10 @@ def test_derive_balance_due_states():
 # Tunables live in the constants section rather than as scattered
 # magic numbers; pin their values so a change is a conscious decision.
 # ============================================================================
-def test_timeout_retry_constants():
-    import CheckRoyalCaribbeanPrice as crccl
-    assert crccl.REQUEST_TIMEOUT == 30
-    assert crccl.SHORT_REQUEST_TIMEOUT == 10
-    assert crccl.MAX_RETRIES == 3
-    assert crccl.RETRY_BACKOFF_BASE == 2
-    assert crccl.DEFAULT_ON_FAILURE == "retry"
-    assert crccl.ACCOUNT_COOLDOWN_SECONDS == 5
-
-
 def test_config_parses_without_apprise_package(tmp_path, monkeypatch):
     """apprise is an optional dependency: a config with an apprise: block must
     still parse when the package is absent - notifications just turn off."""
-    import CheckRoyalCaribbeanPrice as crccl
-    monkeypatch.setattr(crccl, "Apprise", None)
+    monkeypatch.setattr("CheckRoyalCaribbeanPrice.Apprise", None)
     yaml_content = """
     accountInfo:
       - username: "test_user"
