@@ -2686,6 +2686,15 @@ def _build_checkout_url(
     else:
         base_url = f"https://www.{account_info.url_brand}.com/room-selection/room-location"
 
+    # Drop parameters with no value: urlencode() would otherwise stringify
+    # None into the literal string "None" (e.g. travel-agent bookings that
+    # carry no bookingOfficeCountryCode). Downstream URL parsing would then
+    # forward countryCode="None" to the checkout API, which rejects it with
+    # HTTP 400 BAD_INPUT ("must match pattern ^[A-Z]{3}$") and the cabin
+    # reports "Room Price Not Found". Omitting the key lets
+    # parse_provided_URL() fall back to its defaults (country -> "USA").
+    params = {key: value for key, value in params.items() if value is not None}
+
     # Seamlessly combine the base URL and the safely encoded string
     return f"{base_url}?{urlencode(params)}"
 
