@@ -2572,3 +2572,44 @@ def test_derive_balance_due_ta_agency_flagged_unknown():
     # Test bookingType: "G" match (from reservation 3523878)
     booking3 = {"balanceDue": None, "paidInFull": False, "bookingType": "G"}
     assert derive_balance_due(booking3, []) == "TA_UNKNOWN"
+
+
+# ITEM 22 TESTS: TA BOOKINGS WITHOUT bookingOfficeCountryCode (checkout URL None params)
+
+def test_build_checkout_url_omits_none_params_for_ta_bookings():
+    """A travel-agent booking that carries no bookingOfficeCountryCode must not
+    leak the literal string 'None' into the checkout URL. urlencode() would
+    stringify the None, parse_provided_URL() would read it back verbatim, and
+    the checkout API would reject countryCode='None' with HTTP 400 BAD_INPUT
+    ('must match pattern ^[A-Z]{3}$') -- reporting 'Room Price Not Found' for
+    a cabin that is actually on sale. Omitting the key lets the parser fall
+    back to its default (country -> 'USA')."""
+    from CheckRoyalCaribbeanPrice import parse_provided_URL
+
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    discounts = DiscountProfile(
+        loyalty_number=None, state=None, senior=False,
+        military=False, fire=False, police=False, dp340=False
+    )
+    metrics = {
+        'num_adults': 2, 'num_children': 0, 'sub_type': 'I1',
+        'category_code': 'I1', 'have_a_senior': False
+    }
+    booking = {
+        'packageCode': 'ST07E490',
+        'sailDate': '20270124',
+        'bookingCurrency': 'USD',
+        'shipCode': 'ST',
+        'stateroomNumber': '11588',
+        'stateroomType': 'B',
+        # NOTE: intentionally no 'bookingOfficeCountryCode' key (TA booking)
+    }
+
+    url = _build_checkout_url(booking, metrics, account_info, discounts)
+
+    assert "country=None" not in url
+    assert "None" not in url  # no parameter may stringify a Python None
+
+    parsed = parse_provided_URL(url)
+    assert parsed.booking_office_country_code == "USA"
+    assert parsed.sail_date == "2027-01-24"  # checkout API requires the dashed form
