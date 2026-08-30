@@ -3,35 +3,9 @@
 ## Edit Config File
 If a config file is not found, code will prompt if you want it to automatically download a simple config file. Fill in user/password and run. Only look below after getting basic configuration working.
 
-Create your `config.yaml` file with the below information. Feel free to copy the file `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`. The spacing/alignment is important. (eg. The `-` under accountInfo must be 3 spaces over under the 2nd c in account).  
-```yaml
-accountInfo:
-  - username: "user@gmail.com" # Your Royal Caribbean User Name
-    password: "pa$$word" # Your Royal Caribbean Password
-  - username: "user@gmail.com" # Your Celebrity User Name
-    password: "pa$$word" # Your Celebrity Password
-    cruiseLine: "celebrity" # Must indicate if celebrity
-displayCruisePrices: true # Optional, this will display current price for your booked cruises. Use above discount codes.
-minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
-notifyOnError: false # Optional, send Apprise alert if the script fails (default: false)
-cruises: # Optional, this allows you to watch the price of a cruise you have not booked yet
-  - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
-    paidPrice: "3833.74"
-  - cruiseURL: "https://www.celebritycruises.com/checkout/guest-info?groupId=RF04FLL-1098868345&packageCode=RF4BH246&sailDate=2025-08-11&country=USA&selectedCurrencyCode=USD&shipCode=RF&cabinClassType=INTERIOR&category=I&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=Y&r0f=Y&r0g=BESTRATE&r0h=n&r0A=1127.6" # Can have as many URLS and price paid as you want. Supports Celebrity too
-    paidPrice: "1127.6"
-apprise_test: false # Optional
-apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
-  - url: "mailto://user:password@gmail.com"
-  - url: "ntfy://abcfeg3839439djd"
-logFile: "output.txt"
-outputWatchAsJson: true # Optional, write the watchlist add-on prices from each run to a JSON file
-outputJsonFile: "output-json-watch.txt" # Optional, override the JSON output path
-```
+You can also `SAMPLE-config.yaml` to `config.yaml`. Edit `config.yaml` and place it in same directory as `CheckRoyalCaribbeanPrice.py` or `CheckRoyalCaribbeanPrice.exe` or when running `CheckRoyalCaribbeanPrice.py` provide the optional argument `-c path/to/config.yaml`. The spacing/alignment is important. (eg. The `-` under accountInfo must be 3 spaces over under the 2nd c in account).  
 
-If `outputWatchAsJson` is true, the add-on watch prices checked during each run are also written as a JSON list.
-Set `outputJsonFile` to change the output path; it defaults to `output-json-watch.txt`.
-
-If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
+If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simple. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
 ```yaml
 accountInfo:
   - username: "user@gmail.com" # Your Royal Caribbean User Name
@@ -141,4 +115,32 @@ To keep passwords out of your config file, any config value that is exactly `${V
 accountInfo:
   - username: "user@gmail.com"
     password: "${RCCL_PASSWORD}" # reads the RCCL_PASSWORD environment variable
+```
+
+If `outputWatchAsJson` is true, the add-on watch prices checked during each run are also written as a JSON list.
+Set `outputJsonFile` to change the output path; it defaults to `output-json-watch.txt`.
+
+## Example Config with more options (not all of them)
+```yaml
+accountInfo:
+  - username: "user@gmail.com" # Your Royal Caribbean User Name
+    password: "pa$$word" # Your Royal Caribbean Password
+  - username: "user@gmail.com" # Your Celebrity User Name
+    password: "pa$$word" # Your Celebrity Password
+    cruiseLine: "celebrity" # Must indicate if celebrity
+displayCruisePrices: true # Optional, this will display current price for your booked cruises. Use above discount codes.
+minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount (per-night/per-day items use total savings per item)
+notifyOnError: false # Optional, send Apprise alert if the script fails (default: false)
+cruises: # Optional, this allows you to watch the price of a cruise you have not booked yet
+  - cruiseURL: "https://www.royalcaribbean.com/checkout/guest-info?sailDate=2025-12-27&shipCode=VI&groupId=VI12BWI-753707406&packageCode=VI12L049&selectedCurrencyCode=USD&country=USA&cabinClassType=OUTSIDE&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=N&r0f=4N&r0g=BESTRATE&r0h=n&r0j=2138&r0w=2&r0B=BD&r0x=AF&r0y=6aa01639-c2d8-4d52-b850-e11c5ecf7146"
+    paidPrice: "3833.74"
+  - cruiseURL: "https://www.celebritycruises.com/checkout/guest-info?groupId=RF04FLL-1098868345&packageCode=RF4BH246&sailDate=2025-08-11&country=USA&selectedCurrencyCode=USD&shipCode=RF&cabinClassType=INTERIOR&category=I&roomIndex=0&r0a=2&r0c=0&r0b=n&r0r=n&r0s=n&r0q=n&r0t=n&r0d=OUTSIDE&r0D=y&rgVisited=true&r0C=y&r0e=Y&r0f=Y&r0g=BESTRATE&r0h=n&r0A=1127.6" # Can have as many URLS and price paid as you want. Supports Celebrity too
+    paidPrice: "1127.6"
+apprise_test: false # Optional
+apprise:  # Optional, see https://github.com/caronc/apprise, can have as many lines as you want.
+  - url: "mailto://user:password@gmail.com"
+  - url: "ntfy://abcfeg3839439djd"
+logFile: "output.txt"
+outputWatchAsJson: true # Optional, write the watchlist add-on prices from each run to a JSON file
+outputJsonFile: "output-json-watch.txt" # Optional, override the JSON output path
 ```
