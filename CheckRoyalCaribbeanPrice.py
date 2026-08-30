@@ -107,13 +107,6 @@ log = None
 log_warn = None
 log_err = None
 
-# Rows collected across all accounts/bookings during a run, printed at the end as a
-# compact check-in + final-payment summary table (see print_checkin_payment_table)
-checkin_payment_rows: List[Dict[str, Any]] = []
-
-# Add-on watch prices collected during the current run for machine-readable output
-watch_price_rows: List[Dict[str, Any]] = []
-
 ##################################
 # Classes (Structural and Logging)
 ##################################
@@ -547,6 +540,84 @@ class CruiseAppConfig:
             return datetime.strptime(clean_str, "%Y%m%d").strftime(self.date_display_format)
         except ValueError:
             return str(date_str)   # malformed API date: show it raw, don't crash the run
+
+
+class CheckinPaymentTracker:
+    """
+    Tracks and deduplicates check-in and final payment metrics across accounts/bookings,
+    rendering an end-of-run summary table.
+    """
+    def __init__(self) -> None:
+        self.rows: List[Dict[str, Any]] = []
+
+    def record_row(self, row: Dict[str, Any]) -> None:
+        """
+        Adds a booking to the end-of-run summary table, merging duplicate linked reservations.
+        """
+        key = row.get("dedupe_key")
+        for existing in self.rows:
+            if key is not None and existing.get("dedupe_key") == key:
+                if existing.get("balance_due") not in (True, False) and row.get("balance_due") in (True, False):
+                    existing["balance_due"] = row["balance_due"]
+                    existing["past_final_payment"] = row["past_final_payment"]
+                if existing.get("checkin_label") in (None, "TBD") and row.get("checkin_label") not in (None, "TBD"):
+                    existing["checkin_label"] = row["checkin_label"]
+                return
+        self.rows.append(row)
+
+    def print_table(self) -> None:
+        """
+        Prints a compact end-of-run summary table sorted by sail date.
+        """
+        if not self.rows:
+            return
+
+        rows = sorted(self.rows, key=lambda r: r["sail_date"] or "")
+
+        headers = ("Sail Date", "Ship (Room)", "Reservation", "Check-In", "Final Payment")
+        table = []
+        pay_colors = []
+        for r in rows:
+            sail = config.format_date(r["sail_date"]) if r["sail_date"] else "?"
+            if r["final_payment"] is not None:
+                pay = r["final_payment"].strftime(config.date_display_format)
+                if r["balance_due"] is True:
+                    if r["past_final_payment"]:
+                        pay += " (PAST DUE)"
+                        pay_colors.append(RED)
+                    else:
+                        pay += " (balance due)"
+                        pay_colors.append(YELLOW)
+                elif r["balance_due"] is False:
+                    pay += " (paid)"
+                    pay_colors.append(GREEN)
+                elif r["balance_due"] == "TA_UNKNOWN":
+                    pay += " (contact TA for balance)"
+                    pay_colors.append(YELLOW)
+                elif r["balance_due"] is None:
+                    pay += " (status unknown)"
+                    pay_colors.append(YELLOW)
+            else:
+                pay = "-"
+                pay_colors.append("")
+            table.append((sail, r["name"], r.get("reservation", "-"), r["checkin_label"], pay))
+
+        widths = [max(len(str(row[i])) for row in ([headers] + table)) for i in range(len(headers))]
+
+        def fmt(cells: Tuple[str, ...], pay_color: str = "") -> str:
+            padded = [str(c).ljust(widths[i]) for i, c in enumerate(cells)]
+            if pay_color:
+                padded[-1] = f"{pay_color}{padded[-1]}{RESET}"
+            return "  ".join(padded)
+
+        log(f"\n{BLUE}Upcoming Check-In & Final Payment Dates{RESET}")
+        log(fmt(headers))
+        log("  ".join("-" * w for w in widths))
+        prev_sail = None
+        for row, pay_color in zip(table, pay_colors):
+            display_row = ("" if row[0] == prev_sail else row[0],) + row[1:]
+            prev_sail = row[0]
+            log(fmt(display_row, pay_color))
 
 
 ############################################
@@ -1188,7 +1259,13 @@ def get_checkin_info(account_info: AccountInfo,
 #
 # Reservation Tracking and Data Scraping Functions #
 #
-def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dictionary: ShipRegistry) -> None:
+def get_voyages(
+    account_info: AccountInfo,
+    discounts: CruiseURLParams,
+    ship_dictionary: ShipRegistry,
+    payment_tracker: Optional[CheckinPaymentTracker] = None,
+    collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
+) -> None:
     """
     Extracts all current, valid upcoming cruise bookings linked to an active account profile.
 
@@ -1340,15 +1417,17 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         balance_due_amount = booking.get("balanceDueAmount")
         if str(reservation_ID) in config.paid_reservations:
             balance_due = False   # user vouches for it (reservationsPaidInFull)
-        record_checkin_payment_row({
-            "name": summary_name,
-            "reservation": summary_reservation,
-            "sail_date": sail_date,
-            "checkin_label": checkin_label or "TBD",
-            "final_payment": final_payment_date,
-            "past_final_payment": date.today() > final_payment_date,
-            "balance_due": balance_due,
-            "dedupe_key": f"{reservation_ID}|{sail_date}",
+
+        if payment_tracker is not None:
+            payment_tracker.record_row({
+                    "name": summary_name,
+                    "reservation": summary_reservation,
+                    "sail_date": sail_date,
+                    "checkin_label": checkin_label or "TBD",
+                    "final_payment": final_payment_date,
+                    "past_final_payment": date.today() > final_payment_date,
+                    "balance_due": balance_due,
+                    "dedupe_key": f"{reservation_ID}|{sail_date}",
         })
 
         if balance_due is True:
@@ -1393,7 +1472,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 log(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
         # Get the extra add-ons purchased for this voyage
-        get_orders(account_info, booking, metrics)
+        get_orders(account_info, booking, metrics, collected_watch_rows=collected_watch_rows)
         log(" ")
 
         # Process watchlists on a per-occupant layout instead of per-booking line
@@ -1406,7 +1485,14 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 }
 
                 # Handle any watch list items for this guest's booking
-                process_watch_list_for_booking(account_info, booking, watch_list_items, apobj, passenger_info)
+                process_watch_list_for_booking(
+                    account_info,
+                    booking,
+                    watch_list_items,
+                    apobj,
+                    passenger_info,
+                    collected_watch_rows=collected_watch_rows
+                )
 
             log(" ")
 
@@ -2037,7 +2123,7 @@ def get_new_order_price(
     booking: Dict[str, Any],
     apobj: Optional[Apprise],
     ctx: WatchItemContext
-) -> None:
+) -> Optional[Dict[str, Any]]:
     """
     Compares active promotional planner prices against a passenger's purchased cost.
 
@@ -2139,14 +2225,14 @@ def get_new_order_price(
         log(YELLOW + f"\t{title}: no current price returned; cannot compare" + RESET)
         return
 
-    watch_price_rows.append({
+    watch_tracker_record = {
         "SailDate": start_date,
         "ReservationID": reservation_ID,
         "Passenger": passenger_name,
         "ProductID": product,
         "ProductTitle": title,
         "CurrentPrice": current_price,
-    })
+    }
 
     # Process Deal Alerts
     if current_price < paid_price:
@@ -2206,15 +2292,17 @@ def get_new_order_price(
             temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
 
+    return watch_tracker_record
 
-def write_watch_price_json(output_path: str) -> None:
+
+def write_watch_price_json(rows: List[Dict[str, Any]], output_path: str) -> None:
     """Write the add-on watch prices collected during this run as a JSON array."""
     if platform.system() == "iOS":
         output_path = os.path.expanduser('~/Documents') + "/" + output_path
 
     try:
         with open(output_path, "w", encoding="utf-8") as output_file:
-            json.dump(watch_price_rows, output_file, indent=2)
+            json.dump(rows, output_file, indent=2)
             output_file.write("\n")
     except OSError as error:
         log(f"{YELLOW}Warning: Could not write JSON watch output '{output_path}': {error}{RESET}")
@@ -2225,7 +2313,8 @@ def process_watch_list_for_booking(
     booking: Dict[str, Any],
     watch_list_items: List[WatchListItem],
     apobj: Optional[Apprise],
-    passenger_info: Dict[str, Any]
+    passenger_info: Dict[str, Any],
+    collected_watch_rows: Optional[List[Dict[str, Any]]] = None
 ) -> None:
     """
     Evaluates individual user watchlist targets against active booking records.
@@ -2286,10 +2375,17 @@ def process_watch_list_for_booking(
         )
 
         # Check the item's current price
-        get_new_order_price(account_info, booking, apobj, ctx)
+        if watch_row := get_new_order_price(account_info, booking, apobj, ctx):
+            if collected_watch_rows is not None:
+                collected_watch_rows.append(watch_row)
 
 
-def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict[str, Any]) -> None:
+def get_orders(
+    account_info: AccountInfo,
+    booking: Dict[str, Any],
+    metrics: Dict[str, Any],
+    collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
+) -> None:
     """
     Retrieves the digital order history or itinerary manifest for an active booking.
 
@@ -2456,7 +2552,10 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             reservation_id=guestreservation_ID
                         )
 
-                        get_new_order_price(account_info, booking, config.apobj, ctx)
+                        # Check the item's current price
+                        if watch_row := get_new_order_price(account_info, booking, config.apobj, ctx):
+                            if collected_watch_rows is not None:
+                                collected_watch_rows.append(watch_row)
 
 
 def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
@@ -3512,98 +3611,6 @@ def derive_balance_due(booking: dict, cruise_paid_price_from_api: Optional[List[
     return None
 
 
-def record_checkin_payment_row(row: Dict[str, Any]) -> None:
-    """
-    Adds a booking to the end-of-run summary table, merging duplicates.
-
-    Linked reservations appear in every linked account's booking list, so a
-    multi-account run sees the same reservation once per account. Rows are
-    keyed on reservation id + sail date ("dedupe_key"); when a duplicate
-    arrives, the more informative fields win - a definitive balance_due
-    (True/False) beats None, and a real check-in label beats the "TBD"
-    placeholder - because only the owning account's view reliably carries
-    payment data. This keeps the outcome independent of the accountInfo order.
-    """
-    key = row.get("dedupe_key")
-    for existing in checkin_payment_rows:
-        if key is not None and existing.get("dedupe_key") == key:
-            if existing.get("balance_due") not in (True, False) and row.get("balance_due") in (True, False):
-                existing["balance_due"] = row["balance_due"]
-                existing["past_final_payment"] = row["past_final_payment"]
-            if existing.get("checkin_label") in (None, "TBD") and row.get("checkin_label") not in (None, "TBD"):
-                existing["checkin_label"] = row["checkin_label"]
-            return
-    checkin_payment_rows.append(row)
-
-
-def print_checkin_payment_table() -> None:
-    """
-    Prints a compact end-of-run summary of upcoming check-in openings / boarding
-    times and final payment dates for every booked sailing, sorted by sail date.
-
-    Nothing is printed when no booked sailings were gathered (e.g. a watchlist-only
-    run), so it never adds noise to runs that have nothing to summarize.
-    """
-    if not checkin_payment_rows:
-        return
-
-    rows = sorted(checkin_payment_rows, key=lambda r: r["sail_date"] or "")
-
-    headers = ("Sail Date", "Ship (Room)", "Reservation", "Check-In", "Final Payment")
-    table = []
-    pay_colors = []
-    for r in rows:
-        sail = config.format_date(r["sail_date"]) if r["sail_date"] else "?"
-        if r["final_payment"] is not None:
-            pay = r["final_payment"].strftime(config.date_display_format)
-            # Green when settled, yellow when a balance is still owed, red when that
-            # balance is now past the final payment deadline. "(paid)" is only shown
-            # when the API explicitly said the balance is settled - a missing/null
-            # balanceDue must not masquerade as paid in full.
-            if r["balance_due"] is True:
-                if r["past_final_payment"]:
-                    pay += " (PAST DUE)"
-                    pay_colors.append(RED)
-                else:
-                    pay += " (balance due)"
-                    pay_colors.append(YELLOW)
-            elif r["balance_due"] is False:
-                pay += " (paid)"
-                pay_colors.append(GREEN)
-            elif r["balance_due"] == "TA_UNKNOWN":
-                pay += " (contact TA for balance)"
-                pay_colors.append(YELLOW)
-            elif r["balance_due"] is None:
-                pay += " (status unknown)"
-                pay_colors.append(YELLOW)
-        else:
-            pay = "-"
-            pay_colors.append("")
-        table.append((sail, r["name"], r.get("reservation", "-"), r["checkin_label"], pay))
-
-    # Size each column to the widest of its header/cells. The stored values are ANSI-free;
-    # color is applied only at print time so it never skews this width math.
-    widths = [max(len(str(row[i])) for row in ([headers] + table)) for i in range(len(headers))]
-
-    def fmt(cells: Tuple[str, ...], pay_color: str = "") -> str:
-        padded = [str(c).ljust(widths[i]) for i, c in enumerate(cells)]
-        if pay_color:
-            padded[-1] = f"{pay_color}{padded[-1]}{RESET}"
-        return "  ".join(padded)
-
-    log(f"\n{BLUE}Upcoming Check-In & Final Payment Dates{RESET}")
-    log(fmt(headers))
-    log("  ".join("-" * w for w in widths))
-    prev_sail = None
-    for row, pay_color in zip(table, pay_colors):
-        # Blank the sail date when it repeats the row above (linked cruises / multiple
-        # cabins on one sailing) so each date prints once. Rows are sorted by date, so
-        # same-date rows are always adjacent.
-        display_row = ("" if row[0] == prev_sail else row[0],) + row[1:]
-        prev_sail = row[0]
-        log(fmt(display_row, pay_color))
-
-
 def main() -> None:
     """
     Primary orchestration engine for the cruise pricing validation suite.
@@ -3614,9 +3621,11 @@ def main() -> None:
     unbooked prospective vacation watchlists.
     """
     try:
-        # Start each run with an empty check-in / payment summary collector
-        checkin_payment_rows.clear()
-        watch_price_rows.clear()
+        # Instantiate clean per-run tracker
+        payment_tracker = CheckinPaymentTracker()
+
+        # Watch list table rows
+        collected_watch_rows: List[Dict[str, Any]] = []
 
         # Set Time with AM/PM or 24h based on locale
         locale.setlocale(locale.LC_TIME,'')
@@ -3624,6 +3633,9 @@ def main() -> None:
 
         if config.log_file:
             log(f"Logging run to file: {config.log_file}")
+
+        if config.output_watch_as_json:
+            log(f"Logging watch list item prices to JSON file: {config.output_json_watch_file}")
 
         # Since timestamp is a datetime object, convert it to a string or update format_date to handle both
         log(f"Report generated {config.format_date(timestamp.strftime('%Y%m%d'))} {timestamp.strftime('%X')}")
@@ -3674,7 +3686,13 @@ def main() -> None:
 
             # Gather the information on all voyages under the current account
             try:
-                get_voyages(account_info, discounts, ship_dictionary)
+                get_voyages(
+                   account_info,
+                   discounts,
+                   ship_dictionary,
+                   payment_tracker=payment_tracker,
+                   collected_watch_rows=collected_watch_rows,
+                 )
             finally:
                 # Close the account session even when a booking raises, so
                 # sessions don't leak across the remaining accounts
@@ -3724,11 +3742,11 @@ def main() -> None:
             anon_session.close()
 
         # Summary table of upcoming check-in and final-payment dates for booked sailings
-        print_checkin_payment_table()
+        payment_tracker.print_table()
 
         # Write the watchlist price results to JSON for external consumption
         if config.output_watch_as_json:
-            write_watch_price_json(config.output_json_watch_file)
+            write_watch_price_json(collected_watch_rows, config.output_json_watch_file)
 
     except Exception as e:
         # Let the global catch-all at the module entry point handle unexpected execution faults
