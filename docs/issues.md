@@ -7,3 +7,4 @@
 1. For linked cruises, purchases will probably show up under the reservation of the person who purchased it. For example, if your kids are in a different cabin/reservation and you bought them the refreshment package, the price checker display it under your reservation. The cabin listed after the kids name in () should be correct however. Linked reservations for someone you do not live with may behave differently.
 1. Please double check that the price is lower before you rebook! I am not responsible if you book at a higher price!
 1. Double check you are cancelling the item for the correct cruise
+1. Automatic cabin checking broken for non-USD currency. Use watch list functionality for now
