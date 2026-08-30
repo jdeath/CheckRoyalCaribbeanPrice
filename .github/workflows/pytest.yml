@@ -41,4 +41,4 @@ jobs:
 
       - name: Execute Pytest Suite
         run: |
-          python -m pytest test_price_browser.py test_price_checker.py test_alert_matrix.py -vs --cov=CheckRoyalCaribbeanPrice --cov=BrowseRoyalCaribbeanPrice --cov-report=term-missing
+          python -m pytest test_price_browser.py test_price_checker.py test_alert_matrix.py test_per_account_notify.py -vs --cov=CheckRoyalCaribbeanPrice --cov=BrowseRoyalCaribbeanPrice --cov-report=term-missing
