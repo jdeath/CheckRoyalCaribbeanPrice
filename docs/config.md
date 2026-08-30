@@ -28,9 +28,6 @@ outputWatchAsJson: true # Optional, write the watchlist add-on prices from each 
 outputJsonFile: "output-json-watch.txt" # Optional, override the JSON output path
 ```
 
-If `outputWatchAsJson` is true, the add-on watch prices checked during each run are also written as a JSON list.
-Set `outputJsonFile` to change the output path; it defaults to `output-json-watch.txt`.
-
 If you only want to check cruise addons (drink packages, excursions, etc) and do not want emails or check cruise prices, the config file is simpler. Start with this to see if works. You can have any number of Royal and/or Celebrity accounts:
 ```yaml
 accountInfo:
@@ -142,3 +139,6 @@ accountInfo:
   - username: "user@gmail.com"
     password: "${RCCL_PASSWORD}" # reads the RCCL_PASSWORD environment variable
 ```
+
+If `outputWatchAsJson` is true, the add-on watch prices checked during each run are also written as a JSON list.
+Set `outputJsonFile` to change the output path; it defaults to `output-json-watch.txt`.
