@@ -1002,6 +1002,14 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
     parsed_cabin_string = _parse_stateroom_type(cabin_string)
     cabin_string = parsed_cabin_string if parsed_cabin_string != "NONE" else cabin_string
 
+    # Extract sub-type (r0e) and category code (r0f) with fallbacks for Guarantee (GTY) codes
+    raw_r0e = params.get("r0e", [None])[0]
+    raw_r0f = params.get("r0f", [None])[0]
+
+    # If r0e or r0f are missing, fallback to r0d / cabin_string if it's a specific category code (e.g. XB)
+    stateroom_subtype = raw_r0e or (r0d_list[0] if r0d_list else None)
+    stateroom_category_code = raw_r0f or (r0d_list[0] if r0d_list else None)
+
     # Parse the URL parameters and save in a class instance
     return CruiseURLParams(
         is_royal="royal" in domain,
@@ -1012,8 +1020,10 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
 #        ship_code=params.get("ship_code", [None])[0],
         cabin_class_string=cabin_string,
         stateroom_type_name=r0d_list[0] if r0d_list else None,
-        stateroom_subtype=params.get("r0e", [None])[0],
-        stateroom_category_code=params.get("r0f", [None])[0],
+        stateroom_subtype=stateroom_subtype,
+        stateroom_category_code=stateroom_category_code,
+#        stateroom_subtype=params.get("r0e", [None])[0],
+#        stateroom_category_code=params.get("r0f", [None])[0],
         package_code=params.get("packageCode", [None])[0],
 #        package_code=params.get("package_code", [None])[0],
         number_of_adults=params.get("r0a", ["2"])[0],
@@ -1801,8 +1811,6 @@ def get_cruise_price(account_info: AccountInfo,
         if not automatic_URL and apobj is not None:
             apobj.notify(body=text_string, title='Cruise Room Not Available', body_format=NotifyFormat.TEXT)
 
-        # TODO: This code block will print the "Available Rooms" line even if the count is 0;
-        #       do we want to use this commented-out block instead
         if url_params.package_code and not automatic_URL:
             # Pre-filter rooms that actually have inventory available
             # (key is 'rooms_left' as produced by check_if_room_is_available; price may be None)
@@ -2745,6 +2753,13 @@ def _build_checkout_url(
     url_sail_date = f"{sail_date[0:4]}-{sail_date[4:6]}-{sail_date[6:8]}"
     stateroom_number = booking.get("stateroomNumber")
 
+    # Resolve stateroom type and subtype defaults safely
+    stateroom_type = _parse_stateroom_type(booking.get("stateroomType"))
+    fallback_category = metrics.get('category_code') or metrics.get('sub_type') or booking.get("stateroomType")
+
+    sub_type = metrics.get('sub_type') or fallback_category
+    category_code = metrics.get('category_code') or fallback_category
+
     # Build the dictionary of parameters that URLs for GTY and non-GTY share completely
     params = {
         'packageCode': booking.get("packageCode"),
@@ -2792,7 +2807,7 @@ def _build_checkout_url(
     # HTTP 400 BAD_INPUT ("must match pattern ^[A-Z]{3}$") and the cabin
     # reports "Room Price Not Found". Omitting the key lets
     # parse_provided_URL() fall back to its defaults (country -> "USA").
-    params = {key: value for key, value in params.items() if value is not None}
+    params = {key: value for key, value in params.items() if value is not None and value != ""}
 
     # Seamlessly combine the base URL and the safely encoded string
     return f"{base_url}?{urlencode(params)}"
