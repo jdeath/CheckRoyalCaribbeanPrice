@@ -137,7 +137,8 @@ MARKET_RULES: dict[str, Union[int, DurationRules]] = {
 #                          module-level setup failure before any pricing ran.
 #                          Nothing in this run should be trusted.
 #   EXIT_PARTIAL_FAILURE - the run COMPLETED, but one or more accounts were
-#                          SKIPPED after a login failure. Data already
+#                          SKIPPED after a login or post-login profile-fetch
+#                          failure. Data already
 #                          written for the accounts that DID succeed (price
 #                          points committed, price-drop alerts sent, the
 #                          watchlist JSON) is real and must not be redone.
@@ -3853,9 +3854,10 @@ def main() -> None:
         ship_dictionary = ShipRegistry()
         get_ship_dictionary_web(ship_dictionary)
 
-        # Usernames that failed to log in this run - tracked so the end-of-run
-        # summary (and exit status) can't come out looking green when one
-        # account in a multi-account config silently never got checked.
+        # Usernames that could not be checked this run (login or post-login
+        # profile fetch failed) - tracked so the end-of-run summary (and exit
+        # status) can't come out looking green when one account in a
+        # multi-account config silently never got checked.
         failed_accounts: List[str] = []
 
         for account_info in config.accounts:
@@ -3876,13 +3878,30 @@ def main() -> None:
             # move on to the next account. SystemExit derives from
             # BaseException rather than Exception, so it has to be named
             # explicitly here; a bare `except Exception` would not catch it.
+            #
+            # login() and get_profile() are guarded together (an account that
+            # can't log in can't have its profile fetched either, so both
+            # failures are skip-and-continue the same way), but a phase flag
+            # tracks which of the two actually raised. A get_profile() error
+            # (e.g. a transient 500) on an account whose login SUCCEEDED is a
+            # different failure than a bad password, and must not be reported
+            # to the user as a login problem - that would send them chasing
+            # the wrong fix.
+            account_phase = "login"
             try:
                 account_info.access = login(account_info)
+                account_phase = "profile"
                 state_from_profile, loyalty_number, c_and_a_points = get_profile(account_info)
-            except (SystemExit, Exception) as login_err:
+            except (SystemExit, Exception) as account_err:
                 failed_accounts.append(account_info.username)
-                log(RED + f"\n[SKIPPED] {account_info.friendly_name} ({account_info.username}) could not be "
-                          f"logged in this run (see the error above) - skipping this account and continuing "
+                if account_phase == "login":
+                    skip_reason = "could not be logged in"
+                    notify_title = 'Cruise Price Account Login Failed'
+                else:
+                    skip_reason = "logged in, but its profile could not be fetched"
+                    notify_title = 'Cruise Price Account Profile Fetch Failed'
+                log(RED + f"\n[SKIPPED] {account_info.friendly_name} ({account_info.username}) {skip_reason} "
+                          f"this run (see the error above) - skipping this account and continuing "
                           f"with the rest of the run." + RESET)
 
                 # Route the failure through the same per-account/global
@@ -3895,9 +3914,9 @@ def main() -> None:
                 account_notifier = notifier_for(account_info)
                 if config.notify_on_error and account_notifier is not None and len(account_notifier) > 0:
                     account_notifier.notify(
-                        body=f"Account {account_info.username} ({account_info.friendly_name}) could not be "
-                             f"logged in this run and was skipped:\n{login_err}",
-                        title='Cruise Price Account Login Failed',
+                        body=f"Account {account_info.username} ({account_info.friendly_name}) {skip_reason} "
+                             f"this run and was skipped:\n{account_err}",
+                        title=notify_title,
                         body_format=NotifyFormat.TEXT,
                     )
                 continue
@@ -3997,12 +4016,13 @@ def main() -> None:
             # scheduler/log-scraper watching this process, hiding exactly the
             # kind of silent partial loss this guard exists to prevent - so
             # both the history row and the process exit code say otherwise.
-            log(RED + f"\n{len(failed_accounts)} of {len(config.accounts)} account(s) failed to log in this run "
-                      f"and were SKIPPED: {', '.join(failed_accounts)}. Prices for those accounts were NOT "
-                      f"checked." + RESET)
+            log(RED + f"\n{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked this "
+                      f"run and were SKIPPED: {', '.join(failed_accounts)}. Prices for those accounts were NOT "
+                      f"checked. See the [SKIPPED] line(s) above for whether each was a login or profile-fetch "
+                      f"failure." + RESET)
             config.history.finish_run(
                 "partial_failure",
-                f"{len(failed_accounts)} of {len(config.accounts)} account(s) failed to log in: "
+                f"{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked: "
                 f"{', '.join(failed_accounts)}",
             )
             # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.

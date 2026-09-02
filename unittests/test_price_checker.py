@@ -3582,15 +3582,103 @@ def test_main_unrelated_fatal_error_still_propagates_and_is_not_partial_failure(
          patch.object(C, "get_ship_dictionary_web"), \
          patch.object(C, "login", return_value=access), \
          patch.object(C, "get_profile", return_value=("FL", "LOY-1", 0)), \
-         patch.object(C, "get_voyages", side_effect=boom):
+         patch.object(C, "get_voyages", side_effect=boom), \
+         patch("sys.exit") as mock_exit:
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError) as exc_info:
             C.main()
+
+    # This must be the exact bare RuntimeError, never converted along the
+    # way, and main() itself must never call sys.exit for it. That matters
+    # because the *only* place this exception's fate as an exit code gets
+    # decided is the module-level handler at the bottom of this file
+    # (`if __name__ == "__main__": ... except Exception as exc: ...
+    # sys.exit(1)`), which maps every exception reaching it - unconditionally,
+    # with no branch for EXIT_PARTIAL_FAILURE - to the fixed exit code 1.
+    # Pinning that main() calls sys.exit zero times here (mirroring how
+    # test_main_continues_to_next_account_when_first_login_raises_systemexit
+    # pins EXIT_PARTIAL_FAILURE off main()'s OWN sys.exit call) is what
+    # guarantees this exception is still headed for that fixed 1, and would
+    # catch a future change that had main() itself start intercepting fatal
+    # errors and mapping some of them to EXIT_PARTIAL_FAILURE.
+    assert exc_info.value is boom
+    assert not isinstance(exc_info.value, SystemExit)
+    mock_exit.assert_not_called()
+    assert C.EXIT_PARTIAL_FAILURE not in (0, 1)
 
     # Finalized as a fatal "error", never as "partial_failure" - the two
     # outcomes must stay distinguishable by exit code (1 vs
     # EXIT_PARTIAL_FAILURE) all the way through to the history row.
     mock_cfg.history.finish_run.assert_called_once_with("error", "RuntimeError: boom")
+
+
+def test_main_distinguishes_login_failure_from_profile_fetch_failure():
+    """
+    ITEM 1 fix: login() and get_profile() are guarded together (both skip
+    the account the same way), but a profile-fetch failure on an account
+    whose login SUCCEEDED must be reported as a profile problem, not
+    misreported as a login problem - conflating the two would send someone
+    debugging a transient profile-API 500 chasing a "bad password" that
+    never happened. A genuine login failure must still say "login".
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    login_bad_account = AccountInfo(username="badlogin@example.com", password="stale-pw", cruise_line="royal")
+    login_bad_account.apobj = MagicMock(name="login_bad_apobj")
+    login_bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
+
+    profile_bad_account = AccountInfo(username="badprofile@example.com", password="pw", cruise_line="royal")
+    profile_bad_account.apobj = MagicMock(name="profile_bad_apobj")
+    profile_bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
+
+    mock_cfg = _make_multi_account_config([login_bad_account, profile_bad_account])
+    mock_cfg.notify_on_error = True
+
+    good_access = APIAccess(token="tok", id="acct-id", session=MagicMock())
+    logged: list[str] = []
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=[SystemExit(1), good_access]), \
+         patch.object(C, "get_profile", side_effect=RuntimeError("profile 500")) as mock_get_profile, \
+         patch.object(C, "get_voyages") as mock_get_voyages:
+
+        with pytest.raises(SystemExit) as exc_info:
+            C.main()
+
+    # get_profile() was reached only for the account that actually logged in.
+    mock_get_profile.assert_called_once_with(profile_bad_account)
+    # Neither account made it to get_voyages() - both were skipped.
+    mock_get_voyages.assert_not_called()
+
+    joined = "\n".join(logged)
+
+    # The login failure is reported as a login problem...
+    assert "badlogin@example.com) could not be logged in" in joined
+    # ...and the profile-fetch failure on the account that DID log in is
+    # reported as a profile problem, never misreported as a login failure.
+    assert "badprofile@example.com) logged in, but its profile could not be fetched" in joined
+    assert "badprofile@example.com) could not be logged in" not in joined
+
+    # Each account's own notifier got a message naming ITS OWN failure phase.
+    login_notify = login_bad_account.apobj.notify.call_args.kwargs
+    assert "could not be logged in" in login_notify["body"]
+    assert login_notify["title"] == 'Cruise Price Account Login Failed'
+
+    profile_notify = profile_bad_account.apobj.notify.call_args.kwargs
+    assert "logged in, but its profile could not be fetched" in profile_notify["body"]
+    assert "could not be logged in" not in profile_notify["body"]
+    assert profile_notify["title"] == 'Cruise Price Account Profile Fetch Failed'
+
+    # Both accounts still land in the same partial-failure outcome - the
+    # fix distinguishes the MESSAGE, not whether the account gets skipped.
+    mock_cfg.history.finish_run.assert_called_once()
+    finish_status, finish_summary = mock_cfg.history.finish_run.call_args.args
+    assert finish_status == "partial_failure"
+    assert "badlogin@example.com" in finish_summary
+    assert "badprofile@example.com" in finish_summary
+    assert exc_info.value.code == C.EXIT_PARTIAL_FAILURE
 
 
 def test_main_all_accounts_succeed_exits_and_records_ok_unchanged():
