@@ -3441,6 +3441,9 @@ def _make_multi_account_config(accounts):
     mock_cfg.prospective_cruises = []
     mock_cfg.date_display_format = "%m/%d/%Y"
     mock_cfg.format_date = lambda d: str(d)
+    # Mirrors the real config default (notifyOnError: false) - tests that
+    # need the opt-in login-failure notification enable it explicitly.
+    mock_cfg.notify_on_error = False
     return mock_cfg
 
 
@@ -3490,18 +3493,27 @@ def test_main_continues_to_next_account_when_first_login_raises_systemexit():
     assert finish_status == "partial_failure"
     assert "bad@example.com" in finish_summary
 
-    # The run must not exit 0 when an account was skipped
-    assert exc_info.value.code != 0
+    # The run must exit with the distinct partial-failure code - never 0
+    # (which would hide the skipped account) and never 1 (which is reserved
+    # for a fatal/total failure and would wrongly tell a supervising
+    # scheduler that the whole run, including the good accounts' already-
+    # written data, needs to be retried).
+    assert C.EXIT_PARTIAL_FAILURE not in (0, 1)
+    assert exc_info.value.code == C.EXIT_PARTIAL_FAILURE
 
 
-def test_main_notifies_failed_account_via_its_own_notifier():
+def test_main_notifies_failed_account_via_its_own_notifier_when_notify_on_error_enabled():
     """A per-account apprise: notifier must hear about ITS OWN login failure,
-    following the same notifier_for() resolution used for price alerts."""
+    following the same notifier_for() resolution used for price alerts - as
+    long as the user has opted in to error notifications (notifyOnError:
+    true), the same opt-out the module-level fatal-error handler honors."""
     import CheckRoyalCaribbeanPrice as C
 
     bad_account = AccountInfo(username="bad@example.com", password="stale-pw", cruise_line="royal")
     bad_account.apobj = MagicMock(name="bad_account_apobj")
+    bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
     mock_cfg = _make_multi_account_config([bad_account])
+    mock_cfg.notify_on_error = True
 
     with patch.object(C, "config", mock_cfg), \
          patch.object(C, "log", MagicMock()), \
@@ -3516,6 +3528,69 @@ def test_main_notifies_failed_account_via_its_own_notifier():
     bad_account.apobj.notify.assert_called_once()
     body = bad_account.apobj.notify.call_args.kwargs["body"]
     assert "bad@example.com" in body
+
+
+def test_main_does_not_notify_failed_account_when_notify_on_error_disabled():
+    """
+    The opt-out: a user who set notifyOnError: false but still has an
+    apprise: URL for price-drop alerts must NOT receive a login-failure
+    push - they explicitly asked not to be notified about errors, and this
+    notification must honor that the same way the module-level fatal-error
+    handler already does (`config.notify_on_error` gate).
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    bad_account = AccountInfo(username="bad@example.com", password="stale-pw", cruise_line="royal")
+    bad_account.apobj = MagicMock(name="bad_account_apobj")
+    bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
+    mock_cfg = _make_multi_account_config([bad_account])
+    mock_cfg.notify_on_error = False
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=SystemExit(1)), \
+         patch.object(C, "get_profile"), \
+         patch.object(C, "get_voyages"):
+
+        with pytest.raises(SystemExit):
+            C.main()
+
+    bad_account.apobj.notify.assert_not_called()
+
+
+def test_main_unrelated_fatal_error_still_propagates_and_is_not_partial_failure():
+    """
+    A login failure is deliberately absorbed into the partial-failure path
+    (EXIT_PARTIAL_FAILURE). An unrelated fatal error elsewhere in the run
+    (e.g. get_voyages blowing up after a successful login) must NOT be
+    caught by that same per-account guard - it has to keep propagating as a
+    real exception, exactly as it did before this feature, so it still
+    reaches the module-level fatal handler and its distinct sys.exit(1) -
+    never silently downgraded to a "some accounts were skipped" outcome.
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    account = AccountInfo(username="user@example.com", password="pw", cruise_line="royal")
+    mock_cfg = _make_multi_account_config([account])
+
+    access = APIAccess(token="tok", id="acct-id", session=MagicMock())
+    boom = RuntimeError("boom")
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", return_value=access), \
+         patch.object(C, "get_profile", return_value=("FL", "LOY-1", 0)), \
+         patch.object(C, "get_voyages", side_effect=boom):
+
+        with pytest.raises(RuntimeError):
+            C.main()
+
+    # Finalized as a fatal "error", never as "partial_failure" - the two
+    # outcomes must stay distinguishable by exit code (1 vs
+    # EXIT_PARTIAL_FAILURE) all the way through to the history row.
+    mock_cfg.history.finish_run.assert_called_once_with("error", "RuntimeError: boom")
 
 
 def test_main_all_accounts_succeed_exits_and_records_ok_unchanged():

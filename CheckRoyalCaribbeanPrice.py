@@ -130,6 +130,25 @@ MARKET_RULES: dict[str, Union[int, DurationRules]] = {
     "CA":  [(4, 75), (14, 90), (float("inf"), 120)],
 }
 
+# Process exit code contract for main() - a supervising scheduler can rely on
+# these three outcomes meaning exactly this and nothing else:
+#   0                    - full success: every account was checked
+#   1                    - fatal/total failure: an unhandled exception, or a
+#                          module-level setup failure before any pricing ran.
+#                          Nothing in this run should be trusted.
+#   EXIT_PARTIAL_FAILURE - the run COMPLETED, but one or more accounts were
+#                          SKIPPED after a login failure. Data already
+#                          written for the accounts that DID succeed (price
+#                          points committed, price-drop alerts sent, the
+#                          watchlist JSON) is real and must not be redone.
+#                          A scheduler that treats this the same as exit 1
+#                          and blindly retries the whole run will re-price
+#                          already-priced accounts and can send duplicate
+#                          price-drop notifications to real users - so this
+#                          code is deliberately distinct from the fatal (1)
+#                          and success (0) cases.
+EXIT_PARTIAL_FAILURE = 2
+
 # ANSI color codes
 RESET = '\033[0m' # Resets color to default
 
@@ -665,9 +684,11 @@ class PriceHistory:
     mid-run loses nothing already recorded - this script is a short-lived
     process invoked fresh per run, so there is no long-lived connection to
     manage. A `runs` row whose finished_at is still NULL means the process
-    exited without ever finalizing it (e.g. a sys.exit() from a login
-    failure, before main()'s own error handler could run) - treat such rows
-    as an aborted run, not a currently-in-progress one.
+    exited without ever finalizing it (e.g. a crash or a killed process,
+    before main()'s own error handler could run) - treat such rows as an
+    aborted run, not a currently-in-progress one. A login failure no longer
+    leaves finished_at NULL: main() catches it per account and finalizes the
+    run as "partial_failure" instead.
     """
 
     def __init__(self, db_path: Optional[str] = None) -> None:
@@ -3867,9 +3888,12 @@ def main() -> None:
                 # Route the failure through the same per-account/global
                 # notifier resolution used everywhere else in this script, so
                 # a bad password reaches the user the same way a price alert
-                # would - not a bespoke notification path.
+                # would - not a bespoke notification path. Gated the same way
+                # as the module-level fatal-error notifier below: honor the
+                # notifyOnError opt-out, and only fire when the resolved
+                # notifier actually has URLs registered.
                 account_notifier = notifier_for(account_info)
-                if account_notifier is not None:
+                if config.notify_on_error and account_notifier is not None and len(account_notifier) > 0:
                     account_notifier.notify(
                         body=f"Account {account_info.username} ({account_info.friendly_name}) could not be "
                              f"logged in this run and was skipped:\n{login_err}",
@@ -3981,7 +4005,8 @@ def main() -> None:
                 f"{len(failed_accounts)} of {len(config.accounts)} account(s) failed to log in: "
                 f"{', '.join(failed_accounts)}",
             )
-            sys.exit(1)
+            # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.
+            sys.exit(EXIT_PARTIAL_FAILURE)
 
         config.history.finish_run("ok")
 
