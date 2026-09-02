@@ -3832,13 +3832,52 @@ def main() -> None:
         ship_dictionary = ShipRegistry()
         get_ship_dictionary_web(ship_dictionary)
 
+        # Usernames that failed to log in this run - tracked so the end-of-run
+        # summary (and exit status) can't come out looking green when one
+        # account in a multi-account config silently never got checked.
+        failed_accounts: List[str] = []
+
         for account_info in config.accounts:
             log(f"\nUsing {account_info.friendly_name} for user {account_info.username}")
             log(f"\t{account_info.friendly_name} loyalty number will be used for checking cabin prices")
 
-            # Login in to this account and get the profile information
-            account_info.access = login(account_info)
-            state_from_profile, loyalty_number, c_and_a_points = get_profile(account_info)
+            # Login in to this account and get the profile information.
+            #
+            # login() intentionally still raises SystemExit on failure (a stale
+            # password, a WAF block, etc.) - that contract is load-bearing for
+            # an out-of-tree caller that uses login() directly as a standalone
+            # credential probe. Left unguarded, though, that SystemExit would
+            # propagate straight out of this loop and take the whole
+            # multi-account run down over ONE bad account, silently skipping
+            # every account queued after it. So the caller - not login() -
+            # absorbs the failure: catch it (and any other unexpected
+            # Exception from either call) per account, report it loudly, and
+            # move on to the next account. SystemExit derives from
+            # BaseException rather than Exception, so it has to be named
+            # explicitly here; a bare `except Exception` would not catch it.
+            try:
+                account_info.access = login(account_info)
+                state_from_profile, loyalty_number, c_and_a_points = get_profile(account_info)
+            except (SystemExit, Exception) as login_err:
+                failed_accounts.append(account_info.username)
+                log(RED + f"\n[SKIPPED] {account_info.friendly_name} ({account_info.username}) could not be "
+                          f"logged in this run (see the error above) - skipping this account and continuing "
+                          f"with the rest of the run." + RESET)
+
+                # Route the failure through the same per-account/global
+                # notifier resolution used everywhere else in this script, so
+                # a bad password reaches the user the same way a price alert
+                # would - not a bespoke notification path.
+                account_notifier = notifier_for(account_info)
+                if account_notifier is not None:
+                    account_notifier.notify(
+                        body=f"Account {account_info.username} ({account_info.friendly_name}) could not be "
+                             f"logged in this run and was skipped:\n{login_err}",
+                        title='Cruise Price Account Login Failed',
+                        body_format=NotifyFormat.TEXT,
+                    )
+                continue
+
             if account_info.state is None:
                 account_info.state = state_from_profile
 
@@ -3927,6 +3966,22 @@ def main() -> None:
         # Write the watchlist price results to JSON for external consumption
         if config.output_watch_as_json:
             write_watch_price_json(collected_watch_rows, config.output_json_watch_file)
+
+        if failed_accounts:
+            # At least one account never got checked this run. A quiet exit
+            # 0 here would look identical to a fully-successful run to any
+            # scheduler/log-scraper watching this process, hiding exactly the
+            # kind of silent partial loss this guard exists to prevent - so
+            # both the history row and the process exit code say otherwise.
+            log(RED + f"\n{len(failed_accounts)} of {len(config.accounts)} account(s) failed to log in this run "
+                      f"and were SKIPPED: {', '.join(failed_accounts)}. Prices for those accounts were NOT "
+                      f"checked." + RESET)
+            config.history.finish_run(
+                "partial_failure",
+                f"{len(failed_accounts)} of {len(config.accounts)} account(s) failed to log in: "
+                f"{', '.join(failed_accounts)}",
+            )
+            sys.exit(1)
 
         config.history.finish_run("ok")
 

@@ -33,6 +33,7 @@ from CheckRoyalCaribbeanPrice import (
 # ITEM 22 TESTS: TA BOOKINGS WITHOUT bookingOfficeCountryCode (checkout URL None params)
 # ITEM 23 TESTS: LOGIN FAILURE DIAGNOSTICS (OAuth error body surfaced)
 # ITEM 24 TESTS: MARKET COUNTRY CODE PREFERRED OVER BOOKING OFFICE COUNTRY CODE
+# ITEM 26 TESTS: PER-ACCOUNT LOGIN FAILURE ISOLATION (main() run resilience)
     AccountInfo,
     APIAccess,
     CheckinPaymentTracker,
@@ -63,6 +64,7 @@ from CheckRoyalCaribbeanPrice import (
     get_voyages,
     load_config_objects,
     login,
+    main,
     parse_provided_URL,
     resolve_lead_time
 )
@@ -3414,3 +3416,133 @@ class TestFinalPaymentDateOverrides:
                 sail_date="2026-12-31",
                 final_payment_date_override="INVALID_DATE",
             )
+# ============================================================================
+# ITEM 26 TESTS: PER-ACCOUNT LOGIN FAILURE ISOLATION (main() run resilience)
+# ============================================================================
+# A stale password on ONE account in a multi-account config.yaml used to take
+# the entire run down: login()'s sys.exit(1) propagated straight out of
+# main()'s account loop as an uncaught SystemExit. main() must now absorb a
+# failed login/profile fetch for one account, report it loudly, and still
+# process every remaining account - without changing login()'s own contract
+# (an out-of-tree caller uses login() directly as a standalone credential
+# probe and depends on it still raising SystemExit on failure).
+
+def _make_multi_account_config(accounts):
+    """A MagicMock config with just enough real values wired up that main()
+    can run its account loop and fall through past the watchlist / JSON
+    stages without touching the network or the filesystem."""
+    mock_cfg = MagicMock()
+    mock_cfg.accounts = accounts
+    mock_cfg.apobj = None
+    mock_cfg.apprise_test = False
+    mock_cfg.log_file = None
+    mock_cfg.output_watch_as_json = False
+    mock_cfg.minimum_saving_alert = None
+    mock_cfg.prospective_cruises = []
+    mock_cfg.date_display_format = "%m/%d/%Y"
+    mock_cfg.format_date = lambda d: str(d)
+    return mock_cfg
+
+
+def test_main_continues_to_next_account_when_first_login_raises_systemexit():
+    """
+    The real-world failure this guards: account 1 has a stale password and
+    login() raises SystemExit for it, while account 2 is fine. The run must
+    still reach and process account 2, and must exit non-zero afterward so
+    the skipped account isn't silently swallowed by a green-looking run.
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    bad_account = AccountInfo(username="bad@example.com", password="stale-pw", cruise_line="royal")
+    good_account = AccountInfo(username="good@example.com", password="correct-pw", cruise_line="royal")
+    mock_cfg = _make_multi_account_config([bad_account, good_account])
+
+    good_access = APIAccess(token="tok", id="acct-id", session=MagicMock())
+    logged: list[str] = []
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=[SystemExit(1), good_access]) as mock_login, \
+         patch.object(C, "get_profile", return_value=("FL", "LOY-1", 0)) as mock_get_profile, \
+         patch.object(C, "get_voyages") as mock_get_voyages, \
+         patch("CheckRoyalCaribbeanPrice.time.sleep"):
+
+        with pytest.raises(SystemExit) as exc_info:
+            C.main()
+
+    # login() was attempted for BOTH accounts - the first failure did not stop the loop
+    assert mock_login.call_count == 2
+
+    # Only the account that actually logged in went on to get_profile()/get_voyages()
+    mock_get_profile.assert_called_once_with(good_account)
+    mock_get_voyages.assert_called_once()
+    assert mock_get_voyages.call_args.args[0] is good_account
+
+    # The failure was reported loudly and named the failing account
+    joined = "\n".join(logged)
+    assert "bad@example.com" in joined
+    assert "SKIPPED" in joined
+
+    # History records the run as a partial failure (not a silent "ok")
+    mock_cfg.history.finish_run.assert_called_once()
+    finish_status, finish_summary = mock_cfg.history.finish_run.call_args.args
+    assert finish_status == "partial_failure"
+    assert "bad@example.com" in finish_summary
+
+    # The run must not exit 0 when an account was skipped
+    assert exc_info.value.code != 0
+
+
+def test_main_notifies_failed_account_via_its_own_notifier():
+    """A per-account apprise: notifier must hear about ITS OWN login failure,
+    following the same notifier_for() resolution used for price alerts."""
+    import CheckRoyalCaribbeanPrice as C
+
+    bad_account = AccountInfo(username="bad@example.com", password="stale-pw", cruise_line="royal")
+    bad_account.apobj = MagicMock(name="bad_account_apobj")
+    mock_cfg = _make_multi_account_config([bad_account])
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=SystemExit(1)), \
+         patch.object(C, "get_profile"), \
+         patch.object(C, "get_voyages"):
+
+        with pytest.raises(SystemExit):
+            C.main()
+
+    bad_account.apobj.notify.assert_called_once()
+    body = bad_account.apobj.notify.call_args.kwargs["body"]
+    assert "bad@example.com" in body
+
+
+def test_main_all_accounts_succeed_exits_and_records_ok_unchanged():
+    """Baseline: with no failures, current behavior is unchanged - every
+    account is processed, the history run finishes 'ok', and the process
+    does not raise/exit non-zero."""
+    import CheckRoyalCaribbeanPrice as C
+
+    account_one = AccountInfo(username="one@example.com", password="pw1", cruise_line="royal")
+    account_two = AccountInfo(username="two@example.com", password="pw2", cruise_line="royal")
+    mock_cfg = _make_multi_account_config([account_one, account_two])
+
+    access_one = APIAccess(token="tok1", id="id1", session=MagicMock())
+    access_two = APIAccess(token="tok2", id="id2", session=MagicMock())
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=[access_one, access_two]) as mock_login, \
+         patch.object(C, "get_profile", return_value=("FL", "LOY-1", 0)) as mock_get_profile, \
+         patch.object(C, "get_voyages") as mock_get_voyages, \
+         patch("CheckRoyalCaribbeanPrice.time.sleep"):
+
+        C.main()  # must return normally - no SystemExit
+
+    assert mock_login.call_count == 2
+    assert mock_get_profile.call_count == 2
+    assert mock_get_voyages.call_count == 2
+
+    mock_cfg.history.finish_run.assert_called_once_with("ok")
