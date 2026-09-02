@@ -2566,3 +2566,59 @@ def test_build_checkout_url_omits_none_params_for_ta_bookings():
     parsed = parse_provided_URL(url)
     assert parsed.booking_office_country_code == "USA"
     assert parsed.sail_date == "2027-01-24"  # checkout API requires the dashed form
+
+
+# ITEM 23 TESTS: LOGIN FAILURE DIAGNOSTICS (OAuth error body surfaced)
+
+def test_login_failure_logs_server_error_body_and_scrubs_password():
+    """A bare status code cannot tell a rejected password ('invalid_grant')
+    from a malformed request ('invalid_request') or an edge/WAF block, which
+    makes login failures undiagnosable from a run log. login() must surface
+    the server's own error text -- with the password scrubbed if it ever
+    appears in the response."""
+    import CheckRoyalCaribbeanPrice as C
+
+    account_info = AccountInfo(username="someone@example.com", password="pa55!word", cruise_line="royal")
+
+    bad_response = MagicMock()
+    bad_response.status_code = 400
+    bad_response.text = '{"error_description":"Login failure","error":"invalid_grant"}'
+
+    mock_session = MagicMock()
+    mock_session.post.return_value = bad_response
+
+    logged: list[str] = []
+    with patch.object(C, "new_api_session", return_value=mock_session), \
+         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))):
+        with pytest.raises(SystemExit):
+            C.login(account_info)
+
+    joined = "\n".join(logged)
+    assert "invalid_grant" in joined, "the server's OAuth error must reach the run log"
+    assert "someone@example.com" in joined, "the failing account should be identifiable"
+    assert "pa55!word" not in joined, "the password must never be logged"
+
+
+def test_login_failure_scrubs_password_echoed_in_body():
+    """Defensive: if the endpoint ever echoes the submitted password back in
+    an error body, it must not land in the log."""
+    import CheckRoyalCaribbeanPrice as C
+
+    account_info = AccountInfo(username="someone@example.com", password="pa55!word", cruise_line="royal")
+
+    bad_response = MagicMock()
+    bad_response.status_code = 400
+    bad_response.text = '{"error":"invalid_request","detail":"password pa55!word rejected"}'
+
+    mock_session = MagicMock()
+    mock_session.post.return_value = bad_response
+
+    logged: list[str] = []
+    with patch.object(C, "new_api_session", return_value=mock_session), \
+         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))):
+        with pytest.raises(SystemExit):
+            C.login(account_info)
+
+    joined = "\n".join(logged)
+    assert "pa55!word" not in joined
+    assert "***" in joined
