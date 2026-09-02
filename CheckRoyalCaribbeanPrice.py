@@ -134,14 +134,20 @@ MARKET_RULES: dict[str, Union[int, DurationRules]] = {
 # these three outcomes meaning exactly this and nothing else:
 #   0                    - full success: every account was checked
 #   1                    - fatal/total failure: an unhandled exception, or a
-#                          module-level setup failure before any pricing ran.
-#                          Nothing in this run should be trusted.
+#                          module-level setup failure. This can happen before
+#                          any pricing ran, or partway through a multi-account
+#                          run after earlier accounts already succeeded and
+#                          had their price-drop alerts sent - the exit code
+#                          alone doesn't say how far the run got. Don't
+#                          blindly auto-retry on this code (that risks
+#                          re-alerting accounts that already succeeded);
+#                          surface it to a human and check the log first.
 #   EXIT_PARTIAL_FAILURE - the run COMPLETED, but one or more accounts were
 #                          SKIPPED after a login or post-login profile-fetch
-#                          failure. Data already
-#                          written for the accounts that DID succeed (price
-#                          points committed, price-drop alerts sent, the
-#                          watchlist JSON) is real and must not be redone.
+#                          failure. Data already written for the accounts
+#                          that DID succeed (price points committed,
+#                          price-drop alerts sent, the watchlist JSON) is
+#                          real and must not be redone.
 #                          A scheduler that treats this the same as exit 1
 #                          and blindly retries the whole run will re-price
 #                          already-priced accounts and can send duplicate
@@ -3854,11 +3860,13 @@ def main() -> None:
         ship_dictionary = ShipRegistry()
         get_ship_dictionary_web(ship_dictionary)
 
-        # Usernames that could not be checked this run (login or post-login
-        # profile fetch failed) - tracked so the end-of-run summary (and exit
-        # status) can't come out looking green when one account in a
-        # multi-account config silently never got checked.
-        failed_accounts: List[str] = []
+        # Accounts that could not be checked this run, paired with which
+        # phase failed (login or post-login profile fetch) - tracked so the
+        # end-of-run summary (and exit status) can't come out looking green
+        # when one account in a multi-account config silently never got
+        # checked, and so the persisted history row can still tell a stale
+        # password from a transient profile-API failure after the fact.
+        failed_accounts: List[Tuple[str, str]] = []
 
         for account_info in config.accounts:
             log(f"\nUsing {account_info.friendly_name} for user {account_info.username}")
@@ -3893,7 +3901,7 @@ def main() -> None:
                 account_phase = "profile"
                 state_from_profile, loyalty_number, c_and_a_points = get_profile(account_info)
             except (SystemExit, Exception) as account_err:
-                failed_accounts.append(account_info.username)
+                failed_accounts.append((account_info.username, account_phase))
                 if account_phase == "login":
                     skip_reason = "could not be logged in"
                     notify_title = 'Cruise Price Account Login Failed'
@@ -3913,9 +3921,21 @@ def main() -> None:
                 # notifier actually has URLs registered.
                 account_notifier = notifier_for(account_info)
                 if config.notify_on_error and account_notifier is not None and len(account_notifier) > 0:
+                    # login()'s SystemExit carries nothing but a bare exit
+                    # status (e.g. SystemExit(1), whose str() is just "1") -
+                    # the real diagnosis (a stale password, a WAF block,
+                    # etc.) was already logged by login() itself and a bare
+                    # "1" would only be noise to a user who, by definition,
+                    # is being notified because they won't read the log. A
+                    # plain Exception (e.g. from get_profile()) DOES carry a
+                    # useful message, so that case is still included.
+                    if isinstance(account_err, SystemExit) and not isinstance(account_err.code, str):
+                        detail = "See the run log for the exact reason."
+                    else:
+                        detail = str(account_err)
                     account_notifier.notify(
                         body=f"Account {account_info.username} ({account_info.friendly_name}) {skip_reason} "
-                             f"this run and was skipped:\n{account_err}",
+                             f"this run and was skipped. {detail}",
                         title=notify_title,
                         body_format=NotifyFormat.TEXT,
                     )
@@ -4016,14 +4036,21 @@ def main() -> None:
             # scheduler/log-scraper watching this process, hiding exactly the
             # kind of silent partial loss this guard exists to prevent - so
             # both the history row and the process exit code say otherwise.
+            failed_usernames = [username for username, _phase in failed_accounts]
             log(RED + f"\n{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked this "
-                      f"run and were SKIPPED: {', '.join(failed_accounts)}. Prices for those accounts were NOT "
+                      f"run and were SKIPPED: {', '.join(failed_usernames)}. Prices for those accounts were NOT "
                       f"checked. See the [SKIPPED] line(s) above for whether each was a login or profile-fetch "
                       f"failure." + RESET)
+            # Name each account's failure phase (login vs profile) in the
+            # persisted summary too, not just the console [SKIPPED] lines -
+            # a later reader of the history DB only has this string, and
+            # without the phase they can't tell a stale password from a
+            # transient profile-API failure.
+            failure_detail = ", ".join(f"{username} ({phase})" for username, phase in failed_accounts)
             config.history.finish_run(
                 "partial_failure",
                 f"{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked: "
-                f"{', '.join(failed_accounts)}",
+                f"{failure_detail}",
             )
             # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.
             sys.exit(EXIT_PARTIAL_FAILURE)

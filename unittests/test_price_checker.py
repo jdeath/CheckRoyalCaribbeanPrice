@@ -3564,10 +3564,18 @@ def test_main_unrelated_fatal_error_still_propagates_and_is_not_partial_failure(
     A login failure is deliberately absorbed into the partial-failure path
     (EXIT_PARTIAL_FAILURE). An unrelated fatal error elsewhere in the run
     (e.g. get_voyages blowing up after a successful login) must NOT be
-    caught by that same per-account guard - it has to keep propagating as a
-    real exception, exactly as it did before this feature, so it still
-    reaches the module-level fatal handler and its distinct sys.exit(1) -
-    never silently downgraded to a "some accounts were skipped" outcome.
+    caught by that same per-account guard - it has to keep propagating out
+    of main() as the exact, unconverted exception, exactly as it did before
+    this feature, and main() itself must never call sys.exit for it (never
+    silently downgraded to a "some accounts were skipped" outcome).
+
+    This test calls C.main() directly, so it does NOT exercise the
+    `if __name__ == "__main__":` block at the bottom of the module - it
+    cannot observe that block's except-Exception handler actually mapping
+    this exception to sys.exit(1). It only proves the half of that
+    contract that lives inside main(): the exception reaches the caller
+    unconverted and untouched by main()'s own sys.exit calls, which is a
+    precondition for that mapping to happen correctly.
     """
     import CheckRoyalCaribbeanPrice as C
 
@@ -3665,10 +3673,20 @@ def test_main_distinguishes_login_failure_from_profile_fetch_failure():
     login_notify = login_bad_account.apobj.notify.call_args.kwargs
     assert "could not be logged in" in login_notify["body"]
     assert login_notify["title"] == 'Cruise Price Account Login Failed'
+    # login() raised a bare SystemExit(1) here - str(SystemExit(1)) is just
+    # "1", which carries no diagnosis. The notification must not surface
+    # that noise; it should point the reader at the run log instead, where
+    # login() already logged the real reason.
+    assert "run log" in login_notify["body"]
+    assert not login_notify["body"].rstrip().endswith("1")
 
     profile_notify = profile_bad_account.apobj.notify.call_args.kwargs
     assert "logged in, but its profile could not be fetched" in profile_notify["body"]
     assert "could not be logged in" not in profile_notify["body"]
+    # get_profile() raised a plain Exception with a real message - unlike
+    # the bare SystemExit case above, that message IS informative and must
+    # still reach the notification.
+    assert "profile 500" in profile_notify["body"]
     assert profile_notify["title"] == 'Cruise Price Account Profile Fetch Failed'
 
     # Both accounts still land in the same partial-failure outcome - the
@@ -3678,6 +3696,14 @@ def test_main_distinguishes_login_failure_from_profile_fetch_failure():
     assert finish_status == "partial_failure"
     assert "badlogin@example.com" in finish_summary
     assert "badprofile@example.com" in finish_summary
+
+    # The persisted summary must name each account's failure phase too, not
+    # just its username - a later reader of the history DB has only this
+    # string (the console [SKIPPED] lines aren't persisted), so without the
+    # phase they can't tell a stale password from a transient profile-API
+    # failure.
+    assert "badlogin@example.com (login)" in finish_summary
+    assert "badprofile@example.com (profile)" in finish_summary
     assert exc_info.value.code == C.EXIT_PARTIAL_FAILURE
 
 
