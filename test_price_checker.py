@@ -2613,3 +2613,124 @@ def test_build_checkout_url_omits_none_params_for_ta_bookings():
     parsed = parse_provided_URL(url)
     assert parsed.booking_office_country_code == "USA"
     assert parsed.sail_date == "2027-01-24"  # checkout API requires the dashed form
+
+
+# ITEM 23 TESTS: MARKET COUNTRY CODE PREFERRED OVER BOOKING OFFICE COUNTRY CODE
+
+def _item23_url_args():
+    """Shared account/discounts/metrics fixtures for the ITEM 23 URL-builder tests."""
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    discounts = DiscountProfile(
+        loyalty_number=None, state=None, senior=False,
+        military=False, fire=False, police=False, dp340=False
+    )
+    metrics = {
+        'num_adults': 2, 'num_children': 0, 'sub_type': 'XB',
+        'category_code': 'XB', 'have_a_senior': False
+    }
+    return account_info, discounts, metrics
+
+
+def test_build_checkout_url_prefers_market_country_over_office_country():
+    """A TA booking carries the agent's own office country (e.g. a German
+    agency, 'DEU') alongside the market the guest actually bought in ('CHS').
+    The checkout API validates country against the booking currency, so
+    DEU+CHF is rejected even though CHS+CHF prices fine -- send the market
+    code."""
+    account_info, discounts, metrics = _item23_url_args()
+    booking = {
+        'packageCode': 'SY07W704',
+        'sailDate': '20261227',
+        'bookingCurrency': 'CHF',
+        'shipCode': 'SY',
+        'stateroomNumber': '3734',
+        'stateroomType': 'B',
+        'bookingOfficeCountryCode': 'DEU',
+        'bookingMarketCountryCode': 'CHS',
+    }
+
+    url = _build_checkout_url(booking, metrics, account_info, discounts)
+
+    assert "country=CHS" in url
+    assert "country=DEU" not in url
+
+
+def test_build_checkout_url_falls_back_to_office_country_when_no_market_code():
+    """Bookings without a bookingMarketCountryCode (e.g. this head's older
+    payload shape) must keep working exactly as before: fall back to
+    bookingOfficeCountryCode."""
+    account_info, discounts, metrics = _item23_url_args()
+    booking = {
+        'packageCode': 'SY07W704',
+        'sailDate': '20261227',
+        'bookingCurrency': 'GBP',
+        'shipCode': 'SY',
+        'stateroomNumber': '3734',
+        'stateroomType': 'B',
+        'bookingOfficeCountryCode': 'GBR',
+    }
+
+    url = _build_checkout_url(booking, metrics, account_info, discounts)
+
+    assert "country=GBR" in url
+
+
+def test_build_checkout_url_omits_country_when_neither_code_present():
+    """With neither country field present, 'country' must be absent from the
+    URL (never the literal string 'None') so parse_provided_URL() falls back
+    to its own 'USA' default."""
+    account_info, discounts, metrics = _item23_url_args()
+    booking = {
+        'packageCode': 'SY07W704',
+        'sailDate': '20261227',
+        'bookingCurrency': 'USD',
+        'shipCode': 'SY',
+        'stateroomNumber': '3734',
+        'stateroomType': 'B',
+    }
+
+    url = _build_checkout_url(booking, metrics, account_info, discounts)
+
+    assert "country=" not in url
+    assert parse_provided_URL(url).booking_office_country_code == "USA"
+
+
+def test_build_checkout_url_domestic_booking_unchanged():
+    """A domestic US booking carries 'USA' in both fields -- the preference
+    order is transparent and the resulting URL is unchanged."""
+    account_info, discounts, metrics = _item23_url_args()
+    booking = {
+        'packageCode': 'SY07W704',
+        'sailDate': '20261227',
+        'bookingCurrency': 'USD',
+        'shipCode': 'SY',
+        'stateroomNumber': '3734',
+        'stateroomType': 'B',
+        'bookingOfficeCountryCode': 'USA',
+        'bookingMarketCountryCode': 'USA',
+    }
+
+    url = _build_checkout_url(booking, metrics, account_info, discounts)
+
+    assert "country=USA" in url
+
+
+def test_get_dining_and_prices_sends_market_country_code():
+    """get_dining_and_prices() queries the booked/overview React Server
+    Component with a 'country' param; it must send the market code, not the
+    TA's office code, for the same reason as the checkout URL builder."""
+    account_info = AccountInfo(username="tester", password="password", cruise_line="royal")
+    booking = {
+        'amendToken': 'token123',
+        'bookingOfficeCountryCode': 'DEU',
+        'bookingMarketCountryCode': 'CHS',
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.text = '"diningSelection":[]\n"prices":[]'
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp) as mock_request:
+        get_dining_and_prices(account_info, booking)
+
+    sent_params = mock_request.call_args.kwargs['params']
+    assert sent_params['country'] == 'CHS'

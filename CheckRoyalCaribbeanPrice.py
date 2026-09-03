@@ -1099,6 +1099,23 @@ def sanitize_category_code(code: Optional[str]) -> Optional[str]:
     return cleaned
 
 
+def _booking_country_code(booking: Dict[str, Any]) -> Optional[str]:
+    """
+    Resolves the country code a pricing/availability request should send.
+
+    International/TA bookings carry two country fields: bookingOfficeCountryCode
+    (the travel agent's own office, e.g. a German agency) and
+    bookingMarketCountryCode (the market the guest actually bought in, e.g.
+    Switzerland). The checkout API validates country against the booking
+    currency, so an office/currency pair that isn't itself a sales market gets
+    rejected (400/500) even though the market code prices fine. Prefer the
+    market code, fall back to the office code, and return None -- not the
+    literal string "None" -- when neither is present so callers can omit the
+    parameter and let downstream defaults (e.g. parse_provided_URL()'s "USA") apply.
+    """
+    return booking.get("bookingMarketCountryCode") or booking.get("bookingOfficeCountryCode")
+
+
 #
 # Profile and Session Management Functions #
 #
@@ -1574,9 +1591,11 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
     safety fallbacks to return blank lists if network timeouts or structural processing
     faults occur, ensuring downstream processes don't break.
     """
-    # Safely pull the token and country straight from the booking payload
+    # Safely pull the token and country straight from the booking payload.
+    # Prefer the market country (matches the booking currency) over the TA's
+    # office country -- see _booking_country_code().
     amendtoken = booking.get("amendToken")
-    country = booking.get("bookingOfficeCountryCode", "USA")
+    country = _booking_country_code(booking) or "USA"
 
     RSC_URL = f"https://www.{account_info.url_brand}.com/usa/en/booked/overview"
 
@@ -2824,7 +2843,7 @@ def _build_checkout_url(
     params = {
         'packageCode': booking.get("packageCode"),
         'sailDate': url_sail_date,
-        'country': booking.get("bookingOfficeCountryCode"),
+        'country': _booking_country_code(booking),
         'selectedCurrencyCode': booking.get("bookingCurrency"),
         'shipCode': booking.get("shipCode"),
         'roomIndex': '0',
