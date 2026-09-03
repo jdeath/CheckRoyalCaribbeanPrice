@@ -2734,3 +2734,15 @@ def test_get_dining_and_prices_sends_market_country_code():
 
     sent_params = mock_request.call_args.kwargs['params']
     assert sent_params['country'] == 'CHS'
+
+
+def test_booking_country_code_is_normalised_and_blank_market_falls_through():
+    """The checkout API rejects anything but ^[A-Z]{3}$, so a padded or
+    lower-case market code must be normalised, and a whitespace-only market
+    code must not beat a real office code."""
+    from CheckRoyalCaribbeanPrice import _booking_country_code
+
+    assert _booking_country_code({"bookingMarketCountryCode": " chs ", "bookingOfficeCountryCode": "DEU"}) == "CHS"
+    assert _booking_country_code({"bookingMarketCountryCode": "   ", "bookingOfficeCountryCode": "deu"}) == "DEU"
+    assert _booking_country_code({"bookingMarketCountryCode": "", "bookingOfficeCountryCode": ""}) is None
+    assert _booking_country_code({}) is None

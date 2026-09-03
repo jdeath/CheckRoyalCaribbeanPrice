@@ -1113,7 +1113,14 @@ def _booking_country_code(booking: Dict[str, Any]) -> Optional[str]:
     literal string "None" -- when neither is present so callers can omit the
     parameter and let downstream defaults (e.g. parse_provided_URL()'s "USA") apply.
     """
-    return booking.get("bookingMarketCountryCode") or booking.get("bookingOfficeCountryCode")
+    # The API validates this against ^[A-Z]{3}$, so normalise here: a padded or
+    # lower-case value would 400 just like the wrong country does, and a
+    # whitespace-only value must fall through rather than "win" the preference.
+    for key in ("bookingMarketCountryCode", "bookingOfficeCountryCode"):
+        value = (booking.get(key) or "").strip().upper()
+        if value:
+            return value
+    return None
 
 
 #
