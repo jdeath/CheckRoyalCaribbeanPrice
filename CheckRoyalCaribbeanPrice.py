@@ -3076,9 +3076,12 @@ def _calculate_passenger_metrics(
         # Apply legacy GTY room structure workarounds
         if stateroom_category_code is None and stateroom_subtype is None:
             if display_prices:
+                # TODO: Add logic to suggest category override values based on known field values?
+                #       This should likely move elsewhere, as well
                 log(YELLOW + "Data is missing from API. Code is taking a guess to fixing" + RESET)
                 log(YELLOW + "Add category override in config.yaml if wrong category" + RESET)
 
+            # TODO: Get rid of this?
             if stateroom_type == "B" and brand_code == "C":
                 stateroom_category_code = "XC"
                 stateroom_subtype = "XC"

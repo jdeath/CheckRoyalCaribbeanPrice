@@ -2574,8 +2574,9 @@ def test_derive_balance_due_ta_agency_flagged_unknown():
     assert derive_balance_due(booking3, []) == "TA_UNKNOWN"
 
 
+# ======================================================================================
 # ITEM 22 TESTS: TA BOOKINGS WITHOUT bookingOfficeCountryCode (checkout URL None params)
-
+# ======================================================================================
 def test_build_checkout_url_omits_none_params_for_ta_bookings():
     """A travel-agent booking that carries no bookingOfficeCountryCode must not
     leak the literal string 'None' into the checkout URL. urlencode() would
@@ -2584,7 +2585,6 @@ def test_build_checkout_url_omits_none_params_for_ta_bookings():
     ('must match pattern ^[A-Z]{3}$') -- reporting 'Room Price Not Found' for
     a cabin that is actually on sale. Omitting the key lets the parser fall
     back to its default (country -> 'USA')."""
-    from CheckRoyalCaribbeanPrice import parse_provided_URL
 
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
     discounts = DiscountProfile(
