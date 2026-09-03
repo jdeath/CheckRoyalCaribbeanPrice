@@ -2086,13 +2086,32 @@ def get_cruise_price(account_info: AccountInfo,
     if used_discounts != "":
         pre_string = f"{pre_string} ({used_discounts[:-2]} Discount)"
 
+    # History must record sail_date/nights in the SAME form the addon/promo/
+    # booking-snapshot paths already use (the booking's raw YYYYMMDD sailDate
+    # and bare numberOfNights), not url_params.sail_date - that's the dashed
+    # date parsed back out of the checkout URL. Recording the dashed form
+    # here made a reservation with an add-on purchase produce two history
+    # rows that disagree on sail_date/nights for the same sailing, so a
+    # downstream viewer grouping on (reservation_id, ship_code, sail_date,
+    # nights) showed it as two separate cards. url_params.sail_date/
+    # resolved_nights stay exactly as-is for the final-payment computation
+    # above and everything else in this function; only what gets written to
+    # history changes. The synthetic prospective/watchlist booking (see the
+    # `prospective_booking` dict built for config.prospective_cruises) has no
+    # sailDate/numberOfNights of its own, so fall back to those already-
+    # resolved URL/API-derived values for that case, same as before.
+    history_number_of_nights = int(booking.get("numberOfNights") or 0) or None
+    if not booking.get("sailDate"):
+        history_number_of_nights = resolved_nights
+    history_sail_date = booking.get("sailDate") or url_params.sail_date
+
     # Fields shared by every PriceHistory.record_cabin_fare() call below;
     # each call site only adds current_price/status/rebook_decision/notified
     history_common = {
         # str-coerced to match the addon rows, so the two kinds join cleanly
         "reservation_id": str(reservation_id) if reservation_id is not None else None,
         "account_label": account_info.username,
-        "ship_code": url_params.ship_code, "sail_date": url_params.sail_date, "nights": resolved_nights,
+        "ship_code": url_params.ship_code, "sail_date": history_sail_date, "nights": history_number_of_nights,
         "item_code": f"{url_params.package_code}/{url_params.stateroom_category_code}",
         "paid_price": paid_price, "currency": url_params.currency_code,
         "discount_applied": used_discounts[:-2] if used_discounts else None,
