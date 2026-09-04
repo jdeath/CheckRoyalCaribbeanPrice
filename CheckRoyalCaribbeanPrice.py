@@ -3070,14 +3070,6 @@ def _calculate_passenger_metrics(
                 log(YELLOW + "Data is missing from API. Code is taking a guess to fixing" + RESET)
                 log(YELLOW + "Add category override in config.yaml if wrong category" + RESET)
 
-            # TODO: Get rid of this?
-            if stateroom_type == "B" and brand_code == "C":
-                stateroom_category_code = "XC"
-                stateroom_subtype = "XC"
-            elif stateroom_type == "I" and brand_code == "R":
-                stateroom_category_code = "ZI"
-                stateroom_subtype = "ZI"
-
         # Names & Demographic verification
         first_name = guest.get("firstName", "").capitalize()
         passenger_names.append(first_name)
