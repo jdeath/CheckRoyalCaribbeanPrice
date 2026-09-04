@@ -303,7 +303,8 @@ def test_get_orders_handles_item_calculations_without_scope_leak(mock_global_con
 
         mock_net.side_effect = [resp_history, resp_detail]
 
-        get_orders(base_account_info, mock_booking_context, metrics={})
+        get_orders(base_account_info, mock_booking_context)
+#        get_orders(base_account_info, mock_booking_context, metrics={})
 
         mock_price_calc.assert_called_once()
         passed_ctx = mock_price_calc.call_args[0][3]
@@ -347,8 +348,6 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
             }
         ]
     }
-
-    mock_metrics = {}
 
     # 2. Setup the API responses mocked sequentially
     # First response: order history query payload
@@ -419,7 +418,7 @@ def test_get_orders_linked_reservation_isolation(mock_config, mock_execute):
     # 3. Capture the instantiated context objects by patching WatchItemContext or tracking the pricing execution
     with patch('CheckRoyalCaribbeanPrice.get_new_order_price') as mock_pricing_call:
 
-        get_orders(account_info, mock_booking, mock_metrics)
+        get_orders(account_info, mock_booking)
 
         # 4. Assertions to confirm your code fixes are operational
         assert mock_pricing_call.called, "Pricing engine was never invoked for the linked passenger!"
@@ -802,16 +801,10 @@ def test_get_orders_complete_execution_path():
         }
     }
 
-    # 1. Match the exact dictionary structure expected by your real script's `booking` argument
+    # Match the exact dictionary structure expected by your real script's `booking` argument
     mock_booking = {
         "bookingId": "1234567",
         "stateroomNumber": "6543"
-    }
-
-    # 2. Match the exact structure expected by your real script's `metrics` argument
-    mock_metrics = {
-        "passenger_names": "Matt Smith",
-        "checkin_string": "Boarding Time 11:00"
     }
 
     with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_orders_response), \
@@ -821,7 +814,7 @@ def test_get_orders_complete_execution_path():
 
         try:
             # Call the function with exactly 3 parameters matching its signature
-            get_orders(account_info, mock_booking, mock_metrics)
+            get_orders(account_info, mock_booking)
         except Exception as exc:
             pytest.fail(f"Execution path loop threw unexpected tracking exception: {exc}")
 
@@ -1585,7 +1578,8 @@ def test_get_orders_per_day_price_calculation_safety():
         mock_api.side_effect = [mock_resp1, mock_resp2]
 
         with patch('CheckRoyalCaribbeanPrice.get_new_order_price') as mock_check_price:
-            get_orders(account_info, booking, {})
+            get_orders(account_info, booking)
+#            get_orders(account_info, booking, {})
 
             assert mock_check_price.called
             captured_ctx = mock_check_price.call_args[0][3]
@@ -1757,8 +1751,7 @@ def test_calculate_passenger_metrics_gty_scope_isolation():
         guests=guests,
         sail_date="20270510",
         booking=booking,
-        brand_code="R",
-        display_prices=False
+        brand_code="R"
     )
 
     # The final evaluation should reflect the explicit category details
@@ -1784,8 +1777,7 @@ def test_calculate_passenger_metrics_brittle_timestamp_fallback():
             guests=guests,
             sail_date="20270510",
             booking=booking,
-            brand_code="R",
-            display_prices=False
+            brand_code="R"
         )
         # Verify the calculation falls back cleanly rather than crashing out
         assert isinstance(metrics["checkin_string"], str)
@@ -1809,8 +1801,7 @@ def test_calculate_passenger_metrics_gty_booking_fallbacks():
         guests=guests,
         sail_date=sail_date,
         booking=booking,
-        brand_code="R",
-        display_prices=False,
+        brand_code="R"
     )
 
     assert metrics.get("category_code") == "XB"
@@ -1839,7 +1830,6 @@ def test_load_config_objects_handles_none_values_safely(tmp_path):
         assert isinstance(config, CruiseAppConfig)
         assert config.minimum_saving_alert is None
         assert config.output_json_watch_file == "output-json-watch.txt"
-#        assert config.output_json_watch == "output-json.text"
 
 
 def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch):
@@ -1938,8 +1928,7 @@ def test_calculate_passenger_metrics_partial_checkin_spec(mock_global_config):
         guests=guests_payload,
         sail_date="20271212",
         booking=booking,
-        brand_code="R",
-        display_prices=False
+        brand_code="R"
     )
 
     # The partial entry is wrapped in yellow ANSI codes; compare the visible text
@@ -1973,8 +1962,7 @@ def test_calculate_passenger_metrics_completed_checkin_regression(mock_global_co
         guests=guests_payload,
         sail_date="20270510",
         booking=booking,
-        brand_code="R",
-        display_prices=False
+        brand_code="R"
     )
 
     assert metrics["checkin_string"] == "Bob: Boarding Time 01:33"
@@ -2214,7 +2202,6 @@ def test_exact_price_match_includes_obc(monkeypatch):
 # ==============================================================================
 # ITEM 17 TESTS "NOT FOR SALE" AVAILABILITY GATE (MATCH ON SUBTYPE CODE ALONE)
 # ==============================================================================
-
 def _room_selection_rsc(code="D", category_code="4D"):
     """Minimal room-selection RSC payload exposing one stateroom subtype."""
     return json.dumps({"rooms": [{"options": {"stateroomTypes": [
@@ -2654,8 +2641,9 @@ def test_build_checkout_url_omits_none_params_for_ta_bookings():
     assert parsed.sail_date == "2027-01-24"  # checkout API requires the dashed form
 
 
+# ======================================================================================
 # ITEM 23 TESTS: LOGIN FAILURE DIAGNOSTICS (OAuth error body surfaced)
-
+# ======================================================================================
 def test_login_failure_logs_server_error_body_and_scrubs_password():
     """A bare status code cannot tell a rejected password ('invalid_grant')
     from a malformed request ('invalid_request') or an edge/WAF block, which
@@ -2713,8 +2701,8 @@ def test_login_failure_scrubs_password_echoed_in_body():
 # ======================================================================================
 # ITEM 24 TESTS: MARKET COUNTRY CODE PREFERRED OVER BOOKING OFFICE COUNTRY CODE
 # ======================================================================================
-def _item23_url_args():
-    """Shared account/discounts/metrics fixtures for the ITEM 23 URL-builder tests."""
+def _country_code_test_args():
+    """Shared account/discounts/metrics fixtures for the country code tests."""
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
     discounts = DiscountProfile(
         loyalty_number=None, state=None, senior=False,
@@ -2733,7 +2721,7 @@ def test_build_checkout_url_prefers_market_country_over_office_country():
     The checkout API validates country against the booking currency, so
     DEU+CHF is rejected even though CHS+CHF prices fine -- send the market
     code."""
-    account_info, discounts, metrics = _item23_url_args()
+    account_info, discounts, metrics = _country_code_test_args()
     booking = {
         'packageCode': 'SY07W704',
         'sailDate': '20261227',
@@ -2755,7 +2743,7 @@ def test_build_checkout_url_falls_back_to_office_country_when_no_market_code():
     """Bookings without a bookingMarketCountryCode (e.g. this head's older
     payload shape) must keep working exactly as before: fall back to
     bookingOfficeCountryCode."""
-    account_info, discounts, metrics = _item23_url_args()
+    account_info, discounts, metrics = _country_code_test_args()
     booking = {
         'packageCode': 'SY07W704',
         'sailDate': '20261227',
@@ -2775,7 +2763,7 @@ def test_build_checkout_url_omits_country_when_neither_code_present():
     """With neither country field present, 'country' must be absent from the
     URL (never the literal string 'None') so parse_provided_URL() falls back
     to its own 'USA' default."""
-    account_info, discounts, metrics = _item23_url_args()
+    account_info, discounts, metrics = _country_code_test_args()
     booking = {
         'packageCode': 'SY07W704',
         'sailDate': '20261227',
@@ -2794,7 +2782,7 @@ def test_build_checkout_url_omits_country_when_neither_code_present():
 def test_build_checkout_url_domestic_booking_unchanged():
     """A domestic US booking carries 'USA' in both fields -- the preference
     order is transparent and the resulting URL is unchanged."""
-    account_info, discounts, metrics = _item23_url_args()
+    account_info, discounts, metrics = _country_code_test_args()
     booking = {
         'packageCode': 'SY07W704',
         'sailDate': '20261227',
