@@ -1029,8 +1029,6 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
     # If r0e or r0f are missing, fallback to r0d / cabin_string if it's a specific category code (e.g. XB)
     stateroom_subtype = raw_r0e
     stateroom_category_code = raw_r0f
-#    stateroom_subtype = raw_r0e or (r0d_list[0] if r0d_list else None)
-#    stateroom_category_code = raw_r0f or (r0d_list[0] if r0d_list else None)
 
     # Parse the URL parameters and save in a class instance
     return CruiseURLParams(
@@ -1039,15 +1037,11 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
         currency_code=params.get("selectedCurrencyCode", ["USD"])[0],
         booking_office_country_code=params.get("country", ["USA"])[0],
         ship_code=params.get("shipCode", [None])[0],
-#        ship_code=params.get("ship_code", [None])[0],
         cabin_class_string=cabin_string,
         stateroom_type_name=r0d_list[0] if r0d_list else None,
         stateroom_subtype=stateroom_subtype,
         stateroom_category_code=stateroom_category_code,
-#        stateroom_subtype=params.get("r0e", [None])[0],
-#        stateroom_category_code=params.get("r0f", [None])[0],
         package_code=params.get("packageCode", [None])[0],
-#        package_code=params.get("package_code", [None])[0],
         number_of_adults=params.get("r0a", ["2"])[0],
         number_of_children=params.get("r0c", ["0"])[0],
         loyalty_number=params.get("r0l", [None])[0],
@@ -1379,19 +1373,6 @@ def get_voyages(
     bookings = response.json().get("payload", {}).get("profileBookings", [])
 
     for booking in bookings:
-#        # TEST CODE
-#        if booking.get("stateroomNumber") == "GTY" or not booking.get("stateroomCategoryCode"):
-#            print("\n=== DEBUG #105: FULL GTY BOOKING PAYLOAD ===")
-#            if 'passengersInStateroom' in booking:
-#                print(f"passengersInStateroom: {booking['passengersInStateroom']!r}")
-#            if 'passengers' in booking:
-#                print(f"passengers: {booking['passengers']!r}")
-#
-#            # Dump raw response structure
-#            print_response(booking)
-#            print("============================================\n")
-#        # END TEST CODE
-
         # Pull out the individual booking fields
         reservation_ID = booking.get("bookingId")
         passenger_ID = booking.get("passengerId")
@@ -1412,7 +1393,8 @@ def get_voyages(
         stateroom_type_name = _parse_stateroom_type(booking.get("stateroomType"))
 
         # Unpack cabin occupants & boarding windows safely
-        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
+        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code)
+#        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
 
         # Preserve resolved GTY category code for downstream pricing checks
         if metrics.get("category_code") and not booking.get("stateroomCategoryCode"):
@@ -1432,6 +1414,7 @@ def get_voyages(
             log(metrics['checkin_string'])
             checkin_label = f"Boarding {metrics.get('boarding_time')}" if metrics.get('boarding_time') else "Checked in"
         else:
+            # TODO: the second return is always None; get rid of it
             checkin_label, _ = get_checkin_info(account_info, reservation_ID, passenger_ID, ship_code, sail_date, apobj)
 
         # Process Dining Setup
@@ -1532,6 +1515,7 @@ def get_voyages(
         # Current Web Market Pricing Block
         if display_cruise_prices:
             # Build the complex Checkout/Room Selection URL
+            has_api_category = bool(metrics.get("category_code") or metrics.get("sub_type"))
 
             # Map legacy manual pricing text overrides from configuration yaml
             if isinstance(reservation_price_paid, dict) and reservation_price_paid:
@@ -1551,6 +1535,11 @@ def get_voyages(
                                 paid_price_struct[key] = val
 
             if booking.get("stateroomType") != "NONE":
+                has_override = bool(paid_price_struct.get("categoryOverride") or paid_price_struct.get("subcategoryOverride"))
+                if not (has_api_category or has_override):
+                    log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
+                    log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
+
                 get_cruise_price(account_info,
                                  booking,
                                  ship_dictionary,
@@ -1561,7 +1550,8 @@ def get_voyages(
                 log(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
         # Get the extra add-ons purchased for this voyage
-        get_orders(account_info, booking, metrics, collected_watch_rows=collected_watch_rows)
+        get_orders(account_info, booking, collected_watch_rows=collected_watch_rows)
+#        get_orders(account_info, booking, metrics, collected_watch_rows=collected_watch_rows)
         log(" ")
 
         # Process watchlists on a per-occupant layout instead of per-booking line
@@ -1658,7 +1648,6 @@ def get_cruise_price(account_info: AccountInfo,
     if provided_url:
         # Path A: Standard tracking via an external web marketing link string
         # Parse the provided URL
-#        log(f"TEST CODE: get_cruise price provided_url was {provided_url}")
         url_params = parse_provided_URL(provided_url)
 
         # FAIL-SAFE PATCH: If the URL parser missed ship/package codes,
@@ -1724,18 +1713,9 @@ def get_cruise_price(account_info: AccountInfo,
             )
 
         # 2. Build a dummy pristine, validated web URL
-#        # TEST CODE Temporary diagnostic log for issue #105
-#        if booking.get("stateroomNumber") == "GTY" or not booking.get("stateroomCategoryCode"):
-#            print("\n=== DEBUG #105: PAYLOAD SEARCH ===")
-#            print(f"passengersInStateroom content: {booking.get('passengersInStateroom')!r}")
-#            print(f"passengers content: {booking.get('passengers')!r}")
-#            print(f"stateroomDescription: {booking.get('stateroomDescription')!r}")
-#            print("===================================\n")
-#        # END TEST CODE
         cruise_price_URL = _build_checkout_url(booking, metrics, account_info, temp_discounts)
 
         # 3. Parse the dummy URL, jsut as path A!
-#        log(f"TEST CODE: get_cruise_price built URL was {cruise_price_URL}")
         url_params = parse_provided_URL(cruise_price_URL)
 
         # 4. Fix the parser/override omissions immediately while we are safely inside Path B scope
@@ -1795,7 +1775,9 @@ def get_cruise_price(account_info: AccountInfo,
     # Reach into the global ship mapper object natively
     ship_name = ship_dictionary.get_ship(url_params.ship_code)
     sail_date_display = config.format_date(url_params.sail_date)
-    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {url_params.stateroom_category_code}"
+    category_display = url_params.stateroom_category_code or url_params.stateroom_subtype or "Unassigned/GTY"
+    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {category_display}"
+#    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {url_params.stateroom_category_code}"
 
     # Build active discount labels
     used_discounts = ""
@@ -2495,11 +2477,11 @@ def process_watch_list_for_booking(
             if collected_watch_rows is not None:
                 collected_watch_rows.append(watch_row)
 
-
+# TODO: confirm metrics isn't used at all here
 def get_orders(
     account_info: AccountInfo,
     booking: Dict[str, Any],
-    metrics: Dict[str, Any],
+#    metrics: Dict[str, Any],
     collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """
@@ -3024,7 +3006,7 @@ def _calculate_passenger_metrics(
     sail_date: str,
     booking: Dict[str, Any],
     brand_code: str,
-    display_prices: bool
+#    display_prices: bool
 ) -> Dict[str, Any]:
     """
     Parses structural guest files to calculate age milestones, check-in windows, and demographic flags.
@@ -3070,14 +3052,15 @@ def _calculate_passenger_metrics(
     for guest in guests:
         guest_category = guest.get("stateroomCategoryCode")
         stateroom_category_code = sanitize_category_code(guest_category) or booking_category_fallback
+        category_unresolved = (stateroom_category_code is None and stateroom_subtype is None)
 
-        # Apply legacy GTY room structure workarounds
-        if stateroom_category_code is None and stateroom_subtype is None:
-            if display_prices:
-                # TODO: Add logic to suggest category override values based on known field values?
-                #       This should likely move elsewhere, as well
-                log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
-                log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
+#        # Apply legacy GTY room structure workarounds
+#        if stateroom_category_code is None and stateroom_subtype is None:
+#            if display_prices:
+#                # TODO: Add logic to suggest category override values based on known field values?
+#                #       This should likely move elsewhere, as well
+#                log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
+#                log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
 
         # Names & Demographic verification
         first_name = guest.get("firstName", "").capitalize()
@@ -3122,7 +3105,7 @@ def _calculate_passenger_metrics(
         "num_children": num_children,
         "have_a_senior": have_a_senior,
         "category_code": stateroom_category_code,
-        "sub_type": stateroom_subtype
+        "sub_type": stateroom_subtype#,
     }
 
 '''
