@@ -2211,9 +2211,10 @@ def test_exact_price_match_includes_obc(monkeypatch):
         f"OBC tracking lost on exact match. Logs: {''.join(captured_logs)}"
 
 
-# ============================================================================
+# ==============================================================================
 # ITEM 17 TESTS "NOT FOR SALE" AVAILABILITY GATE (MATCH ON SUBTYPE CODE ALONE)
-# ============================================================================
+# ==============================================================================
+
 def _room_selection_rsc(code="D", category_code="4D"):
     """Minimal room-selection RSC payload exposing one stateroom subtype."""
     return json.dumps({"rooms": [{"options": {"stateroomTypes": [
@@ -2273,8 +2274,38 @@ def test_availability_false_when_subtype_code_absent():
     assert alternates[0]["name"].startswith("Ocean View Balcony")
 
 
-def test_availability_true_for_gty_booking():
-    params = _availability_params(subtype="XB", category_code="XB")
+def test_apply_overrides_category_mirroring():
+    """
+    Verify that setting categoryOverride without subcategoryOverride
+    automatically mirrors stateroom_category_code into stateroom_subtype.
+    """
+    params = CruiseURLParams()
+    params.apply_overrides({"categoryOverride": "XB"})
+    assert params.stateroom_category_code == "XB"
+    assert params.stateroom_subtype == "XB"
+
+    params_explicit = CruiseURLParams()
+    params_explicit.apply_overrides({
+        "categoryOverride": "XB",
+        "subcategoryOverride": "2D"
+    })
+    assert params_explicit.stateroom_category_code == "XB"
+    assert params_explicit.stateroom_subtype == "2D"
+
+
+@pytest.mark.parametrize("subtype, category_code", [
+    ("XB", None),            # Category-only GTY (via mirrored override)
+    (None, "YO"),            # Subtype-only GTY
+    ("XB", "XB"),            # Both populated with GTY code
+    ("BALCONYGTY", None),    # Category string suffix
+    (None, "INSIDEGTY"),     # Subtype string suffix
+])
+def test_check_if_room_is_available_gty_bypass_variations(subtype, category_code):
+    """
+    Verify that check_if_room_is_available evaluates is_gty as True
+    whether the GTY code lands in stateroom_category_code or stateroom_subtype.
+    """
+    params = _availability_params(subtype=subtype, category_code=category_code)
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -2285,6 +2316,23 @@ def test_availability_true_for_gty_booking():
 
     assert available is True
     assert alternates == []
+
+
+def test_parse_provided_url_no_r0d_fallback():
+    """
+    Verify that parse_provided_URL leaves category and subtype as None
+    when r0e/r0f are missing, rather than falling back to broad r0d types.
+    """
+    sample_url = (
+        "https://www.royalcaribbean.com/booking/stateroom?"
+        "sailDate=2026-12-27&shipCode=SY&r0d=BALCONY"
+    )
+
+    params = parse_provided_URL(sample_url)
+
+    # Must not pollute category or subtype with "BALCONY"
+    assert params.stateroom_subtype is None
+    assert params.stateroom_category_code is None
 
 
 # ============================================================================

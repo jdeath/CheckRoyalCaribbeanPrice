@@ -353,6 +353,10 @@ class CruiseURLParams:
         self.loyalty_number = overrides.get("loyaltyNumber", self.loyalty_number)
         self.state = overrides.get("state", self.state)
 
+        # Mirror categoryOverride to subtype if subcategoryOverride was omitted
+        if overrides.get("categoryOverride") and not overrides.get("subcategoryOverride"):
+            self.stateroom_subtype = self.stateroom_category_code
+
         # Enforce corporate structural constraints natively
         if self.all_included and self.is_royal:
             log("Royal Does Not Have All In Fare\nRemoving All In Fare. Check Documentation")
@@ -1023,8 +1027,10 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
     raw_r0f = params.get("r0f", [None])[0]
 
     # If r0e or r0f are missing, fallback to r0d / cabin_string if it's a specific category code (e.g. XB)
-    stateroom_subtype = raw_r0e or (r0d_list[0] if r0d_list else None)
-    stateroom_category_code = raw_r0f or (r0d_list[0] if r0d_list else None)
+    stateroom_subtype = raw_r0e
+    stateroom_category_code = raw_r0f
+#    stateroom_subtype = raw_r0e or (r0d_list[0] if r0d_list else None)
+#    stateroom_category_code = raw_r0f or (r0d_list[0] if r0d_list else None)
 
     # Parse the URL parameters and save in a class instance
     return CruiseURLParams(
@@ -2174,7 +2180,9 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     gty_codes = {"GTY", "XB", "YO", "ZI", "WS", "XN", "CB"}
     is_gty = (
             params.stateroom_subtype in gty_codes
+            or params.stateroom_category_code in gty_codes
             or (params.stateroom_subtype and params.stateroom_subtype.endswith("GTY"))
+            or (params.stateroom_category_code and params.stateroom_category_code.endswith("GTY"))
     )
 
     if is_gty and stateroom_types:
@@ -2241,6 +2249,7 @@ def get_new_order_price(
     # Explicit check: If this context item targets specific bookings, enforce isolation
     # Fall back to using extracting the ID from booking if not listed in the ctx structure
     reservation_ID = ctx.reservation_id or booking.get("bookingId")
+
     # str-coerce both sides: YAML ints vs API string bookingIds must still match
     if ctx.reservations and str(reservation_ID) not in {str(r) for r in ctx.reservations}:
         return
@@ -3067,8 +3076,8 @@ def _calculate_passenger_metrics(
             if display_prices:
                 # TODO: Add logic to suggest category override values based on known field values?
                 #       This should likely move elsewhere, as well
-                log(YELLOW + "Data is missing from API. Code is taking a guess to fixing" + RESET)
-                log(YELLOW + "Add category override in config.yaml if wrong category" + RESET)
+                log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
+                log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
 
         # Names & Demographic verification
         first_name = guest.get("firstName", "").capitalize()
