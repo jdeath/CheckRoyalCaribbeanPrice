@@ -74,6 +74,22 @@ RETRY_BACKOFF_BASE = 2
 # Cool-down between accounts when checking more than one, to avoid hammering the API
 ACCOUNT_COOLDOWN_SECONDS = 5
 
+# Module-level constant for room type translations
+STATEROOM_TYPE_MAPPING = {
+    "I": "INTERIOR",
+    "O": "OUTSIDE",
+    "B": "BALCONY",
+    "D": "DELUXE",
+    "C": "CONCIERGE",
+}
+
+# Macro classifications / generic terms that cause HTTP 500 when sent as r0e / r0f
+CHECKOUT_FORBIDDEN_CATEGORY_CODES = (
+    set(STATEROOM_TYPE_MAPPING.keys())   |
+    set(STATEROOM_TYPE_MAPPING.values()) |
+    {"S", "SUITE", "OCEANVIEW", "NONE"}
+)
+
 # ANSI color codes
 RESET = '\033[0m' # Resets color to default
 
@@ -106,13 +122,6 @@ has_terminal_issues = False;
 log = None
 log_warn = None
 log_err = None
-
-# Rows collected across all accounts/bookings during a run, printed at the end as a
-# compact check-in + final-payment summary table (see print_checkin_payment_table)
-checkin_payment_rows: List[Dict[str, Any]] = []
-
-# Add-on watch prices collected during the current run for machine-readable output
-watch_price_rows: List[Dict[str, Any]] = []
 
 ##################################
 # Classes (Structural and Logging)
@@ -344,6 +353,10 @@ class CruiseURLParams:
         self.loyalty_number = overrides.get("loyaltyNumber", self.loyalty_number)
         self.state = overrides.get("state", self.state)
 
+        # Mirror categoryOverride to subtype if subcategoryOverride was omitted
+        if overrides.get("categoryOverride") and not overrides.get("subcategoryOverride"):
+            self.stateroom_subtype = self.stateroom_category_code
+
         # Enforce corporate structural constraints natively
         if self.all_included and self.is_royal:
             log("Royal Does Not Have All In Fare\nRemoving All In Fare. Check Documentation")
@@ -552,6 +565,84 @@ class CruiseAppConfig:
             return datetime.strptime(clean_str, "%Y%m%d").strftime(self.date_display_format)
         except ValueError:
             return str(date_str)   # malformed API date: show it raw, don't crash the run
+
+
+class CheckinPaymentTracker:
+    """
+    Tracks and deduplicates check-in and final payment metrics across accounts/bookings,
+    rendering an end-of-run summary table.
+    """
+    def __init__(self) -> None:
+        self.rows: List[Dict[str, Any]] = []
+
+    def record_row(self, row: Dict[str, Any]) -> None:
+        """
+        Adds a booking to the end-of-run summary table, merging duplicate linked reservations.
+        """
+        key = row.get("dedupe_key")
+        for existing in self.rows:
+            if key is not None and existing.get("dedupe_key") == key:
+                if existing.get("balance_due") not in (True, False) and row.get("balance_due") in (True, False):
+                    existing["balance_due"] = row["balance_due"]
+                    existing["past_final_payment"] = row["past_final_payment"]
+                if existing.get("checkin_label") in (None, "TBD") and row.get("checkin_label") not in (None, "TBD"):
+                    existing["checkin_label"] = row["checkin_label"]
+                return
+        self.rows.append(row)
+
+    def print_table(self) -> None:
+        """
+        Prints a compact end-of-run summary table sorted by sail date.
+        """
+        if not self.rows:
+            return
+
+        rows = sorted(self.rows, key=lambda r: r["sail_date"] or "")
+
+        headers = ("Sail Date", "Ship (Room)", "Reservation", "Check-In", "Final Payment")
+        table = []
+        pay_colors = []
+        for r in rows:
+            sail = config.format_date(r["sail_date"]) if r["sail_date"] else "?"
+            if r["final_payment"] is not None:
+                pay = r["final_payment"].strftime(config.date_display_format)
+                if r["balance_due"] is True:
+                    if r["past_final_payment"]:
+                        pay += " (PAST DUE)"
+                        pay_colors.append(RED)
+                    else:
+                        pay += " (balance due)"
+                        pay_colors.append(YELLOW)
+                elif r["balance_due"] is False:
+                    pay += " (paid)"
+                    pay_colors.append(GREEN)
+                elif r["balance_due"] == "TA_UNKNOWN":
+                    pay += " (contact TA for balance)"
+                    pay_colors.append(YELLOW)
+                elif r["balance_due"] is None:
+                    pay += " (status unknown)"
+                    pay_colors.append(YELLOW)
+            else:
+                pay = "-"
+                pay_colors.append("")
+            table.append((sail, r["name"], r.get("reservation", "-"), r["checkin_label"], pay))
+
+        widths = [max(len(str(row[i])) for row in ([headers] + table)) for i in range(len(headers))]
+
+        def fmt(cells: Tuple[str, ...], pay_color: str = "") -> str:
+            padded = [str(c).ljust(widths[i]) for i, c in enumerate(cells)]
+            if pay_color:
+                padded[-1] = f"{pay_color}{padded[-1]}{RESET}"
+            return "  ".join(padded)
+
+        log(f"\n{BLUE}Upcoming Check-In & Final Payment Dates{RESET}")
+        log(fmt(headers))
+        log("  ".join("-" * w for w in widths))
+        prev_sail = None
+        for row, pay_color in zip(table, pay_colors):
+            display_row = ("" if row[0] == prev_sail else row[0],) + row[1:]
+            prev_sail = row[0]
+            log(fmt(display_row, pay_color))
 
 
 ############################################
@@ -930,16 +1021,14 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
     # Some Countries List Cabin String as B, causing issue with room lookup
     parsed_cabin_string = _parse_stateroom_type(cabin_string)
     cabin_string = parsed_cabin_string if parsed_cabin_string != "NONE" else cabin_string
-#    if cabin_string == "I":
-#        cabin_string = "INTERIOR"
-#    if cabin_string == "O":
-#        cabin_string = "OUTSIDE"
-#    if cabin_string == "B":
-#        cabin_string = "BALCONY"
-#    if cabin_string == "D":
-#        cabin_string = "DELUXE"
-#    if cabin_string == "C":
-#        cabin_string = "CONCIERGE"
+
+    # Extract sub-type (r0e) and category code (r0f) with fallbacks for Guarantee (GTY) codes
+    raw_r0e = params.get("r0e", [None])[0]
+    raw_r0f = params.get("r0f", [None])[0]
+
+    # If r0e or r0f are missing, fallback to r0d / cabin_string if it's a specific category code (e.g. XB)
+    stateroom_subtype = raw_r0e
+    stateroom_category_code = raw_r0f
 
     # Parse the URL parameters and save in a class instance
     return CruiseURLParams(
@@ -947,12 +1036,12 @@ def parse_provided_URL(url: str) -> CruiseURLParams:
         sail_date=params.get("sailDate", [None])[0],
         currency_code=params.get("selectedCurrencyCode", ["USD"])[0],
         booking_office_country_code=params.get("country", ["USA"])[0],
-        ship_code=params.get("ship_code", [None])[0],
+        ship_code=params.get("shipCode", [None])[0],
         cabin_class_string=cabin_string,
         stateroom_type_name=r0d_list[0] if r0d_list else None,
-        stateroom_subtype=params.get("r0e", [None])[0],
-        stateroom_category_code=params.get("r0f", [None])[0],
-        package_code=params.get("package_code", [None])[0],
+        stateroom_subtype=stateroom_subtype,
+        stateroom_category_code=stateroom_category_code,
+        package_code=params.get("packageCode", [None])[0],
         number_of_adults=params.get("r0a", ["2"])[0],
         number_of_children=params.get("r0c", ["0"])[0],
         loyalty_number=params.get("r0l", [None])[0],
@@ -977,14 +1066,53 @@ def _parse_stateroom_type(room_type_code: Optional[str]) -> str:
     Maps internal character letters (such as 'I', 'O', 'B') to explicit structural
     keywords expected by corporate inventory checkout paths (e.g., 'INTERIOR', 'OUTSIDE', 'BALCONY').
     """
-    mapping = {
-        "I": "INTERIOR",
-        "O": "OUTSIDE",
-        "B": "BALCONY",
-        "D": "DELUXE",
-        "C": "CONCIERGE"
-    }
-    return mapping.get(room_type_code, "NONE")
+    if not room_type_code:
+            return "NONE"
+    return STATEROOM_TYPE_MAPPING.get(room_type_code.upper(), "NONE")
+
+
+def sanitize_category_code(code: Optional[str]) -> Optional[str]:
+    """
+    Validates that a string is a genuine subcategory/rate code (e.g., 'XB', '2D', 'CB')
+    and not a macro stateroom type or single-character classification.
+    """
+    if not code:
+        return None
+
+    # Reject known generic classification words/letters
+    cleaned = code.strip().upper()
+    if cleaned in CHECKOUT_FORBIDDEN_CATEGORY_CODES:
+        return None
+
+    # Caribbean category codes are at least 2 characters (e.g., 'XB', '2D', 'CB')
+    if len(cleaned) < 2:
+        return None
+
+    return cleaned
+
+
+def _booking_country_code(booking: Dict[str, Any]) -> Optional[str]:
+    """
+    Resolves the country code a pricing/availability request should send.
+
+    International/TA bookings carry two country fields: bookingOfficeCountryCode
+    (the travel agent's own office, e.g. a German agency) and
+    bookingMarketCountryCode (the market the guest actually bought in, e.g.
+    Switzerland). The checkout API validates country against the booking
+    currency, so an office/currency pair that isn't itself a sales market gets
+    rejected (400/500) even though the market code prices fine. Prefer the
+    market code, fall back to the office code, and return None -- not the
+    literal string "None" -- when neither is present so callers can omit the
+    parameter and let downstream defaults (e.g. parse_provided_URL()'s "USA") apply.
+    """
+    # The API validates this against ^[A-Z]{3}$, so normalise here: a padded or
+    # lower-case value would 400 just like the wrong country does, and a
+    # whitespace-only value must fall through rather than "win" the preference.
+    for key in ("bookingMarketCountryCode", "bookingOfficeCountryCode"):
+        value = (booking.get(key) or "").strip().upper()
+        if value:
+            return value
+    return None
 
 
 #
@@ -1216,7 +1344,13 @@ def get_checkin_info(account_info: AccountInfo,
 #
 # Reservation Tracking and Data Scraping Functions #
 #
-def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dictionary: ShipRegistry) -> None:
+def get_voyages(
+    account_info: AccountInfo,
+    discounts: CruiseURLParams,
+    ship_dictionary: ShipRegistry,
+    payment_tracker: Optional[CheckinPaymentTracker] = None,
+    collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
+) -> None:
     """
     Extracts all current, valid upcoming cruise bookings linked to an active account profile.
 
@@ -1272,7 +1406,12 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         stateroom_type_name = _parse_stateroom_type(booking.get("stateroomType"))
 
         # Unpack cabin occupants & boarding windows safely
-        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
+        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code)
+#        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
+
+        # Preserve resolved GTY category code for downstream pricing checks
+        if metrics.get("category_code") and not booking.get("stateroomCategoryCode"):
+            booking["stateroomCategoryCode"] = metrics["category_code"]
 
         # Display Reservation Information Header
         reservation_display = f"Reservation #{reservation_ID}"
@@ -1288,6 +1427,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
             log(metrics['checkin_string'])
             checkin_label = f"Boarding {metrics.get('boarding_time')}" if metrics.get('boarding_time') else "Checked in"
         else:
+            # TODO: the second return is always None; get rid of it
             checkin_label, _ = get_checkin_info(account_info, reservation_ID, passenger_ID, ship_code, sail_date, apobj)
 
         # Process Dining Setup
@@ -1362,15 +1502,17 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         balance_due_amount = booking.get("balanceDueAmount")
         if str(reservation_ID) in config.paid_reservations:
             balance_due = False   # user vouches for it (reservationsPaidInFull)
-        record_checkin_payment_row({
-            "name": summary_name,
-            "reservation": summary_reservation,
-            "sail_date": sail_date,
-            "checkin_label": checkin_label or "TBD",
-            "final_payment": final_payment_date,
-            "past_final_payment": date.today() > final_payment_date,
-            "balance_due": balance_due,
-            "dedupe_key": f"{reservation_ID}|{sail_date}",
+
+        if payment_tracker is not None:
+            payment_tracker.record_row({
+                    "name": summary_name,
+                    "reservation": summary_reservation,
+                    "sail_date": sail_date,
+                    "checkin_label": checkin_label or "TBD",
+                    "final_payment": final_payment_date,
+                    "past_final_payment": date.today() > final_payment_date,
+                    "balance_due": balance_due,
+                    "dedupe_key": f"{reservation_ID}|{sail_date}",
         })
 
         if balance_due is True:
@@ -1386,6 +1528,7 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
         # Current Web Market Pricing Block
         if display_cruise_prices:
             # Build the complex Checkout/Room Selection URL
+            has_api_category = bool(metrics.get("category_code") or metrics.get("sub_type"))
 
             # Map legacy manual pricing text overrides from configuration yaml
             if isinstance(reservation_price_paid, dict) and reservation_price_paid:
@@ -1405,6 +1548,11 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                                 paid_price_struct[key] = val
 
             if booking.get("stateroomType") != "NONE":
+                has_override = bool(paid_price_struct.get("categoryOverride") or paid_price_struct.get("subcategoryOverride"))
+                if not (has_api_category or has_override):
+                    log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
+                    log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
+
                 get_cruise_price(account_info,
                                  booking,
                                  ship_dictionary,
@@ -1415,7 +1563,8 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 log(YELLOW + "Cannot Check Cruise Price - Use Manual URL Method" + RESET)
 
         # Get the extra add-ons purchased for this voyage
-        get_orders(account_info, booking, metrics)
+        get_orders(account_info, booking, collected_watch_rows=collected_watch_rows)
+#        get_orders(account_info, booking, metrics, collected_watch_rows=collected_watch_rows)
         log(" ")
 
         # Process watchlists on a per-occupant layout instead of per-booking line
@@ -1428,7 +1577,14 @@ def get_voyages(account_info: AccountInfo, discounts: CruiseURLParams, ship_dict
                 }
 
                 # Handle any watch list items for this guest's booking
-                process_watch_list_for_booking(account_info, booking, watch_list_items, apobj, passenger_info)
+                process_watch_list_for_booking(
+                    account_info,
+                    booking,
+                    watch_list_items,
+                    apobj,
+                    passenger_info,
+                    collected_watch_rows=collected_watch_rows
+                )
 
             log(" ")
 
@@ -1441,9 +1597,11 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
     safety fallbacks to return blank lists if network timeouts or structural processing
     faults occur, ensuring downstream processes don't break.
     """
-    # Safely pull the token and country straight from the booking payload
+    # Safely pull the token and country straight from the booking payload.
+    # Prefer the market country (matches the booking currency) over the TA's
+    # office country -- see _booking_country_code().
     amendtoken = booking.get("amendToken")
-    country = booking.get("bookingOfficeCountryCode", "USA")
+    country = _booking_country_code(booking) or "USA"
 
     RSC_URL = f"https://www.{account_info.url_brand}.com/usa/en/booked/overview"
 
@@ -1630,7 +1788,9 @@ def get_cruise_price(account_info: AccountInfo,
     # Reach into the global ship mapper object natively
     ship_name = ship_dictionary.get_ship(url_params.ship_code)
     sail_date_display = config.format_date(url_params.sail_date)
-    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {url_params.stateroom_category_code}"
+    category_display = url_params.stateroom_category_code or url_params.stateroom_subtype or "Unassigned/GTY"
+    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {category_display}"
+#    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {url_params.stateroom_category_code}"
 
     # Build active discount labels
     used_discounts = ""
@@ -1728,8 +1888,6 @@ def get_cruise_price(account_info: AccountInfo,
         if not automatic_URL and apobj is not None:
             apobj.notify(body=text_string, title='Cruise Room Not Available', body_format=NotifyFormat.TEXT)
 
-        # TODO: This code block will print the "Available Rooms" line even if the count is 0;
-        #       do we want to use this commented-out block instead
         if url_params.package_code and not automatic_URL:
             # Pre-filter rooms that actually have inventory available
             # (key is 'rooms_left' as produced by check_if_room_is_available; price may be None)
@@ -2010,6 +2168,21 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     except (IndexError, AttributeError):
         return False, available_rooms
 
+    # --- GTY / CATEGORY OVERRIDE BYPASS ---
+    # Unassigned guarantee inventory (e.g. 'XB', 'ZI', 'YO') and explicit config overrides
+    # do not appear as physical subtype entries in the RSC response array. As long as
+    # stateroomTypes returned active options for the voyage, bypass the subtype loop.
+    gty_codes = {"GTY", "XB", "YO", "ZI", "WS", "XN", "CB"}
+    is_gty = (
+            params.stateroom_subtype in gty_codes
+            or params.stateroom_category_code in gty_codes
+            or (params.stateroom_subtype and params.stateroom_subtype.endswith("GTY"))
+            or (params.stateroom_category_code and params.stateroom_category_code.endswith("GTY"))
+    )
+
+    if is_gty and stateroom_types:
+        return True, []
+
     for stateroom_type in stateroom_types:
         stateroom_subtypes = stateroom_type.get("stateroomSubtypes", [])
         for stateroom_subtype in stateroom_subtypes:
@@ -2059,7 +2232,7 @@ def get_new_order_price(
     booking: Dict[str, Any],
     apobj: Optional[Apprise],
     ctx: WatchItemContext
-) -> None:
+) -> Optional[Dict[str, Any]]:
     """
     Compares active promotional planner prices against a passenger's purchased cost.
 
@@ -2071,6 +2244,7 @@ def get_new_order_price(
     # Explicit check: If this context item targets specific bookings, enforce isolation
     # Fall back to using extracting the ID from booking if not listed in the ctx structure
     reservation_ID = ctx.reservation_id or booking.get("bookingId")
+
     # str-coerce both sides: YAML ints vs API string bookingIds must still match
     if ctx.reservations and str(reservation_ID) not in {str(r) for r in ctx.reservations}:
         return
@@ -2161,14 +2335,14 @@ def get_new_order_price(
         log(YELLOW + f"\t{title}: no current price returned; cannot compare" + RESET)
         return
 
-    watch_price_rows.append({
+    watch_tracker_record = {
         "SailDate": start_date,
         "ReservationID": reservation_ID,
         "Passenger": passenger_name,
         "ProductID": product,
         "ProductTitle": title,
         "CurrentPrice": current_price,
-    })
+    }
 
     # Process Deal Alerts
     if current_price < paid_price:
@@ -2228,17 +2402,19 @@ def get_new_order_price(
             temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
 
+    return watch_tracker_record
 
-def write_watch_price_json(output_path: str) -> None:
+
+def write_watch_price_json(rows: List[Dict[str, Any]], output_path: str) -> None:
     """Write the add-on watch prices collected during this run as a JSON array."""
     if platform.system() == "iOS":
         output_path = os.path.expanduser('~/Documents') + "/" + output_path
 
     try:
         with open(output_path, "w", encoding="utf-8") as output_file:
-            json.dump(watch_price_rows, output_file, indent=2)
+            json.dump(rows, output_file, indent=2)
             output_file.write("\n")
-        log(f"\n{BLUE}Writing watchlist JSON to {output_path}" + RESET) 
+        log(f"\n{BLUE}Writing watchlist JSON to {output_path}" + RESET)
     except OSError as error:
         log(f"{YELLOW}Warning: Could not write JSON watch output '{output_path}': {error}{RESET}")
 
@@ -2248,7 +2424,8 @@ def process_watch_list_for_booking(
     booking: Dict[str, Any],
     watch_list_items: List[WatchListItem],
     apobj: Optional[Apprise],
-    passenger_info: Dict[str, Any]
+    passenger_info: Dict[str, Any],
+    collected_watch_rows: Optional[List[Dict[str, Any]]] = None
 ) -> None:
     """
     Evaluates individual user watchlist targets against active booking records.
@@ -2309,10 +2486,17 @@ def process_watch_list_for_booking(
         )
 
         # Check the item's current price
-        get_new_order_price(account_info, booking, apobj, ctx)
+        if watch_row := get_new_order_price(account_info, booking, apobj, ctx):
+            if collected_watch_rows is not None:
+                collected_watch_rows.append(watch_row)
 
-
-def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict[str, Any]) -> None:
+# TODO: confirm metrics isn't used at all here
+def get_orders(
+    account_info: AccountInfo,
+    booking: Dict[str, Any],
+#    metrics: Dict[str, Any],
+    collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
+) -> None:
     """
     Retrieves the digital order history or itinerary manifest for an active booking.
 
@@ -2479,7 +2663,10 @@ def get_orders(account_info: AccountInfo, booking: Dict[str, Any], metrics: Dict
                             reservation_id=guestreservation_ID
                         )
 
-                        get_new_order_price(account_info, booking, notifier_for(account_info), ctx)
+                        # Check the item's current price
+                        if watch_row := get_new_order_price(account_info, booking, notifier_for(account_info), ctx):
+                            if collected_watch_rows is not None:
+                                collected_watch_rows.append(watch_row)
 
 
 def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> None:
@@ -2659,11 +2846,18 @@ def _build_checkout_url(
     url_sail_date = f"{sail_date[0:4]}-{sail_date[4:6]}-{sail_date[6:8]}"
     stateroom_number = booking.get("stateroomNumber")
 
+    # Resolve stateroom type and subtype defaults safely
+    stateroom_type = _parse_stateroom_type(booking.get("stateroomType"))
+    fallback_category = metrics.get('category_code') or metrics.get('sub_type') or booking.get("stateroomType")
+
+    sub_type = metrics.get('sub_type') or fallback_category
+    category_code = metrics.get('category_code') or fallback_category
+
     # Build the dictionary of parameters that URLs for GTY and non-GTY share completely
     params = {
         'packageCode': booking.get("packageCode"),
         'sailDate': url_sail_date,
-        'country': booking.get("bookingOfficeCountryCode"),
+        'country': _booking_country_code(booking),
         'selectedCurrencyCode': booking.get("bookingCurrency"),
         'shipCode': booking.get("shipCode"),
         'roomIndex': '0',
@@ -2691,13 +2885,11 @@ def _build_checkout_url(
         params['r0k'] = discounts.state
 
     # Define the base URL and add the GTY-specific parameters as needed
+    base_url = f"https://www.{account_info.url_brand}.com/room-selection/room-location"
     if stateroom_number == "GTY":
-        base_url = f"https://www.{account_info.url_brand}.com/checkout/add-ons"
         params['r0g'] = 'BESTRATE'
         params['r0h'] = 'n'
         params['r0C'] = 'y'
-    else:
-        base_url = f"https://www.{account_info.url_brand}.com/room-selection/room-location"
 
     # Drop parameters with no value: urlencode() would otherwise stringify
     # None into the literal string "None" (e.g. travel-agent bookings that
@@ -2706,7 +2898,7 @@ def _build_checkout_url(
     # HTTP 400 BAD_INPUT ("must match pattern ^[A-Z]{3}$") and the cabin
     # reports "Room Price Not Found". Omitting the key lets
     # parse_provided_URL() fall back to its defaults (country -> "USA").
-    params = {key: value for key, value in params.items() if value is not None}
+    params = {key: value for key, value in params.items() if value is not None and value != ""}
 
     # Seamlessly combine the base URL and the safely encoded string
     return f"{base_url}?{urlencode(params)}"
@@ -2827,7 +3019,7 @@ def _calculate_passenger_metrics(
     sail_date: str,
     booking: Dict[str, Any],
     brand_code: str,
-    display_prices: bool
+#    display_prices: bool
 ) -> Dict[str, Any]:
     """
     Parses structural guest files to calculate age milestones, check-in windows, and demographic flags.
@@ -2847,21 +3039,41 @@ def _calculate_passenger_metrics(
     stateroom_subtype = booking.get("stateroomSubtype")
     stateroom_category_code = None   # a booking with no guests must not leave this unbound
 
+    # Check top-level booking fallbacks for GTY reservations where guest-level keys are omitted
+    raw_category = (
+        booking.get("stateroomCategoryCode")
+        or booking.get("categoryCode")
+        or booking.get("subCategoryCode")
+    )
+
+    # Deep check in passengersInStateroom or passengers arrays if top-level is absent (common in GTY)
+    if not raw_category:
+        passenger_list = (booking.get("passengersInStateroom") or []) + (booking.get("passengers") or [])
+        for guest in passenger_list:
+            if isinstance(guest, dict):
+                raw_category = (
+                    guest.get("stateroomCategoryCode")
+                    or guest.get("subCategoryCode")
+                    or guest.get("categoryCode")
+                )
+                if raw_category:
+                    break
+
+    # Sanitize and validate candidate category code against CHECKOUT_FORBIDDEN_CATEGORY_CODES
+    booking_category_fallback = sanitize_category_code(raw_category)
+
     for guest in guests:
-        stateroom_category_code = guest.get("stateroomCategoryCode")
+        guest_category = guest.get("stateroomCategoryCode")
+        stateroom_category_code = sanitize_category_code(guest_category) or booking_category_fallback
+        category_unresolved = (stateroom_category_code is None and stateroom_subtype is None)
 
-        # Apply legacy GTY room structure workarounds
-        if stateroom_category_code is None and stateroom_subtype is None:
-            if display_prices:
-                log(YELLOW + "Data is missing from API. Code is taking a guess to fixing" + RESET)
-                log(YELLOW + "Add category override in config.yaml if wrong category" + RESET)
-
-            if stateroom_type == "B" and brand_code == "C":
-                stateroom_category_code = "XC"
-                stateroom_subtype = "XC"
-            elif stateroom_type == "I" and brand_code == "R":
-                stateroom_category_code = "ZI"
-                stateroom_subtype = "ZI"
+#        # Apply legacy GTY room structure workarounds
+#        if stateroom_category_code is None and stateroom_subtype is None:
+#            if display_prices:
+#                # TODO: Add logic to suggest category override values based on known field values?
+#                #       This should likely move elsewhere, as well
+#                log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
+#                log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
 
         # Names & Demographic verification
         first_name = guest.get("firstName", "").capitalize()
@@ -2906,7 +3118,7 @@ def _calculate_passenger_metrics(
         "num_children": num_children,
         "have_a_senior": have_a_senior,
         "category_code": stateroom_category_code,
-        "sub_type": stateroom_subtype
+        "sub_type": stateroom_subtype#,
     }
 
 '''
@@ -3550,98 +3762,6 @@ def derive_balance_due(booking: dict, cruise_paid_price_from_api: Optional[List[
     return None
 
 
-def record_checkin_payment_row(row: Dict[str, Any]) -> None:
-    """
-    Adds a booking to the end-of-run summary table, merging duplicates.
-
-    Linked reservations appear in every linked account's booking list, so a
-    multi-account run sees the same reservation once per account. Rows are
-    keyed on reservation id + sail date ("dedupe_key"); when a duplicate
-    arrives, the more informative fields win - a definitive balance_due
-    (True/False) beats None, and a real check-in label beats the "TBD"
-    placeholder - because only the owning account's view reliably carries
-    payment data. This keeps the outcome independent of the accountInfo order.
-    """
-    key = row.get("dedupe_key")
-    for existing in checkin_payment_rows:
-        if key is not None and existing.get("dedupe_key") == key:
-            if existing.get("balance_due") not in (True, False) and row.get("balance_due") in (True, False):
-                existing["balance_due"] = row["balance_due"]
-                existing["past_final_payment"] = row["past_final_payment"]
-            if existing.get("checkin_label") in (None, "TBD") and row.get("checkin_label") not in (None, "TBD"):
-                existing["checkin_label"] = row["checkin_label"]
-            return
-    checkin_payment_rows.append(row)
-
-
-def print_checkin_payment_table() -> None:
-    """
-    Prints a compact end-of-run summary of upcoming check-in openings / boarding
-    times and final payment dates for every booked sailing, sorted by sail date.
-
-    Nothing is printed when no booked sailings were gathered (e.g. a watchlist-only
-    run), so it never adds noise to runs that have nothing to summarize.
-    """
-    if not checkin_payment_rows:
-        return
-
-    rows = sorted(checkin_payment_rows, key=lambda r: r["sail_date"] or "")
-
-    headers = ("Sail Date", "Ship (Room)", "Reservation", "Check-In", "Final Payment")
-    table = []
-    pay_colors = []
-    for r in rows:
-        sail = config.format_date(r["sail_date"]) if r["sail_date"] else "?"
-        if r["final_payment"] is not None:
-            pay = r["final_payment"].strftime(config.date_display_format)
-            # Green when settled, yellow when a balance is still owed, red when that
-            # balance is now past the final payment deadline. "(paid)" is only shown
-            # when the API explicitly said the balance is settled - a missing/null
-            # balanceDue must not masquerade as paid in full.
-            if r["balance_due"] is True:
-                if r["past_final_payment"]:
-                    pay += " (PAST DUE)"
-                    pay_colors.append(RED)
-                else:
-                    pay += " (balance due)"
-                    pay_colors.append(YELLOW)
-            elif r["balance_due"] is False:
-                pay += " (paid)"
-                pay_colors.append(GREEN)
-            elif r["balance_due"] == "TA_UNKNOWN":
-                pay += " (contact TA for balance)"
-                pay_colors.append(YELLOW)
-            elif r["balance_due"] is None:
-                pay += " (status unknown)"
-                pay_colors.append(YELLOW)
-        else:
-            pay = "-"
-            pay_colors.append("")
-        table.append((sail, r["name"], r.get("reservation", "-"), r["checkin_label"], pay))
-
-    # Size each column to the widest of its header/cells. The stored values are ANSI-free;
-    # color is applied only at print time so it never skews this width math.
-    widths = [max(len(str(row[i])) for row in ([headers] + table)) for i in range(len(headers))]
-
-    def fmt(cells: Tuple[str, ...], pay_color: str = "") -> str:
-        padded = [str(c).ljust(widths[i]) for i, c in enumerate(cells)]
-        if pay_color:
-            padded[-1] = f"{pay_color}{padded[-1]}{RESET}"
-        return "  ".join(padded)
-
-    log(f"\n{BLUE}Upcoming Check-In & Final Payment Dates{RESET}")
-    log(fmt(headers))
-    log("  ".join("-" * w for w in widths))
-    prev_sail = None
-    for row, pay_color in zip(table, pay_colors):
-        # Blank the sail date when it repeats the row above (linked cruises / multiple
-        # cabins on one sailing) so each date prints once. Rows are sorted by date, so
-        # same-date rows are always adjacent.
-        display_row = ("" if row[0] == prev_sail else row[0],) + row[1:]
-        prev_sail = row[0]
-        log(fmt(display_row, pay_color))
-
-
 def main() -> None:
     """
     Primary orchestration engine for the cruise pricing validation suite.
@@ -3652,9 +3772,11 @@ def main() -> None:
     unbooked prospective vacation watchlists.
     """
     try:
-        # Start each run with an empty check-in / payment summary collector
-        checkin_payment_rows.clear()
-        watch_price_rows.clear()
+        # Instantiate clean per-run tracker
+        payment_tracker = CheckinPaymentTracker()
+
+        # Watch list table rows
+        collected_watch_rows: List[Dict[str, Any]] = []
 
         # Set Time with AM/PM or 24h based on locale
         locale.setlocale(locale.LC_TIME,'')
@@ -3662,6 +3784,9 @@ def main() -> None:
 
         if config.log_file:
             log(f"Logging run to file: {config.log_file}")
+
+        if config.output_watch_as_json:
+            log(f"Logging watch list item prices to JSON file: {config.output_json_watch_file}")
 
         # Since timestamp is a datetime object, convert it to a string or update format_date to handle both
         log(f"Report generated {config.format_date(timestamp.strftime('%Y%m%d'))} {timestamp.strftime('%X')}")
@@ -3725,7 +3850,13 @@ def main() -> None:
 
             # Gather the information on all voyages under the current account
             try:
-                get_voyages(account_info, discounts, ship_dictionary)
+                get_voyages(
+                   account_info,
+                   discounts,
+                   ship_dictionary,
+                   payment_tracker=payment_tracker,
+                   collected_watch_rows=collected_watch_rows,
+                 )
             finally:
                 # Close the account session even when a booking raises, so
                 # sessions don't leak across the remaining accounts
@@ -3775,11 +3906,11 @@ def main() -> None:
             anon_session.close()
 
         # Summary table of upcoming check-in and final-payment dates for booked sailings
-        print_checkin_payment_table()
+        payment_tracker.print_table()
 
         # Write the watchlist price results to JSON for external consumption
         if config.output_watch_as_json:
-            write_watch_price_json(config.output_json_watch_file)
+            write_watch_price_json(collected_watch_rows, config.output_json_watch_file)
 
     except Exception as e:
         # Let the global catch-all at the module entry point handle unexpected execution faults
