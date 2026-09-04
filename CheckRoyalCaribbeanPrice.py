@@ -1164,7 +1164,20 @@ def login(account_info: AccountInfo) -> APIAccess:
         sys.exit(1)
 
     if response.status_code != 200:
-        log(f"Login attempt got return code {response.status_code}")
+        log(f"Login attempt got return code {response.status_code} for user {account_info.username}")
+
+        # The status code alone cannot distinguish a rejected password
+        # ("invalid_grant") from a malformed request ("invalid_request") or an
+        # edge/WAF block that returns HTML - which makes a login failure very
+        # hard to diagnose. Surface the server's own error text; the OAuth
+        # error body carries no credentials, and the password is scrubbed
+        # defensively in case an echo is ever added.
+        detail = (response.text or "").strip()
+        if password and password in detail:
+            detail = detail.replace(password, "***")
+        if detail:
+            log(f"	Server said: {detail[:300]}")
+
         log(f"{account_info.cruise_line} website might be down, username/password incorrect, or have unsupported symbol in password. Quitting.")
         sys.exit(1)
 
