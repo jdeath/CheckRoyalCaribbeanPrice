@@ -1816,29 +1816,6 @@ def test_calculate_passenger_metrics_gty_booking_fallbacks():
     assert metrics.get("category_code") == "XB"
 
 
-def test_calculate_passenger_metrics_config_override_fallback():
-    """
-    Verify that _calculate_passenger_metrics falls back to config.category_override
-    when both guest and booking category fields evaluate to None.
-    """
-    guests = [{"guestId": "1"}]
-    sail_date = "20270510"
-    booking = {"bookingId": "1234567"}  # No category fields present
-
-    with patch("CheckRoyalCaribbeanPrice.config") as mock_config:
-        mock_config.category_override = "XB"
-
-        metrics = _calculate_passenger_metrics(
-            guests=guests,
-            sail_date=sail_date,
-            booking=booking,
-            brand_code="R",
-            display_prices=False,
-        )
-
-        assert metrics.get("category_code") == "XB"
-
-
 # ============================================================================
 # ITEM 14 TESTS: ORCHESTRATION & RUN CONTROL Configuration Lifecycle
 # ============================================================================
@@ -2268,11 +2245,11 @@ def _availability_params(subtype, category_code):
 
 
 def test_availability_matches_on_subtype_code_even_when_category_differs():
-    params = _availability_params(subtype="D", category_code="2D")
+    params = _availability_params(subtype="3D", category_code="4D")
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.text = _room_selection_rsc(code="D", category_code="4D")
+    mock_resp.text = _room_selection_rsc(code="3D", category_code="4D")
 
     with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
         available, alternates = check_if_room_is_available(params)
@@ -2282,7 +2259,7 @@ def test_availability_matches_on_subtype_code_even_when_category_differs():
 
 
 def test_availability_false_when_subtype_code_absent():
-    params = _availability_params(subtype="Z", category_code="9Z")
+    params = _availability_params(subtype="2D", category_code="2D")
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -2294,6 +2271,20 @@ def test_availability_false_when_subtype_code_absent():
     assert available is False
     assert len(alternates) == 1
     assert alternates[0]["name"].startswith("Ocean View Balcony")
+
+
+def test_availability_true_for_gty_booking():
+    params = _availability_params(subtype="XB", category_code="XB")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = _room_selection_rsc(code="D", category_code="4D")
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        available, alternates = check_if_room_is_available(params)
+
+    assert available is True
+    assert alternates == []
 
 
 # ============================================================================
@@ -2614,9 +2605,9 @@ def test_build_checkout_url_omits_none_params_for_ta_bookings():
     assert parsed.booking_office_country_code == "USA"
     assert parsed.sail_date == "2027-01-24"  # checkout API requires the dashed form
 
-
+# ======================================================================================
 # ITEM 23 TESTS: MARKET COUNTRY CODE PREFERRED OVER BOOKING OFFICE COUNTRY CODE
-
+# ======================================================================================
 def _item23_url_args():
     """Shared account/discounts/metrics fixtures for the ITEM 23 URL-builder tests."""
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")

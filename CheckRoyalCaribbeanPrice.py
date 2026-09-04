@@ -1069,14 +1069,6 @@ def _parse_stateroom_type(room_type_code: Optional[str]) -> str:
     if not room_type_code:
             return "NONE"
     return STATEROOM_TYPE_MAPPING.get(room_type_code.upper(), "NONE")
-#    mapping = {
-#        "I": "INTERIOR",
-#        "O": "OUTSIDE",
-#        "B": "BALCONY",
-#        "D": "DELUXE",
-#        "C": "CONCIERGE"
-#    }
-#    return mapping.get(room_type_code, "NONE")
 
 
 def sanitize_category_code(code: Optional[str]) -> Optional[str]:
@@ -1381,18 +1373,18 @@ def get_voyages(
     bookings = response.json().get("payload", {}).get("profileBookings", [])
 
     for booking in bookings:
-        # TEST CODE
-        if booking.get("stateroomNumber") == "GTY" or not booking.get("stateroomCategoryCode"):
-            print("\n=== DEBUG #105: FULL GTY BOOKING PAYLOAD ===")
-            if 'passengersInStateroom' in booking:
-                print(f"passengersInStateroom: {booking['passengersInStateroom']!r}")
-            if 'passengers' in booking:
-                print(f"passengers: {booking['passengers']!r}")
-
-            # Dump raw response structure
-            print_response(booking)
-            print("============================================\n")
-        # END TEST CODE
+#        # TEST CODE
+#        if booking.get("stateroomNumber") == "GTY" or not booking.get("stateroomCategoryCode"):
+#            print("\n=== DEBUG #105: FULL GTY BOOKING PAYLOAD ===")
+#            if 'passengersInStateroom' in booking:
+#                print(f"passengersInStateroom: {booking['passengersInStateroom']!r}")
+#            if 'passengers' in booking:
+#                print(f"passengers: {booking['passengers']!r}")
+#
+#            # Dump raw response structure
+#            print_response(booking)
+#            print("============================================\n")
+#        # END TEST CODE
 
         # Pull out the individual booking fields
         reservation_ID = booking.get("bookingId")
@@ -1416,11 +1408,9 @@ def get_voyages(
         # Unpack cabin occupants & boarding windows safely
         metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
 
-        # TEST CODE
         # Preserve resolved GTY category code for downstream pricing checks
         if metrics.get("category_code") and not booking.get("stateroomCategoryCode"):
             booking["stateroomCategoryCode"] = metrics["category_code"]
-        # END TEST CODE
 
         # Display Reservation Information Header
         reservation_display = f"Reservation #{reservation_ID}"
@@ -1662,7 +1652,7 @@ def get_cruise_price(account_info: AccountInfo,
     if provided_url:
         # Path A: Standard tracking via an external web marketing link string
         # Parse the provided URL
-        log(f"TEST CODE: get_cruise price provided_url was {provided_url}")
+#        log(f"TEST CODE: get_cruise price provided_url was {provided_url}")
         url_params = parse_provided_URL(provided_url)
 
         # FAIL-SAFE PATCH: If the URL parser missed ship/package codes,
@@ -1728,18 +1718,18 @@ def get_cruise_price(account_info: AccountInfo,
             )
 
         # 2. Build a dummy pristine, validated web URL
-        # TEST CODE Temporary diagnostic log for issue #105
-        if booking.get("stateroomNumber") == "GTY" or not booking.get("stateroomCategoryCode"):
-            print("\n=== DEBUG #105: PAYLOAD SEARCH ===")
-            print(f"passengersInStateroom content: {booking.get('passengersInStateroom')!r}")
-            print(f"passengers content: {booking.get('passengers')!r}")
-            print(f"stateroomDescription: {booking.get('stateroomDescription')!r}")
-            print("===================================\n")
-        # END TEST CODE
+#        # TEST CODE Temporary diagnostic log for issue #105
+#        if booking.get("stateroomNumber") == "GTY" or not booking.get("stateroomCategoryCode"):
+#            print("\n=== DEBUG #105: PAYLOAD SEARCH ===")
+#            print(f"passengersInStateroom content: {booking.get('passengersInStateroom')!r}")
+#            print(f"passengers content: {booking.get('passengers')!r}")
+#            print(f"stateroomDescription: {booking.get('stateroomDescription')!r}")
+#            print("===================================\n")
+#        # END TEST CODE
         cruise_price_URL = _build_checkout_url(booking, metrics, account_info, temp_discounts)
 
         # 3. Parse the dummy URL, jsut as path A!
-        log(f"TEST CODE: get_cruise_price built URL was {cruise_price_URL}")
+#        log(f"TEST CODE: get_cruise_price built URL was {cruise_price_URL}")
         url_params = parse_provided_URL(cruise_price_URL)
 
         # 4. Fix the parser/override omissions immediately while we are safely inside Path B scope
@@ -2176,6 +2166,19 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
         stateroom_types = rooms[0].get("options", {}).get("stateroomTypes", [])
     except (IndexError, AttributeError):
         return False, available_rooms
+
+    # --- GTY / CATEGORY OVERRIDE BYPASS ---
+    # Unassigned guarantee inventory (e.g. 'XB', 'ZI', 'YO') and explicit config overrides
+    # do not appear as physical subtype entries in the RSC response array. As long as
+    # stateroomTypes returned active options for the voyage, bypass the subtype loop.
+    gty_codes = {"GTY", "XB", "YO", "ZI", "WS", "XN", "CB"}
+    is_gty = (
+            params.stateroom_subtype in gty_codes
+            or (params.stateroom_subtype and params.stateroom_subtype.endswith("GTY"))
+    )
+
+    if is_gty and stateroom_types:
+        return True, []
 
     for stateroom_type in stateroom_types:
         stateroom_subtypes = stateroom_type.get("stateroomSubtypes", [])
@@ -2878,15 +2881,11 @@ def _build_checkout_url(
         params['r0k'] = discounts.state
 
     # Define the base URL and add the GTY-specific parameters as needed
-    # TEST CODE
     base_url = f"https://www.{account_info.url_brand}.com/room-selection/room-location"
     if stateroom_number == "GTY":
-#        base_url = f"https://www.{account_info.url_brand}.com/checkout/add-ons"
         params['r0g'] = 'BESTRATE'
         params['r0h'] = 'n'
         params['r0C'] = 'y'
-#    else:
-#        base_url = f"https://www.{account_info.url_brand}.com/room-selection/room-location"
 
     # Drop parameters with no value: urlencode() would otherwise stringify
     # None into the literal string "None" (e.g. travel-agent bookings that
@@ -3036,7 +3035,6 @@ def _calculate_passenger_metrics(
     stateroom_subtype = booking.get("stateroomSubtype")
     stateroom_category_code = None   # a booking with no guests must not leave this unbound
 
-    # TEST CODE
     # Check top-level booking fallbacks for GTY reservations where guest-level keys are omitted
     raw_category = (
         booking.get("stateroomCategoryCode")
@@ -3044,8 +3042,7 @@ def _calculate_passenger_metrics(
         or booking.get("subCategoryCode")
     )
 
-    # Deep check in passengersInStateroom or passengers arrays if top-level
-    # is absent (common in GTY)
+    # Deep check in passengersInStateroom or passengers arrays if top-level is absent (common in GTY)
     if not raw_category:
         passenger_list = (booking.get("passengersInStateroom") or []) + (booking.get("passengers") or [])
         for guest in passenger_list:
@@ -3058,20 +3055,12 @@ def _calculate_passenger_metrics(
                 if raw_category:
                     break
 
-    # 3. Sanitize and validate candidate category code against CHECKOUT_FORBIDDEN_CATEGORY_CODES
+    # Sanitize and validate candidate category code against CHECKOUT_FORBIDDEN_CATEGORY_CODES
     booking_category_fallback = sanitize_category_code(raw_category)
 
-    # 4. Check config override if API yielded no valid subcategory code
-    if not booking_category_fallback and getattr(config, "category_override", None):
-        booking_category_fallback = sanitize_category_code(config.category_override)
-    # END TEST CODE
-
     for guest in guests:
-        # TEST CODE
         guest_category = guest.get("stateroomCategoryCode")
         stateroom_category_code = sanitize_category_code(guest_category) or booking_category_fallback
-        # END TEST CODE
-#        stateroom_category_code = guest.get("stateroomCategoryCode")
 
         # Apply legacy GTY room structure workarounds
         if stateroom_category_code is None and stateroom_subtype is None:
