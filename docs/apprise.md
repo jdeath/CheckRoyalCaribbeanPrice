@@ -2,7 +2,7 @@
 
 ## Notification Emails/Pushbullet/etc via Apprise (Optional)
 1. Review documentation for apprise at: https://github.com/caronc/apprise
-1. 99% of people probably have gmail, so you can use this line in your config.yaml (see [Edit Config File](docs/config.md)):
+1. 99% of people probably have gmail, so you can use this line in your config.yaml (see [Edit Config File](config.md)):
 ```
 apprise:
   - url: "mailto://user:password@gmail.com"

@@ -43,3 +43,5 @@ Cruise activity schedule, such as trivia and game shows, often only populated a 
 You can run this on the iPhone, following the [iPhone install directions](install-ios.md) and download the [BrowseRoyalCaribbeanPrice.py](https://raw.githubusercontent.com/jdeath/CheckRoyalCaribbeanPrice/refs/heads/main/BrowseRoyalCaribbeanPrice.py) to your phone, no need to edit as the Browse script does not need username/password.
 
 There is also an EXPIRIMENTAL vibe-coded browser based version of the BrowseRoyalCaribbeanPrice available at `https://jdeath.github.io/` . You must disable CORS in your broweser for it to work.
+
+Another user made GUI that displays information directly in home assistant. Check it out `https://github.com/MycroftHolmesV/RoyalPriceDashboard`

@@ -20,21 +20,23 @@ from unittest.mock import MagicMock, patch
 from apprise import Apprise
 
 from CheckRoyalCaribbeanPrice import (
+# ITEM 1 TEST: CONFIG LOADING: per-account apprise -> AccountInfo.apobj
+# ITEM 2 TESTS: RESOLVER: notifier_for
+# ITEM 3 TESTS INTEGRATION: routing during an actual price-drop notification
+# ITEM 4 TESTS: apprise_test PATH: both global and per-account notifiers get a test message
     AccountInfo,
     CruiseAppConfig,
     _build_apprise,
     get_cruise_price,
     load_config_objects,
+    main,
     notifier_for,
 )
 
-import CheckRoyalCaribbeanPrice as rcapp
 
-
-# =====================================================================
+# =========================================================================================
 # FIXTURES & SCENARIO HELPERS (mirrors test_alert_matrix.py's style)
-# =====================================================================
-
+# =========================================================================================
 def make_account(username: str = "test_user") -> AccountInfo:
     account = AccountInfo(username=username, password="password", cruise_line="royal")
     account.access = MagicMock()
@@ -55,21 +57,41 @@ def make_checkout_url(sail_days_out: int = 400) -> str:
     )
 
 
-def fare(amount, grats=100.0, ins=50.0, obc=0.0):
-    return {"fare": amount, "gratuities": grats, "insurance": ins, "obc": obc}
+def build_fare(
+    base_fare: float,
+    gratuities: float = 100.0,
+    insurance: float = 50.0,
+    obc: float = 0.0
+) -> dict:
+    """
+    Builds a standard fare breakdown dictionary for pricing scenario tests.
+
+    Defaults:
+      - gratuities: $100.0
+      - insurance:  $50.0
+      - obc:        $0.0
+    """
+    return {
+        "fare": base_fare,
+        "gratuities": gratuities,
+        "insurance": insurance,
+        "obc": obc,
+    }
 
 
-AVAILABLE = {"room_available": True, "sailing_nights": 7, "available_rooms": []}
+def build_available_response(sailing_nights: int = 7, room_available: bool = True) -> dict:
+    """Builds a fresh baseline API response dict for an available cabin payload."""
+    return {
+        "room_available": room_available,
+        "sailing_nights": sailing_nights,
+        "available_rooms": [],
+    }
 
 
 def run_price_drop_scenario(*, account, config_apobj, other_accounts=None):
     """
     Drive get_cruise_price with a guaranteed price drop (fires exactly one
     notify), routing through whatever config/account apobj is wired up.
-
-    other_accounts, if given, are unrelated AccountInfo objects also present
-    in config.accounts (as in a real shared config), so a fallback test can
-    prove the notification lands on the global notifier and not on them.
     """
     booking = {"url": make_checkout_url()}
     paid_price_struct = {"paidPrice": 3000.0}
@@ -85,7 +107,7 @@ def run_price_drop_scenario(*, account, config_apobj, other_accounts=None):
     ship_dictionary = MagicMock()
     ship_dictionary.get_ship.return_value = "Wonder of the Seas"
 
-    results = {**AVAILABLE, "base_fare": fare(2500.0)}  # 2500 < 3000 paid: guaranteed drop
+    results = {**build_available_response(), "base_fare": build_fare(2500.0)}  # 2500 < 3000 paid: guaranteed drop
 
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
          patch("CheckRoyalCaribbeanPrice.log"), \
@@ -94,12 +116,10 @@ def run_price_drop_scenario(*, account, config_apobj, other_accounts=None):
                           paid_price_struct=paid_price_struct)
 
 
-# =====================================================================
-# CONFIG LOADING: per-account apprise -> AccountInfo.apobj
-# =====================================================================
-
+# =========================================================================================
+# ITEM 1 TEST: CONFIG LOADING: per-account apprise -> AccountInfo.apobj
+# =========================================================================================
 class TestLoadConfigObjectsPerAccountApprise:
-
     def test_account_with_apprise_gets_its_own_apobj(self, tmp_path):
         yaml_content = """
     accountInfo:
@@ -163,7 +183,6 @@ class TestLoadConfigObjectsPerAccountApprise:
 
 
 class TestBuildApprise:
-
     def test_empty_list_returns_none(self):
         assert _build_apprise([]) is None
 
@@ -177,19 +196,17 @@ class TestBuildApprise:
 
     def test_apprise_not_installed_returns_none_and_warns(self):
         """Mirrors the pre-existing #85 'apprise optional' sentinel handling."""
-        with patch.object(rcapp, "Apprise", None), \
+        with patch("CheckRoyalCaribbeanPrice.Apprise", None), \
              patch("CheckRoyalCaribbeanPrice.logging.warning") as mock_warn:
             result = _build_apprise([{"url": "json://topic-a"}])
         assert result is None
         mock_warn.assert_called_once()
 
 
-# =====================================================================
-# RESOLVER: notifier_for
-# =====================================================================
-
+# =========================================================================================
+# ITEM 2 TESTS: RESOLVER: notifier_for
+# =========================================================================================
 class TestNotifierFor:
-
     def test_returns_account_apobj_when_present(self):
         global_apobj = MagicMock()
         account = make_account()
@@ -217,12 +234,10 @@ class TestNotifierFor:
             assert notifier_for(None) is global_apobj
 
 
-# =====================================================================
-# INTEGRATION: routing during an actual price-drop notification
-# =====================================================================
-
+# =========================================================================================
+# ITEM 3 TESTS INTEGRATION: routing during an actual price-drop notification
+# =========================================================================================
 class TestPerAccountRoutingIntegration:
-
     def test_price_drop_notifies_account_apobj_not_global(self):
         """account_info.apobj = B is configured: B fires, global A stays silent."""
         global_apobj = MagicMock(name="global_A")
@@ -254,12 +269,10 @@ class TestPerAccountRoutingIntegration:
         other_account.apobj.notify.assert_not_called()
 
 
-# =====================================================================
-# apprise_test PATH: both global and per-account notifiers get a test message
-# =====================================================================
-
+# =========================================================================================
+# ITEM 4 TESTS: apprise_test PATH: both global and per-account notifiers get a test message
+# =========================================================================================
 class TestAppriseTestNotifiesAllNotifiers:
-
     def test_main_apprise_test_notifies_global_and_each_account(self):
         recorder = []  # locks the ORDER: global notify -> account notify -> SystemExit
 
@@ -270,8 +283,8 @@ class TestAppriseTestNotifiesAllNotifiers:
         account_with.apobj = MagicMock(name="chris_apobj")
         account_with.apobj.notify.side_effect = lambda **kw: recorder.append("account_notify:chris@example.com")
 
-        account_without = make_account(username="friend@example.com")
         # account_without.apobj stays None -> must NOT receive a direct notify
+        account_without = make_account(username="friend@example.com")
 
         mock_cfg = MagicMock()
         mock_cfg.apobj = global_apobj
@@ -280,10 +293,10 @@ class TestAppriseTestNotifiesAllNotifiers:
         mock_cfg.accounts = [account_with, account_without]
         mock_cfg.format_date = lambda d: str(d)
 
-        with patch.object(rcapp, "config", mock_cfg), \
+        with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()):
             with pytest.raises(SystemExit) as exc_info:
-                rcapp.main()
+                main()
             recorder.append("SystemExit")
 
         assert exc_info.value.code == 0
@@ -321,10 +334,10 @@ class TestAppriseTestNotifiesAllNotifiers:
         mock_cfg.accounts = [account_with]
         mock_cfg.format_date = lambda d: str(d)
 
-        with patch.object(rcapp, "config", mock_cfg), \
+        with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()):
             with pytest.raises(SystemExit) as exc_info:
-                rcapp.main()
+                main()
 
         assert exc_info.value.code == 0
         account_with.apobj.notify.assert_called_once()
@@ -352,11 +365,11 @@ class TestAppriseTestNotifiesAllNotifiers:
         # accidentally short-circuit the guard to True
         assert account_without.apobj is None
 
-        with patch.object(rcapp, "config", mock_cfg), \
+        with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
              patch("CheckRoyalCaribbeanPrice.get_ship_dictionary_web") as ship_dictionary_mock, \
-             patch("CheckRoyalCaribbeanPrice.print_checkin_payment_table"):
-            rcapp.main()  # must NOT raise SystemExit
+             patch("CheckRoyalCaribbeanPrice.CheckinPaymentTracker.print_table"):
+            main()  # must NOT raise SystemExit
 
         # The self-test block exits the process; reaching the ship-dictionary
         # fetch proves the run fell through past it instead.
