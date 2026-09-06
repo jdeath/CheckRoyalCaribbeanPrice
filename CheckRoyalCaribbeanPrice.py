@@ -1407,7 +1407,6 @@ def get_voyages(
 
         # Unpack cabin occupants & boarding windows safely
         metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code)
-#        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
 
         # Preserve resolved GTY category code for downstream pricing checks
         if metrics.get("category_code") and not booking.get("stateroomCategoryCode"):
@@ -1427,7 +1426,6 @@ def get_voyages(
             log(metrics['checkin_string'])
             checkin_label = f"Boarding {metrics.get('boarding_time')}" if metrics.get('boarding_time') else "Checked in"
         else:
-            # TODO: the second return is always None; get rid of it
             checkin_label, _ = get_checkin_info(account_info, reservation_ID, passenger_ID, ship_code, sail_date, apobj)
 
         # Process Dining Setup
@@ -1564,7 +1562,6 @@ def get_voyages(
 
         # Get the extra add-ons purchased for this voyage
         get_orders(account_info, booking, collected_watch_rows=collected_watch_rows)
-#        get_orders(account_info, booking, metrics, collected_watch_rows=collected_watch_rows)
         log(" ")
 
         # Process watchlists on a per-occupant layout instead of per-booking line
@@ -1790,7 +1787,6 @@ def get_cruise_price(account_info: AccountInfo,
     sail_date_display = config.format_date(url_params.sail_date)
     category_display = url_params.stateroom_category_code or url_params.stateroom_subtype or "Unassigned/GTY"
     pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {category_display}"
-#    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {url_params.stateroom_category_code}"
 
     # Build active discount labels
     used_discounts = ""
@@ -2490,11 +2486,10 @@ def process_watch_list_for_booking(
             if collected_watch_rows is not None:
                 collected_watch_rows.append(watch_row)
 
-# TODO: confirm metrics isn't used at all here
+
 def get_orders(
     account_info: AccountInfo,
     booking: Dict[str, Any],
-#    metrics: Dict[str, Any],
     collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """
@@ -3067,14 +3062,6 @@ def _calculate_passenger_metrics(
         stateroom_category_code = sanitize_category_code(guest_category) or booking_category_fallback
         category_unresolved = (stateroom_category_code is None and stateroom_subtype is None)
 
-#        # Apply legacy GTY room structure workarounds
-#        if stateroom_category_code is None and stateroom_subtype is None:
-#            if display_prices:
-#                # TODO: Add logic to suggest category override values based on known field values?
-#                #       This should likely move elsewhere, as well
-#                log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
-#                log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
-
         # Names & Demographic verification
         first_name = guest.get("firstName", "").capitalize()
         passenger_names.append(first_name)
@@ -3120,6 +3107,7 @@ def _calculate_passenger_metrics(
         "category_code": stateroom_category_code,
         "sub_type": stateroom_subtype#,
     }
+
 
 #####################################
 # Main execution path and Run Control
