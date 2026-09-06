@@ -1565,7 +1565,6 @@ def get_voyages(
 
         # Unpack cabin occupants & boarding windows safely
         metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code)
-#        metrics = _calculate_passenger_metrics(guests, sail_date, booking, brand_code, display_cruise_prices)
 
         # Preserve resolved GTY category code for downstream pricing checks
         if metrics.get("category_code") and not booking.get("stateroomCategoryCode"):
@@ -1585,7 +1584,6 @@ def get_voyages(
             log(metrics['checkin_string'])
             checkin_label = f"Boarding {metrics.get('boarding_time')}" if metrics.get('boarding_time') else "Checked in"
         else:
-            # TODO: the second return is always None; get rid of it
             checkin_label, _ = get_checkin_info(account_info, reservation_ID, passenger_ID, ship_code, sail_date, apobj)
 
         # Process Dining Setup
@@ -1722,7 +1720,6 @@ def get_voyages(
 
         # Get the extra add-ons purchased for this voyage
         get_orders(account_info, booking, collected_watch_rows=collected_watch_rows)
-#        get_orders(account_info, booking, metrics, collected_watch_rows=collected_watch_rows)
         log(" ")
 
         # Process watchlists on a per-occupant layout instead of per-booking line
@@ -1950,7 +1947,6 @@ def get_cruise_price(account_info: AccountInfo,
     sail_date_display = config.format_date(url_params.sail_date)
     category_display = url_params.stateroom_category_code or url_params.stateroom_subtype or "Unassigned/GTY"
     pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {category_display}"
-#    pre_string = f"{sail_date_display} {ship_name} {url_params.cabin_class_string} {url_params.stateroom_category_code}"
 
     # Build active discount labels
     used_discounts = ""
@@ -2731,11 +2727,10 @@ def process_watch_list_for_booking(
             if collected_watch_rows is not None:
                 collected_watch_rows.append(watch_row)
 
-# TODO: confirm metrics isn't used at all here
+
 def get_orders(
     account_info: AccountInfo,
     booking: Dict[str, Any],
-#    metrics: Dict[str, Any],
     collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """
@@ -3308,14 +3303,6 @@ def _calculate_passenger_metrics(
         stateroom_category_code = sanitize_category_code(guest_category) or booking_category_fallback
         category_unresolved = (stateroom_category_code is None and stateroom_subtype is None)
 
-#        # Apply legacy GTY room structure workarounds
-#        if stateroom_category_code is None and stateroom_subtype is None:
-#            if display_prices:
-#                # TODO: Add logic to suggest category override values based on known field values?
-#                #       This should likely move elsewhere, as well
-#                log(YELLOW + "No stateroom category code could be resolved from API payload." + RESET)
-#                log(YELLOW + "Please set categoryOverride in your config YAML for this reservation." + RESET)
-
         # Names & Demographic verification
         first_name = guest.get("firstName", "").capitalize()
         passenger_names.append(first_name)
@@ -3362,352 +3349,7 @@ def _calculate_passenger_metrics(
         "sub_type": stateroom_subtype#,
     }
 
-'''
-######################################################
-# Dead/Obsolete/Unused functions
-# WARNING: These were NOT refactored to use snake_case
-# or renamed functions; these will need to be updated
-# if resurrected
-######################################################
-appkey_mobile = 'cdCNc04srNq4rBvKofw1aC50dsdSaPuc'
-appversion_mobile = '1.73.4'
-user_agent_mobile = 'royal/1.73.4 (com.rccl.royalcaribbean; build:2528; android 16) okhttp/4.12.0'
 
-def string_to_float(s: str) -> float:
-    if not s:
-        return 0.0
-
-    s = s.strip()
-
-    if "," in s and "." in s:
-        # Both present → last one is decimal separator
-        if s.rfind(",") > s.rfind("."):
-            # European: 1.234,56
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            # American: 1,234.56
-            s = s.replace(",", "")
-    elif "," in s:
-        # Only comma present
-        parts = s.split(",")
-        if len(parts[-1]) == 3 and parts[-1].isdigit():
-            # 4,000 → thousands
-            s = s.replace(",", "")
-        else:
-            # 4,0 → decimal
-            s = s.replace(",", ".")
-    elif "." in s:
-        # Only dot present
-        parts = s.split(".")
-        if len(parts[-1]) == 3 and parts[-1].isdigit():
-            # 4.000 → thousands
-            s = s.replace(".", "")
-        # else: 4.0 or 4.00 → decimal → keep dot
-    # else: plain integer
-    return float(s)
-
-def days_between(d1, d2):
-    dt1 = datetime.strptime(d1, "%Y%m%d")
-    dt2 = datetime.strptime(d2, "%Y%m%d")
-    return (dt2 - dt1).days
-
-def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startDate,prefix,quantity,paidPrice,currency,product,apobj, guest, passengerId,passengerName,room, orderCode, orderDate, owner):
-
-    headers = {
-    'User-Agent': USER_AGENT_WEB,
-    'Accept': 'application/json',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'X-Requested-With': 'XMLHttpRequest',
-    'Access-Token': access_token,
-    'AppKey': APPKEY_WEB,
-    'vds-id': accountId,
-    'Account-Id': accountId,
-    'channel': 'web',
-    'Req-App-Id': 'Royal.Web.PlanMyCruise',
-    'Req-App-Vers': '1.81.3',
-    'Content-Type': 'application/json',
-    'Origin': 'https://www.royalcaribbean.com',
-    'DNT': '1',
-    'Sec-GPC': '1',
-    'Connection': 'keep-alive',
-    'Referer': 'https://www.royalcaribbean.com/',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'cross-site',
-    'Priority': 'u=0',
-    # Requests doesn't support trailers
-    # 'TE': 'trailers',
-    }
-
-    params = {
-        'sailingId': ship + startDate,
-        'currencyIso': currency,
-        'categoryId': prefix,
-    }
-
-
-    json_data = {
-        'productCode': product,
-        'quantity': quantity,
-        'signOnReservationId': reservationId,
-        'signOnPassengerId': passengerId,
-        'guests': [
-            {
-                'id': passengerId,
-                'firstName': guest.get("firstName"),
-                'lastName': guest.get("lastName"),
-                'selected': False,
-                'dob': guest.get("dob"),
-                'reservationId': reservationId,
-                'attachedToReservation': False,
-            },
-        ],
-        'offeringId': product,
-    }
-
-    try:
-        response = requests.post(
-            'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/price',
-            params=params,
-            headers=headers,
-            json=json_data,
-        )
-    except Exception as e:
-        log(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
-
-    payload = response.json().get("payload")
-    if payload is None:
-        log("Payload Not Returned")
-        return
-
-    unitType = payload.get("prices")[0].get("unitType")
-
-    if unitType in [ 'perNight', 'perDay' ]:
-        price = payload.get("prices")[0].get("promoDailyPrice")
-    else:
-        price = payload.get("prices")[0].get("promoPrice")
-
-    log(f"Paid Price: {paidPrice} Cart Price: {price}")
-
-def getLoyalty(access_token,accountId,session):
-
-    loyaltyNumber = None
-    headers = {
-        'Access-Token': access_token,
-        'AppKey': APPKEY_WEB,
-        'account-id': accountId,
-    }
-
-    try:
-        response = session.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
-
-    loyalty = response.json().get("payload").get("loyaltyInformation")
-    cAndANumber = loyalty.get("crownAndAnchorId")
-    c_and_a_level = loyalty.get("crownAndAnchorSocietyLoyaltyTier")
-    cAndAPoints = loyalty.get("crownAndAnchorSocietyLoyaltyIndividualPoints")
-    cAndASharedPoints = loyalty.get("crownAndAnchorSocietyLoyaltyRelationshipPoints")
-
-    if cAndANumber is not None and cAndASharedPoints is not None and cAndASharedPoints > 0:
-        print(f"\tC&A: {cAndANumber} {c_and_a_level} - {cAndASharedPoints} Shared Points ({cAndAPoints} Individual Points)")
-        loyaltyNumber = cAndANumber
-
-    clubRoyaleLoyaltyIndividualPoints = loyalty.get("clubRoyaleLoyaltyIndividualPoints")
-    if clubRoyaleLoyaltyIndividualPoints is not None and clubRoyaleLoyaltyIndividualPoints > 0:
-        clubRoyaleLoyaltyTier = loyalty.get("clubRoyaleLoyaltyTier")
-        print(f"\tCasino Royale Tier: {clubRoyaleLoyaltyTier} - {clubRoyaleLoyaltyIndividualPoints} Credits")
-
-    captainsClubId = loyalty.get("captainsClubId")
-    if captainsClubId is not None:
-        captainsClubLoyaltyTier = loyalty.get("captainsClubLoyaltyTier")
-        captainsClubLoyaltyIndividualPoints = loyalty.get("captainsClubLoyaltyIndividualPoints")
-        captainsClubLoyaltyRelationshipPoints = loyalty.get("captainsClubLoyaltyRelationshipPoints")
-        print(f"\tCaptain's Club Number: {captainsClubId} {captainsClubLoyaltyTier} TIER ({captainsClubLoyaltyRelationshipPoints} Shared Points, {captainsClubLoyaltyIndividualPoints} Individual Points)")
-        loyaltyNumber = captainsClubId
-        print("Using Captains Club Id To Check Cruise Prices")
-
-    celebrityBlueChipLoyaltyIndividualPoints = loyalty.get("celebrityBlueChipLoyaltyIndividualPoints")
-    if celebrityBlueChipLoyaltyIndividualPoints is not None and celebrityBlueChipLoyaltyIndividualPoints > 0:
-        clubRoyaleLoyaltyTier = loyalty.get("celebrityBlueChipLoyaltyTier","Unknown")
-        print(f"\tBlue Chip Tier: {clubRoyaleLoyaltyTier} - {celebrityBlueChipLoyaltyIndividualPoints} Credits")
-
-    return loyaltyNumber
-
-def getShipDictionary():
-
-    headers = {
-        'appkey': appkey_mobile,
-        'accept': 'application/json',
-        'appversion': appversion_mobile,
-        'accept-language': 'en',
-        'user-agent': user_agent_mobile,
-    }
-
-    params = {
-        'sort': 'name',
-    }
-
-    try:
-        response = requests.get('https://api.rccl.com/en/all/mobile/v2/ships', params=params, headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
-
-    ships = response.json().get("payload").get("ships")
-
-    shipCodes = {}
-    for ship in ships:
-        shipCode = ship.get("shipCode")
-        name = ship.get("name")
-        shipCodes[shipCode] = name
-    return shipCodes
-
-def getRoyalUp(access_token,accountId,cruiseLineName,session,apobj):
-    # Unused, need javascript parsing to see offer
-    # Could notify when Royal Up is available, but not too useful.
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.5',
-        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'X-Requested-With': 'XMLHttpRequest',
-        'AppKey': 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm',
-        'Access-Token': access_token,
-        'vds-id': accountId,
-        'Account-Id': accountId,
-        'X-Request-Id': '67e0a0c8e15b1c327581b154',
-        'Req-App-Id': 'Royal.Web.PlanMyCruise',
-        'Req-App-Vers': '1.73.0',
-        'Content-Type': 'application/json',
-        'Origin': 'https://www.'+cruiseLineName+'.com',
-        'DNT': '1',
-        'Sec-GPC': '1',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.'+cruiseLineName+'.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        'Priority': 'u=0',
-        # Requests doesn't support trailers
-        # 'TE': 'trailers',
-    }
-
-    try:
-        response = requests.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/upgrades', headers=headers)
-    except Exception as e:
-        print(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
-
-    for booking in response.json().get("payload"):
-        print( booking.get("bookingId") + " " + booking.get("offerUrl") )
-
-
-def get_cruise_price_from_API(
-    currency: str,
-    package_code: str,
-    sail_date: str,
-    booking_type: str,
-    num_adults: Union[int, str],
-    num_children: Union[int, str]
-) -> None:
-    """
-    High-level orchestration manager that pulls live retail cabin pricing directly via the API.
-
-    Acts as the main bridge between raw parsed parameters and structural request assemblies.
-    Pre-formats inventory query arrays and submits them through the target pricing API
-    endpoint to calculate current base fares, port taxes, and total room options.
-    """
-    cookies: Dict[str, str] = {
-        'currency': currency,
-    }
-
-    # Custom headers requested specifically by this GraphQL engine endpoint
-    headers: Dict[str, str] = {
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'currency': currency,
-    }
-
-    filter_string: str = f"id:{package_code}|adults:{num_adults}|children:{num_children}|startDate:{sail_date}~{sail_date}"
-
-    json_data: Dict[str, Any] = {
-        'operationName': 'cruiseSearch_Cruises',
-        'variables': {
-            'filters': filter_string,
-            'enableNewCasinoExperience': False,
-            'sort': {
-                'by': 'RECOMMENDED',
-            },
-            'pagination': {
-                'count': 100,
-                'skip': 0,
-            },
-        },
-        'query': 'query cruiseSearch_Cruises($filters: String) {cruiseSearch(filters: $filters) {results {cruises {id sailings {sailDate stateroomClassPricing {price {value currency { code }} stateroomClass {id name content { code } }}}}}}}',
-    }
-
-    # Route using the centralized execution platform
-    # Passing cookies as an additional named parameter via keyword args extraction or direct tracking
-    resp = _execute_api_request(
-        account_info=None, # Public consumer catalog endpoint, no authentication required
-        method="POST",
-        url='https://www.royalcaribbean.com/cruises/graph',
-        data=json.dumps(json_data),
-        headers=headers,
-        on_failure="retry" # Prevent a transient pricing lookup failure from killing the tracking pipeline
-    )
-
-    if resp is None:
-        log("\tUnable to fetch public live API pricing stream at this time.")
-        return
-
-    try:
-        response_json = resp.json()
-        cruises = response_json.get("data", {}).get("cruiseSearch", {}).get("results", {}).get("cruises", [])
-    except Exception:
-        cruises = []
-
-    if cruises:
-        sailings = cruises[0].get("sailings", [])
-    else:
-        log("         Sailing is sold out")
-        return
-
-    for sailing in sailings:
-        # Standardize matching criteria format
-        current_sail_date: str = sailing.get("sailDate", "")
-        if current_sail_date.replace("-", "") != sail_date and current_sail_date != sail_date:
-            continue
-
-        prices = sailing.get("stateroomClassPricing", [])
-        for price in prices:
-            stateroom_class = price.get("stateroomClass", {})
-            content_struct = stateroom_class.get("content", {}) if stateroom_class else {}
-            cabin_code = content_struct.get("code") if content_struct else None
-
-            if cabin_code == booking_type:
-                post_string = " (your current room class) "
-            else:
-                post_string = ""
-
-            cabin_type = stateroom_class.get("name", "Unknown Type") if stateroom_class else "Unknown Type"
-            price_data = price.get("price")
-
-            if price_data is None:
-                log(f"\t\t{cabin_type} sold out")
-            else:
-                num_passengers = int(num_adults) + int(num_children)
-                total_cabin_cost = float(price_data.get("value", 0.0)) * num_passengers
-                log(f"\t\t{total_cabin_cost} {currency}: Cheapest {cabin_type} Price for {num_passengers}" + post_string)
-
-
-####################################
-# End Dead/Obsolete/Unused functions
-####################################
-'''
 #####################################
 # Main execution path and Run Control
 #####################################

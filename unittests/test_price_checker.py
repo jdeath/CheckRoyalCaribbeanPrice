@@ -38,13 +38,13 @@ from CheckRoyalCaribbeanPrice import (
     DiscountProfile,
     ShipRegistry,
     WatchItemContext,
+    _booking_country_code,
     _build_checkout_url,
     _calculate_passenger_metrics,
     _execute_api_request,
     _extract_json_array,
     above_age_on_sail_date,
     check_if_room_is_available,
-    config,
     derive_balance_due,
     get_all_promotions,
     get_club_royale_tier,
@@ -2650,7 +2650,6 @@ def test_login_failure_logs_server_error_body_and_scrubs_password():
     makes login failures undiagnosable from a run log. login() must surface
     the server's own error text -- with the password scrubbed if it ever
     appears in the response."""
-    import CheckRoyalCaribbeanPrice as C
 
     account_info = AccountInfo(username="someone@example.com", password="pa55!word", cruise_line="royal")
 
@@ -2662,10 +2661,10 @@ def test_login_failure_logs_server_error_body_and_scrubs_password():
     mock_session.post.return_value = bad_response
 
     logged: list[str] = []
-    with patch.object(C, "new_api_session", return_value=mock_session), \
-         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))):
+    with patch("CheckRoyalCaribbeanPrice.new_api_session", return_value=mock_session), \
+         patch("CheckRoyalCaribbeanPrice.log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))):
         with pytest.raises(SystemExit):
-            C.login(account_info)
+            login(account_info)
 
     joined = "\n".join(logged)
     assert "invalid_grant" in joined, "the server's OAuth error must reach the run log"
@@ -2676,7 +2675,6 @@ def test_login_failure_logs_server_error_body_and_scrubs_password():
 def test_login_failure_scrubs_password_echoed_in_body():
     """Defensive: if the endpoint ever echoes the submitted password back in
     an error body, it must not land in the log."""
-    import CheckRoyalCaribbeanPrice as C
 
     account_info = AccountInfo(username="someone@example.com", password="pa55!word", cruise_line="royal")
 
@@ -2688,10 +2686,10 @@ def test_login_failure_scrubs_password_echoed_in_body():
     mock_session.post.return_value = bad_response
 
     logged: list[str] = []
-    with patch.object(C, "new_api_session", return_value=mock_session), \
-         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))):
+    with patch("CheckRoyalCaribbeanPrice.new_api_session", return_value=mock_session), \
+         patch("CheckRoyalCaribbeanPrice.log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))):
         with pytest.raises(SystemExit):
-            C.login(account_info)
+            login(account_info)
 
     joined = "\n".join(logged)
     assert "pa55!word" not in joined
@@ -2824,7 +2822,6 @@ def test_booking_country_code_is_normalised_and_blank_market_falls_through():
     """The checkout API rejects anything but ^[A-Z]{3}$, so a padded or
     lower-case market code must be normalised, and a whitespace-only market
     code must not beat a real office code."""
-    from CheckRoyalCaribbeanPrice import _booking_country_code
 
     assert _booking_country_code({"bookingMarketCountryCode": " chs ", "bookingOfficeCountryCode": "DEU"}) == "CHS"
     assert _booking_country_code({"bookingMarketCountryCode": "   ", "bookingOfficeCountryCode": "deu"}) == "DEU"
