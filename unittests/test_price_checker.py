@@ -2843,23 +2843,38 @@ class TestFinalPaymentDate:
     # 1. Market Lead Time Resolution
     # -------------------------------------------------------------------------
     def test_dach_market_flat_30_days(self):
-        """DEU, CHE, and AUT should always return 30 days regardless of cruise length."""
-        for code in ["DEU", "CHE", "AUT", "deu", "che"]:
+        """DEU, CHE, NOR, SWE, DNK, and FIN should always return 30 days regardless of cruise length."""
+        for code in ["DEU", "CHE", "NOR", "SWE", "DNK", "FIN", "DE", "CH", "NO", "SE", "DK", "FI", "deu", "che"]:
             assert resolve_lead_time(3, code) == 30
             assert resolve_lead_time(7, code) == 30
             assert resolve_lead_time(16, code) == 30
 
+    def test_aut_market_tiered_rules(self):
+        """AUT and AT should return 15 days for <=14 nights, 120 days for longer sailings."""
+        for code in ["AUT", "AT"]:
+            assert resolve_lead_time(7, code) == 15
+            assert resolve_lead_time(14, code) == 15
+            assert resolve_lead_time(15, code) == 120
+
     def test_uk_market_tiered_rules(self):
-        """GBR and IRL should return 56 days for <=14 nights, 70 days for longer sailings."""
-        assert resolve_lead_time(7, "GBR") == 56
-        assert resolve_lead_time(14, "GBR") == 56
-        assert resolve_lead_time(15, "GBR") == 70
-        assert resolve_lead_time(21, "IRL") == 70
+        """GBR, IRL, UK, GB, and IE should return 56 days for <=14 nights, 70 days for longer sailings."""
+        for code in ["GBR", "UK", "IRL", "IE", "GB"]:
+            assert resolve_lead_time(7, code) == 56
+            assert resolve_lead_time(14, code) == 56
+            assert resolve_lead_time(15, code) == 70
+
+    def test_aus_market_tiered_rules(self):
+        """AUS, AU, NZL, and NZ should return 90 days for <=14 nights, 120 days for longer sailings."""
+        for code in ["AUS", "AU", "NZL", "NZ"]:
+            assert resolve_lead_time(3, code) == 90
+            assert resolve_lead_time(7, code) == 90
+            assert resolve_lead_time(15, code) == 120
 
     def test_us_market_and_default_fallback(self):
         """US code or missing/unknown code should follow US duration tiers (75/90/120)."""
-        for code in ["US", None, "UNKNOWN_CODE"]:
+        for code in ["US", "USA", "CAN", "CA", None, "UNKNOWN_CODE"]:
             assert resolve_lead_time(3, code) == 75
+            assert resolve_lead_time(4, code) == 75
             assert resolve_lead_time(7, code) == 90
             assert resolve_lead_time(15, code) == 120
 

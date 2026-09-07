@@ -45,7 +45,6 @@ from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
-#from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 
@@ -99,17 +98,36 @@ DurationRules = list[Tuple[float, int]]
 # Market-specific final payment lead times (days before departure)
 # Flat integer for markets with uniform policies; duration-tiered lists for others.
 MARKET_RULES: dict[str, Union[int, DurationRules]] = {
-    # German-speaking Europe (DACH region): flat 30 days
-    "DEU": 30,
-    "CHE": 30,
-    "AUT": 30,
+    # Central & Northern European markets: flat 30 days
+    "DEU": 30, "DE": 30,  # Germany
+    "CHE": 30, "CH": 30,  # Switzerland
+    "NOR": 30, "NO": 30,  # Norway
+    "SWE": 30, "SE": 30,  # Sweden
+    "DNK": 30, "DK": 30,  # Denmark
+    "FIN": 30, "FI": 30,  # Finland
+
+    # Austria: 15 days for 1-14 nights; 120 days for 15+ nights
+    "AUT": [(14, 15), (float("inf"), 120)],
+    "AT":  [(14, 15), (float("inf"), 120)],
 
     # UK & Ireland: 56 days (8 weeks) for standard sailings, 70 days for 15+ nights
     "GBR": [(14, 56), (float("inf"), 70)],
+    "GB":  [(14, 56), (float("inf"), 70)],
+    "UK":  [(14, 56), (float("inf"), 70)],
     "IRL": [(14, 56), (float("inf"), 70)],
+    "IE":  [(14, 56), (float("inf"), 70)],
+
+    # Australia & New Zealand: 90 days for standard sailings, 120 days for 15+ nights
+    "AUS": [(14, 90), (float("inf"), 120)],
+    "AU":  [(14, 90), (float("inf"), 120)],
+    "NZL": [(14, 90), (float("inf"), 120)],
+    "NZ":  [(14, 90), (float("inf"), 120)],
 
     # Default / US / North America rules (1-4 nights: 75 days, 5-14: 90 days, 15+: 120 days)
-    "US": [(4, 75), (14, 90), (float("inf"), 120)],
+    "USA": [(4, 75), (14, 90), (float("inf"), 120)],
+    "US":  [(4, 75), (14, 90), (float("inf"), 120)],
+    "CAN": [(4, 75), (14, 90), (float("inf"), 120)],
+    "CA":  [(4, 75), (14, 90), (float("inf"), 120)],
 }
 
 # ANSI color codes
