@@ -30,6 +30,9 @@ from CheckRoyalCaribbeanPrice import (
 # ITEM 19 TESTS PAYMENT TABLE BALANCE-DUE TRI-STATE
 # ITEM 20 TESTS API TIMEOUT / RETRY CONSTANTS
 # ITEM 21 TESTS: TA / AGENCY BOOKING BALANCE DUE FALLBACK LOGIC
+# ITEM 22 TESTS: TA BOOKINGS WITHOUT bookingOfficeCountryCode (checkout URL None params)
+# ITEM 23 TESTS: LOGIN FAILURE DIAGNOSTICS (OAuth error body surfaced)
+# ITEM 24 TESTS: MARKET COUNTRY CODE PREFERRED OVER BOOKING OFFICE COUNTRY CODE
     AccountInfo,
     APIAccess,
     CheckinPaymentTracker,
@@ -60,7 +63,8 @@ from CheckRoyalCaribbeanPrice import (
     get_voyages,
     load_config_objects,
     login,
-    parse_provided_URL
+    parse_provided_URL,
+    resolve_lead_time
 )
 
 
@@ -2827,3 +2831,571 @@ def test_booking_country_code_is_normalised_and_blank_market_falls_through():
     assert _booking_country_code({"bookingMarketCountryCode": "   ", "bookingOfficeCountryCode": "deu"}) == "DEU"
     assert _booking_country_code({"bookingMarketCountryCode": "", "bookingOfficeCountryCode": ""}) is None
     assert _booking_country_code({}) is None
+
+
+# ======================================================================================
+# ITEM 25 TESTS: xxx
+# ======================================================================================
+class TestFinalPaymentDate:
+    """Unit tests for market-aware final payment calculations and config date overrides."""
+
+    # -------------------------------------------------------------------------
+    # 1. Market Lead Time Resolution
+    # -------------------------------------------------------------------------
+    def test_dach_market_flat_30_days(self):
+        """DEU, CHE, and AUT should always return 30 days regardless of cruise length."""
+        for code in ["DEU", "CHE", "AUT", "deu", "che"]:
+            assert resolve_lead_time(3, code) == 30
+            assert resolve_lead_time(7, code) == 30
+            assert resolve_lead_time(16, code) == 30
+
+    def test_uk_market_tiered_rules(self):
+        """GBR and IRL should return 56 days for <=14 nights, 70 days for longer sailings."""
+        assert resolve_lead_time(7, "GBR") == 56
+        assert resolve_lead_time(14, "GBR") == 56
+        assert resolve_lead_time(15, "GBR") == 70
+        assert resolve_lead_time(21, "IRL") == 70
+
+    def test_us_market_and_default_fallback(self):
+        """US code or missing/unknown code should follow US duration tiers (75/90/120)."""
+        for code in ["US", None, "UNKNOWN_CODE"]:
+            assert resolve_lead_time(3, code) == 75
+            assert resolve_lead_time(7, code) == 90
+            assert resolve_lead_time(15, code) == 120
+
+    # -------------------------------------------------------------------------
+    # 2. get_final_payment_date Date Math
+    # -------------------------------------------------------------------------
+    def test_get_final_payment_date_dach_market(self):
+        """A Dec 31, 2026 sailing in Germany (DEU) should yield Dec 1, 2026 (30 days prior)."""
+        sail_date = "2026-12-31"
+        res = get_final_payment_date(number_of_nights=7, sail_date=sail_date, market_code="DEU")
+        assert res == date(2026, 12, 1)
+
+    def test_get_final_payment_date_us_market(self):
+        """A Dec 31, 2026 7-night sailing in US should yield Oct 2, 2026 (90 days prior)."""
+        sail_date = "2026-12-31"
+        res = get_final_payment_date(number_of_nights=7, sail_date=sail_date, market_code="US")
+        assert res == date(2026, 10, 2)
+
+    # -------------------------------------------------------------------------
+    # 3. Explicit Override (finalPaymentDate)
+    # -------------------------------------------------------------------------
+    def test_date_override_str_iso_format(self):
+        """Explicit ISO date string override takes priority over all market rules."""
+        res = get_final_payment_date(
+            number_of_nights=7,
+            sail_date="2026-12-31",
+            market_code="US",
+            final_payment_date_override="2026-11-15",
+        )
+        assert res == date(2026, 11, 15)
+
+    def test_date_override_str_compact_format(self):
+        """Explicit compact date string YYYYMMDD takes priority."""
+        res = get_final_payment_date(
+            number_of_nights=7,
+            sail_date="2026-12-31",
+            market_code="US",
+            final_payment_date_override="20261115",
+        )
+        assert res == date(2026, 11, 15)
+
+    def test_date_override_date_object(self):
+        """Explicit date object override passes through cleanly."""
+        override_dt = date(2026, 11, 15)
+        res = get_final_payment_date(
+            number_of_nights=7,
+            sail_date="2026-12-31",
+            market_code="US",
+            final_payment_date_override=override_dt,
+        )
+        assert res == override_dt
+
+    def test_date_override_invalid_string_raises(self):
+        """Malformed override string raises ValueError defensively."""
+        with pytest.raises(ValueError, match="Invalid finalPaymentDate"):
+            get_final_payment_date(
+                number_of_nights=7,
+                sail_date="2026-12-31",
+                final_payment_date_override="invalid-date",
+            )
+
+        # -------------------------------------------------------------------------
+        # 4. Integration: get_cruise_price Dictionary Processing
+        # -------------------------------------------------------------------------
+        @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
+        @patch("CheckRoyalCaribbeanPrice.notifier_for")
+        def test_get_cruise_price_processes_market_and_override(self, mock_notifier, mock_api_pricing):
+            """Verify get_cruise_price extracts market_code and finalPaymentDate override correctly."""
+            mock_api_pricing.return_value = {
+                "room_available": True,
+                "sailing_nights": 7,
+                "prices": {"stateroomPrice": 1000.0, "taxesAndFees": 100.0},
+            }
+
+            mock_account = MagicMock()
+            mock_account.access.session = MagicMock()
+
+            mock_ship_registry = MagicMock()
+            mock_ship_registry.get_ship.return_value = "Test Ship"
+
+            # Target sailing: Dec 31, 2026 (7 nights)
+            # US default (90 days) -> Oct 2, 2026
+            # DEU market (30 days) -> Dec 1, 2026
+            # Override ("2026-11-15") -> Nov 15, 2026
+            booking_payload = {
+                "bookingId": "TEST12345",
+                "sailDate": "20261231",
+                "stateroomSubtype": "D1",
+                "bookingOfficeCountryCode": "DEU",
+                "passengers": [{"stateroomCategoryCode": "BALCONY", "birthdate": "19800101"}],
+            }
+
+            # Case A: Market code DEU from booking yields Dec 1, 2026
+            with patch("CheckRoyalCaribbeanPrice.get_final_payment_date", wraps=get_final_payment_date) as spy_get_fp:
+                get_cruise_price(
+                    account_info=mock_account,
+                    booking=booking_payload,
+                    ship_dictionary=mock_ship_registry,
+                    paid_price_struct={"paidPrice": 1200.0, "duration": 7},
+                )
+                spy_get_fp.assert_called_once()
+                _, kwargs = spy_get_fp.call_args
+                assert kwargs.get("market_code") == "DEU"
+                assert spy_get_fp.spy_return == date(2026, 12, 1)
+
+            # Case B: Explicit finalPaymentDate in paid_price_struct takes absolute priority
+            paid_struct_with_override = {
+                "paidPrice": 1200.0,
+                "duration": 7,
+                "finalPaymentDate": "2026-11-15",
+            }
+
+            with patch("CheckRoyalCaribbeanPrice.get_final_payment_date", wraps=get_final_payment_date) as spy_get_fp:
+                get_cruise_price(
+                    account_info=mock_account,
+                    booking=booking_payload,
+                    ship_dictionary=mock_ship_registry,
+                    paid_price_struct=paid_struct_with_override,
+                )
+                spy_get_fp.assert_called_once()
+                _, kwargs = spy_get_fp.call_args
+                assert kwargs.get("final_payment_date_override") == "2026-11-15"
+            assert spy_get_fp.spy_return == date(2026, 11, 15)
+
+    @patch("CheckRoyalCaribbeanPrice.config")
+    @patch("CheckRoyalCaribbeanPrice._execute_api_request")
+    @patch("CheckRoyalCaribbeanPrice.get_dining_and_prices")
+    @patch("CheckRoyalCaribbeanPrice.get_final_payment_date")
+    def test_integration_get_voyages_passes_regional_market_code(
+        self, mock_get_final_payment, mock_dining, mock_fetch_voyages, mock_config
+    ):
+        """Verify get_voyages extracts regional market codes (e.g. UK/GBR) and propagates them into get_final_payment_date."""
+        mock_config.date_display_format = "%Y-%m-%d"
+        mock_config.reservation_names = {}
+        mock_config.paid_reservations = []
+        mock_config.display_cruise_prices = False
+        mock_config.show_promos = False
+        mock_config.watch_list = []
+
+        mock_dining.return_value = {"dining_selection": [], "prices": []}
+        mock_get_final_payment.return_value = date(2026, 10, 6)  # Mock 70-day UK window output
+
+        # Response simulating a booking originating from the UK office
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "payload": {
+                "profileBookings": [
+                    {
+                        "bookingId": "UK_INTEG_99",
+                        "shipCode": "AL",
+                        "sailDate": "2026-12-15",
+                        "numberOfNights": "7",
+                        "bookingOfficeCountryCode": "UK",
+                        "finalPaymentDate": None,  # No override; force calculation
+                    }
+                ]
+            }
+        }
+        mock_fetch_voyages.return_value = mock_response
+
+        mock_account = MagicMock()
+        mock_account.is_royal = True
+
+        # Run discovery pipeline
+        get_voyages(
+            account_info=mock_account,
+            discounts=MagicMock(),
+            ship_dictionary=MagicMock(),
+        )
+
+        # Confirm get_final_payment_date was invoked with regional market context
+        mock_get_final_payment.assert_called_once_with(
+            7,
+            "2026-12-15",
+            market_code="UK",
+            final_payment_date_override=None,
+        )
+
+
+class TestFinalPaymentIntegration:
+    # -------------------------------------------------------------------------
+    # 1. Direct Contract Tests for get_final_payment_date
+    # -------------------------------------------------------------------------
+    def test_get_final_payment_date_override_takes_precedence(self):
+        """Explicit final payment date string overrides default night-based calculations."""
+        override_str = "2026-11-15"
+        sail_date_str = "2027-04-01"
+
+        resolved = get_final_payment_date(
+            number_of_nights=7,
+            sail_date=sail_date_str,
+            final_payment_date_override=override_str,
+        )
+        assert resolved == date(2026, 11, 15)
+
+    def test_get_final_payment_date_market_code_handling(self):
+        """Passing market_code properly adjusts payment windows if configured."""
+        sail_date_str = "2027-06-01"
+        # Standard calculation test
+        resolved = get_final_payment_date(
+            number_of_nights=7,
+            sail_date=sail_date_str,
+            market_code="US",
+        )
+        assert isinstance(resolved, date)
+        assert resolved < date(2027, 6, 1)
+
+    # -------------------------------------------------------------------------
+    # 2. Integration Test via get_voyages
+    # -------------------------------------------------------------------------
+    @patch("CheckRoyalCaribbeanPrice.config")
+    @patch("CheckRoyalCaribbeanPrice.log")
+    @patch("CheckRoyalCaribbeanPrice.notifier_for")
+    @patch("CheckRoyalCaribbeanPrice._execute_api_request")
+    @patch("CheckRoyalCaribbeanPrice._calculate_passenger_metrics")
+    @patch("CheckRoyalCaribbeanPrice.get_dining_and_prices")
+    @patch("CheckRoyalCaribbeanPrice.get_final_payment_date")
+    @patch("CheckRoyalCaribbeanPrice.get_orders")
+    def test_get_voyages_passes_market_and_override_to_payment_calc(
+        self,
+        mock_get_orders,
+        mock_get_final_payment,
+        mock_dining,
+        mock_calc_metrics,
+        mock_api,
+        mock_notifier,
+        mock_log,
+        mock_config,
+    ):
+        """Verify get_voyages correctly extracts market_code and override from booking."""
+        # Setup config defaults
+        mock_config.date_display_format = "%Y-%m-%d"
+        mock_config.reservation_names = {}
+        mock_config.paid_reservations = []
+        mock_config.display_cruise_prices = False
+        mock_config.show_promos = False
+        mock_config.watch_list = []
+        mock_config.format_date.side_effect = lambda d: d
+
+        # Mock passenger metrics return value
+        mock_calc_metrics.return_value = {
+            "passenger_names": "John Doe",
+            "checkin_string": "Checked in",
+            "boarding_time": "11:00 AM",
+            "category_code": None,
+        }
+
+        # Setup mock booking payload with override and country code
+        mock_api.return_value.json.return_value = {
+            "payload": {
+                "profileBookings": [
+                    {
+                        "bookingId": "1001",
+                        "sailDate": "2027-01-15",
+                        "numberOfNights": "7",
+                        "shipCode": "SY",
+                        "bookingOfficeCountryCode": "UK",
+                        "finalPaymentDate": "2026-10-15",
+                    }
+                ]
+            }
+        }
+        mock_dining.return_value = {"dining_selection": [], "prices": []}
+        mock_get_final_payment.return_value = date(2026, 10, 15)
+
+        mock_account = MagicMock()
+        mock_account.is_royal = True
+        mock_account.access.id = "ACC_1"
+
+        # Execute get_voyages
+        get_voyages(
+            account_info=mock_account,
+            discounts=MagicMock(),
+            ship_dictionary=MagicMock(),
+        )
+
+        # Assert get_final_payment_date received exact expected parameters
+        mock_get_final_payment.assert_called_once_with(
+            7,
+            "2027-01-15",
+            market_code="UK",
+            final_payment_date_override="2026-10-15",
+        )
+
+    # -------------------------------------------------------------------------
+    # 3. Integration Test via get_cruise_price
+    # -------------------------------------------------------------------------
+    @patch("CheckRoyalCaribbeanPrice.config")
+    @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
+    @patch("CheckRoyalCaribbeanPrice._build_checkout_url")
+    @patch("CheckRoyalCaribbeanPrice.parse_provided_URL")
+    @patch("CheckRoyalCaribbeanPrice.get_final_payment_date")
+    def test_get_cruise_price_handles_malformed_dates_gracefully(
+        self,
+        mock_get_final_payment,
+        mock_parse_url,
+        mock_build_url,
+        mock_get_room_price,
+        mock_config,
+    ):
+        """Verify get_cruise_price catches exceptions from bad sail_dates and passes market_code."""
+        mock_config.date_display_format = "%Y-%m-%d"
+        mock_build_url.return_value = "https://mock.rccl.com"
+
+        # Setup URL params with invalid sail date and US market location
+        mock_params = MagicMock()
+        mock_params.sail_date = "INVALID_DATE"
+        mock_params.ship_code = "AL"
+        mock_params.duration = 7
+        mock_params.market_code = "US"
+        mock_params.coupon_code = None
+        mock_parse_url.return_value = mock_params
+
+        # Force get_final_payment_date to raise ValueError on bad string input
+        mock_get_final_payment.side_effect = ValueError("Invalid date format")
+
+        mock_get_room_price.return_value = {
+            "room_available": False  # Triggers Path 1 log output
+        }
+
+        mock_account = MagicMock()
+        mock_account.username = "tester"
+
+        booking = {
+            "bookingId": "2002",
+            "sailDate": "INVALID_DATE",
+            "shipCode": "AL",
+            "url": "https://mock.rccl.com?sailDate=INVALID_DATE",
+        }
+
+        # Should execute without raising ValueError or TypeError
+        get_cruise_price(
+            account_info=mock_account,
+            booking=booking,
+            ship_dictionary=MagicMock(),
+            automatic_URL=True,
+        )
+
+        # Assert get_final_payment_date was called with the bad date and market code
+        mock_get_final_payment.assert_called_once()
+        args, kwargs = mock_get_final_payment.call_args
+
+        assert "INVALID_DATE" in args or kwargs.get("sail_date") == "INVALID_DATE"
+        assert kwargs.get("market_code") == "US" or "US" in args
+
+    # -------------------------------------------------------------------------
+    # 4. Integration Tests: Valid Sail Dates & Non-US Markets
+    # -------------------------------------------------------------------------
+    @patch("CheckRoyalCaribbeanPrice.config")
+    @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
+    @patch("CheckRoyalCaribbeanPrice._build_checkout_url")
+    @patch("CheckRoyalCaribbeanPrice.parse_provided_URL")
+    @patch("CheckRoyalCaribbeanPrice.get_final_payment_date")
+    def test_get_cruise_price_passes_gbr_market_code_to_payment_calc(
+        self,
+        mock_get_final_payment,
+        mock_parse_url,
+        mock_build_url,
+        mock_get_room_price,
+        mock_config,
+    ):
+        """Verify get_cruise_price extracts market_code='GBR' and passes it to get_final_payment_date."""
+        mock_config.date_display_format = "%Y-%m-%d"
+        mock_config.minimum_saving_alert = 10.0
+        mock_build_url.return_value = "https://mock.rccl.com"
+
+        # Setup URL params for a valid UK/GBR booking
+        mock_params = MagicMock()
+        mock_params.sail_date = "2027-06-15"
+        mock_params.ship_code = "AL"
+        mock_params.duration = 7
+        mock_params.market_code = "GBR"
+        mock_params.coupon_code = None
+        mock_parse_url.return_value = mock_params
+
+        # Return a valid calculated date
+        mock_get_final_payment.return_value = date(2027, 4, 6)
+
+        mock_get_room_price.return_value = {
+            "room_available": True,
+            "base_fare": {"fare": 800.0, "gratuities": 0.0, "insurance": 0.0, "obc": "0.0"},
+        }
+
+        booking = {
+            "bookingId": "3003",
+            "sailDate": "2027-06-15",
+            "shipCode": "AL",
+            "marketCode": "GBR",
+            "url": "https://mock.rccl.com?sailDate=2027-06-15&marketCode=GBR",
+            "paidPriceStruct": {"paid_price": 1000.0},
+        }
+
+        get_cruise_price(
+            account_info=MagicMock(),
+            booking=booking,
+            ship_dictionary=MagicMock(),
+            automatic_URL=True,
+        )
+
+        # Assert get_final_payment_date received sail_date and market_code='GBR'
+        mock_get_final_payment.assert_called_once()
+        args, kwargs = mock_get_final_payment.call_args
+
+        assert "2027-06-15" in args or kwargs.get("sail_date") == "2027-06-15"
+        assert kwargs.get("market_code") == "GBR" or "GBR" in args
+
+    @patch("CheckRoyalCaribbeanPrice.config")
+    @patch("CheckRoyalCaribbeanPrice.log")
+    @patch("CheckRoyalCaribbeanPrice.notifier_for")
+    @patch("CheckRoyalCaribbeanPrice._execute_api_request")
+    @patch("CheckRoyalCaribbeanPrice._calculate_passenger_metrics")
+    @patch("CheckRoyalCaribbeanPrice.get_dining_and_prices")
+    @patch("CheckRoyalCaribbeanPrice.get_final_payment_date")
+    @patch("CheckRoyalCaribbeanPrice.get_orders")
+    def test_get_voyages_passes_gbr_market_code_to_payment_calc(
+        self,
+        mock_get_orders,
+        mock_get_final_payment,
+        mock_dining,
+        mock_calc_metrics,
+        mock_api,
+        mock_notifier,
+        mock_log,
+        mock_config,
+    ):
+        """Verify get_voyages passes market_code='GBR' to get_final_payment_date for tracked UK voyages."""
+        mock_config.date_display_format = "%Y-%m-%d"
+        mock_config.reservation_names = {}
+        mock_config.paid_reservations = []
+        mock_config.display_cruise_prices = False
+        mock_config.show_promos = False
+        mock_config.watch_list = []
+        mock_config.format_date.side_effect = lambda d: d
+
+        mock_calc_metrics.return_value = {
+            "passenger_names": "Jane Doe",
+            "checkin_string": "Not Checked In",
+            "boarding_time": "12:00 PM",
+            "category_code": None,
+        }
+
+        mock_api.return_value.json.return_value = {
+            "payload": {
+                "profileBookings": [
+                    {
+                        "bookingId": "UK999",
+                        "sailDate": "2027-06-15",
+                        "numberOfNights": "7",
+                        "shipCode": "SY",
+                        "bookingOfficeCountryCode": "GBR",
+                    }
+                ]
+            }
+        }
+        mock_dining.return_value = {"dining_selection": [], "prices": []}
+        mock_get_final_payment.return_value = date(2027, 4, 6)
+
+        mock_account = MagicMock()
+        mock_account.is_royal = True
+        mock_account.access.id = "ACC_UK"
+
+        get_voyages(
+            account_info=mock_account,
+            discounts=MagicMock(),
+            ship_dictionary=MagicMock(),
+        )
+
+        mock_get_final_payment.assert_called_once_with(
+            7,
+            "2027-06-15",
+            market_code="GBR",
+            final_payment_date_override=None,
+        )
+
+import pytest
+from datetime import date
+from CheckRoyalCaribbeanPrice import get_final_payment_date, resolve_lead_time
+
+
+class TestFinalPaymentDateOverrides:
+    """Test suite for market rules and explicit overrides in get_final_payment_date."""
+
+    def test_integer_days_override(self):
+        """Verify an explicit integer override (e.g. 30 days) subtracts directly from sail date."""
+        sail_date = date(2026, 12, 31)
+        # 30 days before Dec 31, 2026 is Dec 1, 2026
+        calculated = get_final_payment_date(
+            number_of_nights=7,
+            sail_date=sail_date,
+            final_payment_date_override=30,
+        )
+        assert calculated == date(2026, 12, 1)
+
+    def test_string_integer_days_override(self):
+        """Verify a string representation of lead-days ("45") is correctly parsed as an integer offset."""
+        sail_date = "2026-12-31"
+        # 45 days before Dec 31, 2026 is Nov 16, 2026
+        calculated = get_final_payment_date(
+            number_of_nights=7,
+            sail_date=sail_date,
+            final_payment_date_override="45",
+        )
+        assert calculated == date(2026, 11, 16)
+
+    def test_explicit_date_string_override(self):
+        """Verify explicit ISO date strings override market calculations."""
+        sail_date = "2026-12-31"
+        calculated = get_final_payment_date(
+            number_of_nights=7,
+            sail_date=sail_date,
+            final_payment_date_override="2026-11-30",
+        )
+        assert calculated == date(2026, 11, 30)
+
+    @pytest.mark.parametrize(
+        "market_code, nights, expected_days",
+        [
+            ("DEU", 7, 30),      # DACH flat 30-day window
+            ("CHE", 14, 30),     # Switzerland flat 30-day window
+            ("GBR", 7, 56),      # UK standard 8-week window
+            ("GBR", 16, 70),     # UK long sailing 70-day window
+            ("US", 3, 75),       # US short sailing
+            ("US", 7, 90),       # US standard sailing
+            ("US", 15, 120),     # US long sailing
+        ],
+    )
+    def test_market_code_resolution(self, market_code, nights, expected_days):
+        """Verify resolve_lead_time picks the correct regional policy window."""
+        assert resolve_lead_time(nights, market_code) == expected_days
+
+    def test_invalid_override_format_raises_value_error(self):
+        """Verify invalid override strings raise a descriptive ValueError."""
+        with pytest.raises(ValueError, match=r"Invalid finalPaymentDate string format"):
+            get_final_payment_date(
+                number_of_nights=7,
+                sail_date="2026-12-31",
+                final_payment_date_override="INVALID_DATE",
+            )

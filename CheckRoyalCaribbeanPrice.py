@@ -1,14 +1,12 @@
 from __future__ import annotations
 import argparse
 import base64
-from contextlib import closing
 import json
 import locale
 import logging
 import os
 import platform
 import re
-import sqlite3
 
 # curl_cffi impersonates a real browser's TLS fingerprint so the cruise line's
 # edge servers do not reject some IPs/systems as bots with 403 Access Denied
@@ -24,6 +22,7 @@ except ImportError:
     requests = plain_requests
     IMPERSONATE_ARGS = {}
 
+import sqlite3
 import sys
 import traceback
 import time
@@ -42,9 +41,11 @@ except ImportError:
     Apprise = None
     NotifyFormat = None
 
+from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
+#from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 
@@ -91,6 +92,25 @@ CHECKOUT_FORBIDDEN_CATEGORY_CODES = (
     set(STATEROOM_TYPE_MAPPING.values()) |
     {"S", "SUITE", "OCEANVIEW", "NONE"}
 )
+
+# Type alias for duration-based lead-time rules: list of (max_nights, days_before)
+DurationRules = list[Tuple[float, int]]
+
+# Market-specific final payment lead times (days before departure)
+# Flat integer for markets with uniform policies; duration-tiered lists for others.
+MARKET_RULES: dict[str, Union[int, DurationRules]] = {
+    # German-speaking Europe (DACH region): flat 30 days
+    "DEU": 30,
+    "CHE": 30,
+    "AUT": 30,
+
+    # UK & Ireland: 56 days (8 weeks) for standard sailings, 70 days for 15+ nights
+    "GBR": [(14, 56), (float("inf"), 70)],
+    "IRL": [(14, 56), (float("inf"), 70)],
+
+    # Default / US / North America rules (1-4 nights: 75 days, 5-14: 90 days, 15+: 120 days)
+    "US": [(4, 75), (14, 90), (float("inf"), 120)],
+}
 
 # ANSI color codes
 RESET = '\033[0m' # Resets color to default
@@ -669,6 +689,18 @@ class PriceHistory:
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
+    def _insert(self, **fields: Any) -> None:
+        fields.setdefault("observed_at", datetime.now(timezone.utc).isoformat())
+        fields["run_id"] = self._current_run_id
+        cols = ", ".join(fields)
+        placeholders = ", ".join("?" for _ in fields)
+        try:
+            with closing(self._connect()) as conn:
+                conn.execute(f"INSERT INTO price_points ({cols}) VALUES ({placeholders})", tuple(fields.values()))
+                conn.commit()
+        except (sqlite3.Error, OSError) as e:
+            self._disable(e)
+
     def start_run(self) -> Optional[int]:
         """Opens a new `runs` row and remembers it as the active run."""
         if not self.enabled:
@@ -711,18 +743,6 @@ class PriceHistory:
         if not self.enabled or self._current_run_id is None:
             return
         self._insert(**fields)
-
-    def _insert(self, **fields: Any) -> None:
-        fields.setdefault("observed_at", datetime.now(timezone.utc).isoformat())
-        fields["run_id"] = self._current_run_id
-        cols = ", ".join(fields)
-        placeholders = ", ".join("?" for _ in fields)
-        try:
-            with closing(self._connect()) as conn:
-                conn.execute(f"INSERT INTO price_points ({cols}) VALUES ({placeholders})", tuple(fields.values()))
-                conn.commit()
-        except (sqlite3.Error, OSError) as e:
-            self._disable(e)
 
 
 class CheckinPaymentTracker:
@@ -1035,21 +1055,36 @@ def _discount_flag_on(value: Any) -> bool:
         return True
     return str(value).strip().lower() in ("y", "yes", "true")
 
+def resolve_lead_time(number_of_nights: int, market_code: Optional[str] = None) -> int:
+    """Resolves lead time days using market-specific duration tiers."""
+    code = market_code.upper() if market_code else "US"
+    rule = MARKET_RULES.get(code, MARKET_RULES["US"])
 
-def get_final_payment_date(number_of_nights: int, sail_date: Union[str, date, datetime]) -> date:
-    """
-    Calculates final payment settlement timelines based on duration rules.
+    # If the market has a flat rule (e.g., DEU = 30)
+    if isinstance(rule, int):
+        return rule
 
-    Accepts string timestamps or explicit date objects. Computes strict policy deadlines
-    by calculating offsets from the ship's departure date (75 days for short sailings,
-    90 days for standard voyages, 120 days for extended itineraries).
+    # Otherwise, evaluate duration tiers
+    for max_nights, days in rule:
+        if number_of_nights <= max_nights:
+            return days
+
+    return 90  # Safe fallback
+
+def get_final_payment_date(
+    number_of_nights: int,
+    sail_date: Union[str, date, datetime],
+    market_code: Optional[str] = None,
+    final_payment_date_override: Optional[Union[int, str, date, datetime]] = None,
+) -> date:
     """
-    # Standardize the input into a solid date object defensively
+    Calculates final payment settlement timelines based on duration and market rules,
+    or accepts an explicit date/days override from user config.
+    """
+    # 1. Standardize date_of_sailing first
     if isinstance(sail_date, (datetime, date)):
-        # If it's a datetime, extract just the date portion
         date_of_sailing = sail_date.date() if isinstance(sail_date, datetime) else sail_date
     elif isinstance(sail_date, str):
-        # Strip out any potential dash or slash delimiters left over by the caller
         clean_date_str = sail_date.replace("-", "").replace("/", "")
         try:
             date_of_sailing = datetime.strptime(clean_date_str, "%Y%m%d").date()
@@ -1058,15 +1093,34 @@ def get_final_payment_date(number_of_nights: int, sail_date: Union[str, date, da
     else:
         raise TypeError("sail_date must be a string, date, or datetime object.")
 
-    # Apply final payment window rules (from Royal Caribbean FAQ)
-    if number_of_nights < 5:
-        final_payment_deadline = 75
-    elif number_of_nights < 15:
-        final_payment_deadline = 90
-    else:
-        final_payment_deadline = 120
+    # 2. Highest Priority: Explicit User Date Override
+    if final_payment_date_override is not None:
+        if isinstance(final_payment_date_override, int):
+            return date_of_sailing - timedelta(days=final_payment_date_override)
 
-    return date_of_sailing - timedelta(days=final_payment_deadline)
+        if isinstance(final_payment_date_override, (datetime, date)):
+            return (
+                final_payment_date_override.date()
+                if isinstance(final_payment_date_override, datetime)
+                else final_payment_date_override
+            )
+
+        if isinstance(final_payment_date_override, str):
+            clean_override = final_payment_date_override.strip()
+            if clean_override.isdigit() and len(clean_override) <= 3:
+                return date_of_sailing - timedelta(days=int(clean_override))
+
+            clean_override = clean_override.replace("-", "").replace("/", "")
+            try:
+                return datetime.strptime(clean_override, "%Y%m%d").date()
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid finalPaymentDate string format '{final_payment_date_override}'. Expected YYYY-MM-DD or lead days."
+                ) from e
+
+    # 3. Compute Days Before Departure via Market Rules
+    lead_time_days = resolve_lead_time(number_of_nights, market_code)
+    return date_of_sailing - timedelta(days=lead_time_days)
 
 
 def get_config_path() -> str:
@@ -1611,7 +1665,44 @@ def get_voyages(
         all_included_flag = False
         cruise_paid_price_from_API = result.get("prices", [])
 
-        final_payment_date = get_final_payment_date(number_of_nights, sail_date)
+        # Extract direct YAML overrides for this reservation ID (if configured)
+        # The full reservation_price_paid structure will get extracted later
+        yaml_payment_override = None
+        if isinstance(reservation_price_paid, list):
+            for res_entry in reservation_price_paid:
+                if str(reservation_ID) == str(res_entry.get("reservation")):
+                    yaml_payment_override = (
+                        res_entry.get("finalPaymentDaysBeforeSailing")
+                        or res_entry.get("finalPaymentDate")
+                    )
+                    break
+        elif isinstance(reservation_price_paid, dict) and str(reservation_ID) in reservation_price_paid:
+            res_entry = reservation_price_paid.get(str(reservation_ID))
+            if isinstance(res_entry, dict):
+                yaml_payment_override = (
+                    res_entry.get("finalPaymentDaysBeforeSailing")
+                    or res_entry.get("finalPaymentDate")
+                )
+
+        # Extract booking market indicators
+        market_code = (
+            booking.get("bookingOfficeCountryCode")
+            or booking.get("bookingMarketCountryCode")
+            or booking.get("countryCode")
+        )
+
+        final_payment_override = (
+            yaml_payment_override
+            or booking.get("finalPaymentDaysBeforeSailing")
+            or booking.get("finalPaymentDate")
+        )
+
+        final_payment_date = get_final_payment_date(
+            number_of_nights,
+            sail_date,
+            market_code=market_code,
+            final_payment_date_override=final_payment_override,
+        )
         final_payment_date_display = final_payment_date.strftime(date_display_format)
 
         for cur_price in cruise_paid_price_from_API:
@@ -1938,7 +2029,21 @@ def get_cruise_price(account_info: AccountInfo,
     # A watchlist URL can omit or mangle sailDate; a far-future fallback keeps
     # the "past final payment" comparisons meaning "not past" instead of crashing
     try:
-        final_payment_date = get_final_payment_date(resolved_nights, url_params.sail_date)
+        # Attempt extraction from url_params or booking payload if available in scope
+        market_code = getattr(url_params, "market_code", None)
+        final_payment_override = None
+        if paid_price_struct:
+            final_payment_override = (
+                paid_price_struct.get("finalPaymentDaysBeforeSailing")
+                or paid_price_struct.get("finalPaymentDate")
+            )
+
+        final_payment_date = get_final_payment_date(
+            resolved_nights,
+            url_params.sail_date,
+            market_code=market_code,
+            final_payment_date_override=final_payment_override,
+        )
     except (TypeError, ValueError):
         final_payment_date = date.max
 
