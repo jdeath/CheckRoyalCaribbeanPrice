@@ -13,11 +13,11 @@ test_alert_matrix.py):
     side effect" pattern already used for Apprise (A.5).
 """
 import os
+import pytest
 import sqlite3
+
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from CheckRoyalCaribbeanPrice import (
     AccountInfo,
@@ -496,8 +496,6 @@ def test_price_history_disables_on_midrun_write_failure(tmp_path):
 def test_get_new_order_price_records_not_available_for_passenger():
     """The 'not available for passenger' bail (payload never parsed) is the
     back-in-stock waiting state - it must produce a row, not silence."""
-    import CheckRoyalCaribbeanPrice as crccl
-    from unittest.mock import MagicMock
 
     account = MagicMock()
     account.username = "user@example.com"
@@ -522,7 +520,7 @@ def test_get_new_order_price_records_not_available_for_passenger():
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
          patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=bad_response), \
          patch("CheckRoyalCaribbeanPrice.log"):
-        crccl.get_new_order_price(account, booking, None, ctx)
+        get_new_order_price(account, booking, None, ctx)
 
     mock_cfg.history.record_addon.assert_called_once()
     kwargs = mock_cfg.history.record_addon.call_args.kwargs

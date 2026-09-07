@@ -17,8 +17,14 @@ minimumSavingAlert: 0.00 # Optional, only alert when savings are >= this amount 
 notifyOnError: false # Optional, send Apprise alert if the script fails (default: false)
 requestTimeout: 30 # Optional, seconds to wait for each API response before retrying/giving up (default: 30). Raise this if you see timeout errors
 reservationPricePaid:
-  '1234567': 3989.48
-  '7654321': 2368.38
+  - reservation: '1234567'
+    paidPrice: 3989.48
+  - reservation: '7654321'
+    paidPrice: 2368.38
+    finalPaymentDate: "2026-11-30"   # Optional, override final payment cutoff to a specific YYYY-MM-DD date
+  - reservation: '1111111'
+    paidPrice: 3210.00
+    finalPaymentDaysBeforeSailing: 30 # Optional, override final payment cutoff to N days before sailing
 watchList: # Optional, items to monitor for price drops across all your bookings
   - name: "Deluxe Beverage Package"
     prefix: "pt_beverage"  # Category prefix
