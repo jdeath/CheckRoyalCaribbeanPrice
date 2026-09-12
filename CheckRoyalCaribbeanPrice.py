@@ -130,6 +130,32 @@ MARKET_RULES: dict[str, Union[int, DurationRules]] = {
     "CA":  [(4, 75), (14, 90), (float("inf"), 120)],
 }
 
+# Process exit code contract for main() - a supervising scheduler can rely on
+# these three outcomes meaning exactly this and nothing else:
+#   0                    - full success: every account was checked
+#   1                    - fatal/total failure: an unhandled exception, or a
+#                          module-level setup failure. This can happen before
+#                          any pricing ran, or partway through a multi-account
+#                          run after earlier accounts already succeeded and
+#                          had their price-drop alerts sent - the exit code
+#                          alone doesn't say how far the run got. Don't
+#                          blindly auto-retry on this code (that risks
+#                          re-alerting accounts that already succeeded);
+#                          surface it to a human and check the log first.
+#   EXIT_PARTIAL_FAILURE - the run COMPLETED, but one or more accounts were
+#                          SKIPPED after a login or post-login profile-fetch
+#                          failure. Data already written for the accounts
+#                          that DID succeed (price points committed,
+#                          price-drop alerts sent, the watchlist JSON) is
+#                          real and must not be redone.
+#                          A scheduler that treats this the same as exit 1
+#                          and blindly retries the whole run will re-price
+#                          already-priced accounts and can send duplicate
+#                          price-drop notifications to real users - so this
+#                          code is deliberately distinct from the fatal (1)
+#                          and success (0) cases.
+EXIT_PARTIAL_FAILURE = 2
+
 # ANSI color codes
 RESET = '\033[0m' # Resets color to default
 
@@ -665,9 +691,11 @@ class PriceHistory:
     mid-run loses nothing already recorded - this script is a short-lived
     process invoked fresh per run, so there is no long-lived connection to
     manage. A `runs` row whose finished_at is still NULL means the process
-    exited without ever finalizing it (e.g. a sys.exit() from a login
-    failure, before main()'s own error handler could run) - treat such rows
-    as an aborted run, not a currently-in-progress one.
+    exited without ever finalizing it (e.g. a crash or a killed process,
+    before main()'s own error handler could run) - treat such rows as an
+    aborted run, not a currently-in-progress one. A login failure no longer
+    leaves finished_at NULL: main() catches it per account and finalizes the
+    run as "partial_failure" instead.
     """
 
     def __init__(self, db_path: Optional[str] = None) -> None:
@@ -3832,13 +3860,87 @@ def main() -> None:
         ship_dictionary = ShipRegistry()
         get_ship_dictionary_web(ship_dictionary)
 
+        # Accounts that could not be checked this run, paired with which
+        # phase failed (login or post-login profile fetch) - tracked so the
+        # end-of-run summary (and exit status) can't come out looking green
+        # when one account in a multi-account config silently never got
+        # checked, and so the persisted history row can still tell a stale
+        # password from a transient profile-API failure after the fact.
+        failed_accounts: List[Tuple[str, str]] = []
+
         for account_info in config.accounts:
             log(f"\nUsing {account_info.friendly_name} for user {account_info.username}")
             log(f"\t{account_info.friendly_name} loyalty number will be used for checking cabin prices")
 
-            # Login in to this account and get the profile information
-            account_info.access = login(account_info)
-            state_from_profile, loyalty_number, c_and_a_points = get_profile(account_info)
+            # Login in to this account and get the profile information.
+            #
+            # login() intentionally still raises SystemExit on failure (a stale
+            # password, a WAF block, etc.) - that contract is load-bearing for
+            # an out-of-tree caller that uses login() directly as a standalone
+            # credential probe. Left unguarded, though, that SystemExit would
+            # propagate straight out of this loop and take the whole
+            # multi-account run down over ONE bad account, silently skipping
+            # every account queued after it. So the caller - not login() -
+            # absorbs the failure: catch it (and any other unexpected
+            # Exception from either call) per account, report it loudly, and
+            # move on to the next account. SystemExit derives from
+            # BaseException rather than Exception, so it has to be named
+            # explicitly here; a bare `except Exception` would not catch it.
+            #
+            # login() and get_profile() are guarded together (an account that
+            # can't log in can't have its profile fetched either, so both
+            # failures are skip-and-continue the same way), but a phase flag
+            # tracks which of the two actually raised. A get_profile() error
+            # (e.g. a transient 500) on an account whose login SUCCEEDED is a
+            # different failure than a bad password, and must not be reported
+            # to the user as a login problem - that would send them chasing
+            # the wrong fix.
+            account_phase = "login"
+            try:
+                account_info.access = login(account_info)
+                account_phase = "profile"
+                state_from_profile, loyalty_number, c_and_a_points = get_profile(account_info)
+            except (SystemExit, Exception) as account_err:
+                failed_accounts.append((account_info.username, account_phase))
+                if account_phase == "login":
+                    skip_reason = "could not be logged in"
+                    notify_title = 'Cruise Price Account Login Failed'
+                else:
+                    skip_reason = "logged in, but its profile could not be fetched"
+                    notify_title = 'Cruise Price Account Profile Fetch Failed'
+                log(RED + f"\n[SKIPPED] {account_info.friendly_name} ({account_info.username}) {skip_reason} "
+                          f"this run (see the error above) - skipping this account and continuing "
+                          f"with the rest of the run." + RESET)
+
+                # Route the failure through the same per-account/global
+                # notifier resolution used everywhere else in this script, so
+                # a bad password reaches the user the same way a price alert
+                # would - not a bespoke notification path. Gated the same way
+                # as the module-level fatal-error notifier below: honor the
+                # notifyOnError opt-out, and only fire when the resolved
+                # notifier actually has URLs registered.
+                account_notifier = notifier_for(account_info)
+                if config.notify_on_error and account_notifier is not None and len(account_notifier) > 0:
+                    # login()'s SystemExit carries nothing but a bare exit
+                    # status (e.g. SystemExit(1), whose str() is just "1") -
+                    # the real diagnosis (a stale password, a WAF block,
+                    # etc.) was already logged by login() itself and a bare
+                    # "1" would only be noise to a user who, by definition,
+                    # is being notified because they won't read the log. A
+                    # plain Exception (e.g. from get_profile()) DOES carry a
+                    # useful message, so that case is still included.
+                    if isinstance(account_err, SystemExit) and not isinstance(account_err.code, str):
+                        detail = "See the run log for the exact reason."
+                    else:
+                        detail = str(account_err)
+                    account_notifier.notify(
+                        body=f"Account {account_info.username} ({account_info.friendly_name}) {skip_reason} "
+                             f"this run and was skipped. {detail}",
+                        title=notify_title,
+                        body_format=NotifyFormat.TEXT,
+                    )
+                continue
+
             if account_info.state is None:
                 account_info.state = state_from_profile
 
@@ -3927,6 +4029,31 @@ def main() -> None:
         # Write the watchlist price results to JSON for external consumption
         if config.output_watch_as_json:
             write_watch_price_json(collected_watch_rows, config.output_json_watch_file)
+
+        if failed_accounts:
+            # At least one account never got checked this run. A quiet exit
+            # 0 here would look identical to a fully-successful run to any
+            # scheduler/log-scraper watching this process, hiding exactly the
+            # kind of silent partial loss this guard exists to prevent - so
+            # both the history row and the process exit code say otherwise.
+            failed_usernames = [username for username, _phase in failed_accounts]
+            log(RED + f"\n{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked this "
+                      f"run and were SKIPPED: {', '.join(failed_usernames)}. Prices for those accounts were NOT "
+                      f"checked. See the [SKIPPED] line(s) above for whether each was a login or profile-fetch "
+                      f"failure." + RESET)
+            # Name each account's failure phase (login vs profile) in the
+            # persisted summary too, not just the console [SKIPPED] lines -
+            # a later reader of the history DB only has this string, and
+            # without the phase they can't tell a stale password from a
+            # transient profile-API failure.
+            failure_detail = ", ".join(f"{username} ({phase})" for username, phase in failed_accounts)
+            config.history.finish_run(
+                "partial_failure",
+                f"{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked: "
+                f"{failure_detail}",
+            )
+            # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.
+            sys.exit(EXIT_PARTIAL_FAILURE)
 
         config.history.finish_run("ok")
 
