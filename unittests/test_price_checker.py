@@ -33,6 +33,7 @@ from CheckRoyalCaribbeanPrice import (
 # ITEM 22 TESTS: TA BOOKINGS WITHOUT bookingOfficeCountryCode (checkout URL None params)
 # ITEM 23 TESTS: LOGIN FAILURE DIAGNOSTICS (OAuth error body surfaced)
 # ITEM 24 TESTS: MARKET COUNTRY CODE PREFERRED OVER BOOKING OFFICE COUNTRY CODE
+# ITEM 26 TESTS: PER-ACCOUNT LOGIN FAILURE ISOLATION (main() run resilience)
     AccountInfo,
     APIAccess,
     CheckinPaymentTracker,
@@ -63,6 +64,7 @@ from CheckRoyalCaribbeanPrice import (
     get_voyages,
     load_config_objects,
     login,
+    main,
     parse_provided_URL,
     resolve_lead_time
 )
@@ -3414,3 +3416,322 @@ class TestFinalPaymentDateOverrides:
                 sail_date="2026-12-31",
                 final_payment_date_override="INVALID_DATE",
             )
+# ============================================================================
+# ITEM 26 TESTS: PER-ACCOUNT LOGIN FAILURE ISOLATION (main() run resilience)
+# ============================================================================
+# A stale password on ONE account in a multi-account config.yaml used to take
+# the entire run down: login()'s sys.exit(1) propagated straight out of
+# main()'s account loop as an uncaught SystemExit. main() must now absorb a
+# failed login/profile fetch for one account, report it loudly, and still
+# process every remaining account - without changing login()'s own contract
+# (an out-of-tree caller uses login() directly as a standalone credential
+# probe and depends on it still raising SystemExit on failure).
+
+def _make_multi_account_config(accounts):
+    """A MagicMock config with just enough real values wired up that main()
+    can run its account loop and fall through past the watchlist / JSON
+    stages without touching the network or the filesystem."""
+    mock_cfg = MagicMock()
+    mock_cfg.accounts = accounts
+    mock_cfg.apobj = None
+    mock_cfg.apprise_test = False
+    mock_cfg.log_file = None
+    mock_cfg.output_watch_as_json = False
+    mock_cfg.minimum_saving_alert = None
+    mock_cfg.prospective_cruises = []
+    mock_cfg.date_display_format = "%m/%d/%Y"
+    mock_cfg.format_date = lambda d: str(d)
+    # Mirrors the real config default (notifyOnError: false) - tests that
+    # need the opt-in login-failure notification enable it explicitly.
+    mock_cfg.notify_on_error = False
+    return mock_cfg
+
+
+def test_main_continues_to_next_account_when_first_login_raises_systemexit():
+    """
+    The real-world failure this guards: account 1 has a stale password and
+    login() raises SystemExit for it, while account 2 is fine. The run must
+    still reach and process account 2, and must exit non-zero afterward so
+    the skipped account isn't silently swallowed by a green-looking run.
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    bad_account = AccountInfo(username="bad@example.com", password="stale-pw", cruise_line="royal")
+    good_account = AccountInfo(username="good@example.com", password="correct-pw", cruise_line="royal")
+    mock_cfg = _make_multi_account_config([bad_account, good_account])
+
+    good_access = APIAccess(token="tok", id="acct-id", session=MagicMock())
+    logged: list[str] = []
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=[SystemExit(1), good_access]) as mock_login, \
+         patch.object(C, "get_profile", return_value=("FL", "LOY-1", 0)) as mock_get_profile, \
+         patch.object(C, "get_voyages") as mock_get_voyages, \
+         patch("CheckRoyalCaribbeanPrice.time.sleep"):
+
+        with pytest.raises(SystemExit) as exc_info:
+            C.main()
+
+    # login() was attempted for BOTH accounts - the first failure did not stop the loop
+    assert mock_login.call_count == 2
+
+    # Only the account that actually logged in went on to get_profile()/get_voyages()
+    mock_get_profile.assert_called_once_with(good_account)
+    mock_get_voyages.assert_called_once()
+    assert mock_get_voyages.call_args.args[0] is good_account
+
+    # The failure was reported loudly and named the failing account
+    joined = "\n".join(logged)
+    assert "bad@example.com" in joined
+    assert "SKIPPED" in joined
+
+    # History records the run as a partial failure (not a silent "ok")
+    mock_cfg.history.finish_run.assert_called_once()
+    finish_status, finish_summary = mock_cfg.history.finish_run.call_args.args
+    assert finish_status == "partial_failure"
+    assert "bad@example.com" in finish_summary
+
+    # The run must exit with the distinct partial-failure code - never 0
+    # (which would hide the skipped account) and never 1 (which is reserved
+    # for a fatal/total failure and would wrongly tell a supervising
+    # scheduler that the whole run, including the good accounts' already-
+    # written data, needs to be retried).
+    assert C.EXIT_PARTIAL_FAILURE not in (0, 1)
+    assert exc_info.value.code == C.EXIT_PARTIAL_FAILURE
+
+
+def test_main_notifies_failed_account_via_its_own_notifier_when_notify_on_error_enabled():
+    """A per-account apprise: notifier must hear about ITS OWN login failure,
+    following the same notifier_for() resolution used for price alerts - as
+    long as the user has opted in to error notifications (notifyOnError:
+    true), the same opt-out the module-level fatal-error handler honors."""
+    import CheckRoyalCaribbeanPrice as C
+
+    bad_account = AccountInfo(username="bad@example.com", password="stale-pw", cruise_line="royal")
+    bad_account.apobj = MagicMock(name="bad_account_apobj")
+    bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
+    mock_cfg = _make_multi_account_config([bad_account])
+    mock_cfg.notify_on_error = True
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=SystemExit(1)), \
+         patch.object(C, "get_profile"), \
+         patch.object(C, "get_voyages"):
+
+        with pytest.raises(SystemExit):
+            C.main()
+
+    bad_account.apobj.notify.assert_called_once()
+    body = bad_account.apobj.notify.call_args.kwargs["body"]
+    assert "bad@example.com" in body
+
+
+def test_main_does_not_notify_failed_account_when_notify_on_error_disabled():
+    """
+    The opt-out: a user who set notifyOnError: false but still has an
+    apprise: URL for price-drop alerts must NOT receive a login-failure
+    push - they explicitly asked not to be notified about errors, and this
+    notification must honor that the same way the module-level fatal-error
+    handler already does (`config.notify_on_error` gate).
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    bad_account = AccountInfo(username="bad@example.com", password="stale-pw", cruise_line="royal")
+    bad_account.apobj = MagicMock(name="bad_account_apobj")
+    bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
+    mock_cfg = _make_multi_account_config([bad_account])
+    mock_cfg.notify_on_error = False
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=SystemExit(1)), \
+         patch.object(C, "get_profile"), \
+         patch.object(C, "get_voyages"):
+
+        with pytest.raises(SystemExit):
+            C.main()
+
+    bad_account.apobj.notify.assert_not_called()
+
+
+def test_main_unrelated_fatal_error_still_propagates_and_is_not_partial_failure():
+    """
+    A login failure is deliberately absorbed into the partial-failure path
+    (EXIT_PARTIAL_FAILURE). An unrelated fatal error elsewhere in the run
+    (e.g. get_voyages blowing up after a successful login) must NOT be
+    caught by that same per-account guard - it has to keep propagating out
+    of main() as the exact, unconverted exception, exactly as it did before
+    this feature, and main() itself must never call sys.exit for it (never
+    silently downgraded to a "some accounts were skipped" outcome).
+
+    This test calls C.main() directly, so it does NOT exercise the
+    `if __name__ == "__main__":` block at the bottom of the module - it
+    cannot observe that block's except-Exception handler actually mapping
+    this exception to sys.exit(1). It only proves the half of that
+    contract that lives inside main(): the exception reaches the caller
+    unconverted and untouched by main()'s own sys.exit calls, which is a
+    precondition for that mapping to happen correctly.
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    account = AccountInfo(username="user@example.com", password="pw", cruise_line="royal")
+    mock_cfg = _make_multi_account_config([account])
+
+    access = APIAccess(token="tok", id="acct-id", session=MagicMock())
+    boom = RuntimeError("boom")
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", return_value=access), \
+         patch.object(C, "get_profile", return_value=("FL", "LOY-1", 0)), \
+         patch.object(C, "get_voyages", side_effect=boom), \
+         patch("sys.exit") as mock_exit:
+
+        with pytest.raises(RuntimeError) as exc_info:
+            C.main()
+
+    # This must be the exact bare RuntimeError, never converted along the
+    # way, and main() itself must never call sys.exit for it. That matters
+    # because the *only* place this exception's fate as an exit code gets
+    # decided is the module-level handler at the bottom of this file
+    # (`if __name__ == "__main__": ... except Exception as exc: ...
+    # sys.exit(1)`), which maps every exception reaching it - unconditionally,
+    # with no branch for EXIT_PARTIAL_FAILURE - to the fixed exit code 1.
+    # Pinning that main() calls sys.exit zero times here (mirroring how
+    # test_main_continues_to_next_account_when_first_login_raises_systemexit
+    # pins EXIT_PARTIAL_FAILURE off main()'s OWN sys.exit call) is what
+    # guarantees this exception is still headed for that fixed 1, and would
+    # catch a future change that had main() itself start intercepting fatal
+    # errors and mapping some of them to EXIT_PARTIAL_FAILURE.
+    assert exc_info.value is boom
+    assert not isinstance(exc_info.value, SystemExit)
+    mock_exit.assert_not_called()
+    assert C.EXIT_PARTIAL_FAILURE not in (0, 1)
+
+    # Finalized as a fatal "error", never as "partial_failure" - the two
+    # outcomes must stay distinguishable by exit code (1 vs
+    # EXIT_PARTIAL_FAILURE) all the way through to the history row.
+    mock_cfg.history.finish_run.assert_called_once_with("error", "RuntimeError: boom")
+
+
+def test_main_distinguishes_login_failure_from_profile_fetch_failure():
+    """
+    ITEM 1 fix: login() and get_profile() are guarded together (both skip
+    the account the same way), but a profile-fetch failure on an account
+    whose login SUCCEEDED must be reported as a profile problem, not
+    misreported as a login problem - conflating the two would send someone
+    debugging a transient profile-API 500 chasing a "bad password" that
+    never happened. A genuine login failure must still say "login".
+    """
+    import CheckRoyalCaribbeanPrice as C
+
+    login_bad_account = AccountInfo(username="badlogin@example.com", password="stale-pw", cruise_line="royal")
+    login_bad_account.apobj = MagicMock(name="login_bad_apobj")
+    login_bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
+
+    profile_bad_account = AccountInfo(username="badprofile@example.com", password="pw", cruise_line="royal")
+    profile_bad_account.apobj = MagicMock(name="profile_bad_apobj")
+    profile_bad_account.apobj.__len__ = MagicMock(return_value=1)  # a registered URL
+
+    mock_cfg = _make_multi_account_config([login_bad_account, profile_bad_account])
+    mock_cfg.notify_on_error = True
+
+    good_access = APIAccess(token="tok", id="acct-id", session=MagicMock())
+    logged: list[str] = []
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", side_effect=lambda msg="", *a, **k: logged.append(str(msg))), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=[SystemExit(1), good_access]), \
+         patch.object(C, "get_profile", side_effect=RuntimeError("profile 500")) as mock_get_profile, \
+         patch.object(C, "get_voyages") as mock_get_voyages:
+
+        with pytest.raises(SystemExit) as exc_info:
+            C.main()
+
+    # get_profile() was reached only for the account that actually logged in.
+    mock_get_profile.assert_called_once_with(profile_bad_account)
+    # Neither account made it to get_voyages() - both were skipped.
+    mock_get_voyages.assert_not_called()
+
+    joined = "\n".join(logged)
+
+    # The login failure is reported as a login problem...
+    assert "badlogin@example.com) could not be logged in" in joined
+    # ...and the profile-fetch failure on the account that DID log in is
+    # reported as a profile problem, never misreported as a login failure.
+    assert "badprofile@example.com) logged in, but its profile could not be fetched" in joined
+    assert "badprofile@example.com) could not be logged in" not in joined
+
+    # Each account's own notifier got a message naming ITS OWN failure phase.
+    login_notify = login_bad_account.apobj.notify.call_args.kwargs
+    assert "could not be logged in" in login_notify["body"]
+    assert login_notify["title"] == 'Cruise Price Account Login Failed'
+    # login() raised a bare SystemExit(1) here - str(SystemExit(1)) is just
+    # "1", which carries no diagnosis. The notification must not surface
+    # that noise; it should point the reader at the run log instead, where
+    # login() already logged the real reason.
+    assert "run log" in login_notify["body"]
+    assert not login_notify["body"].rstrip().endswith("1")
+
+    profile_notify = profile_bad_account.apobj.notify.call_args.kwargs
+    assert "logged in, but its profile could not be fetched" in profile_notify["body"]
+    assert "could not be logged in" not in profile_notify["body"]
+    # get_profile() raised a plain Exception with a real message - unlike
+    # the bare SystemExit case above, that message IS informative and must
+    # still reach the notification.
+    assert "profile 500" in profile_notify["body"]
+    assert profile_notify["title"] == 'Cruise Price Account Profile Fetch Failed'
+
+    # Both accounts still land in the same partial-failure outcome - the
+    # fix distinguishes the MESSAGE, not whether the account gets skipped.
+    mock_cfg.history.finish_run.assert_called_once()
+    finish_status, finish_summary = mock_cfg.history.finish_run.call_args.args
+    assert finish_status == "partial_failure"
+    assert "badlogin@example.com" in finish_summary
+    assert "badprofile@example.com" in finish_summary
+
+    # The persisted summary must name each account's failure phase too, not
+    # just its username - a later reader of the history DB has only this
+    # string (the console [SKIPPED] lines aren't persisted), so without the
+    # phase they can't tell a stale password from a transient profile-API
+    # failure.
+    assert "badlogin@example.com (login)" in finish_summary
+    assert "badprofile@example.com (profile)" in finish_summary
+    assert exc_info.value.code == C.EXIT_PARTIAL_FAILURE
+
+
+def test_main_all_accounts_succeed_exits_and_records_ok_unchanged():
+    """Baseline: with no failures, current behavior is unchanged - every
+    account is processed, the history run finishes 'ok', and the process
+    does not raise/exit non-zero."""
+    import CheckRoyalCaribbeanPrice as C
+
+    account_one = AccountInfo(username="one@example.com", password="pw1", cruise_line="royal")
+    account_two = AccountInfo(username="two@example.com", password="pw2", cruise_line="royal")
+    mock_cfg = _make_multi_account_config([account_one, account_two])
+
+    access_one = APIAccess(token="tok1", id="id1", session=MagicMock())
+    access_two = APIAccess(token="tok2", id="id2", session=MagicMock())
+
+    with patch.object(C, "config", mock_cfg), \
+         patch.object(C, "log", MagicMock()), \
+         patch.object(C, "get_ship_dictionary_web"), \
+         patch.object(C, "login", side_effect=[access_one, access_two]) as mock_login, \
+         patch.object(C, "get_profile", return_value=("FL", "LOY-1", 0)) as mock_get_profile, \
+         patch.object(C, "get_voyages") as mock_get_voyages, \
+         patch("CheckRoyalCaribbeanPrice.time.sleep"):
+
+        C.main()  # must return normally - no SystemExit
+
+    assert mock_login.call_count == 2
+    assert mock_get_profile.call_count == 2
+    assert mock_get_voyages.call_count == 2
+
+    mock_cfg.history.finish_run.assert_called_once_with("ok")
