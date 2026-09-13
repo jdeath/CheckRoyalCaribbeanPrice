@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 from CheckRoyalCaribbeanPrice import (
 # ITEM 1 TESTS: CRUISE FARE MATRIX: get_cruise_price
 # ITEM 2 TESTS ADD-ON MATRIX: get_new_order_price
+# ITEM 3 TESTS: HISTORY SAIL_DATE/NIGHTS CROSS-PATH CONSISTENCY (GTY-105)
     AccountInfo,
     WatchItemContext,
     get_cruise_price,
@@ -456,3 +457,96 @@ class TestAddonWatchlistAlerts:
         )
         apobj.notify.assert_not_called()
         mock_net.assert_not_called()
+
+
+# ==================================================
+# ITEM 3 TESTS: HISTORY SAIL_DATE/NIGHTS CROSS-PATH CONSISTENCY (GTY-105)
+# ==================================================
+class TestHistorySailDateNightsConsistency:
+    """
+    A reservation with an add-on purchase used to write two disagreeing
+    price_points rows for the same sailing: get_cruise_price() recorded
+    url_params.sail_date (the dashed "2026-09-13" the checkout URL is built
+    with) while get_new_order_price() recorded the booking's raw "20260913"
+    sailDate straight off the API. A downstream viewer grouping on
+    (reservation_id, ship_code, sail_date, nights) then showed the one
+    reservation as two identical cards. Both paths must now record the same
+    raw booking sailDate/numberOfNights, even though the checkout URL still
+    carries the dashed form (the API needs that form; only what gets
+    written to history changed).
+    """
+
+    def test_cabin_fare_history_uses_raw_booking_sail_date_and_nights(self):
+        """
+        The booking behind this price check sails 2026-09-13 / 7 nights, but
+        the checkout URL get_cruise_price() builds carries the dashed form
+        for the API request. record_cabin_fare() must still get the raw
+        booking values, not the dashed URL value.
+        """
+        booking = {
+            # make_checkout_url() embeds a dashed sailDate for a sailing ~400
+            # days out - deliberately NOT "20260913", so url_params.sail_date
+            # (parsed straight back out of this URL) can never accidentally
+            # match the raw booking sailDate below and mask a regression.
+            "url": make_checkout_url(400),
+            "bookingId": "1234567",
+            "sailDate": "20260913",
+            "numberOfNights": 7,
+        }
+        account = make_account()
+
+        mock_cfg = MagicMock()
+        mock_cfg.minimum_saving_alert = None
+        mock_cfg.currency_override = None
+        mock_cfg.date_display_format = "%m/%d/%Y"
+        mock_cfg.format_date = lambda d: str(d)
+
+        ship_dictionary = MagicMock()
+        ship_dictionary.get_ship.return_value = "Wonder of the Seas"
+
+        results = {**build_available_response(sailing_nights=7), "base_fare": build_fare(2500.0)}
+        with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+             patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
+             patch("CheckRoyalCaribbeanPrice.get_room_price_via_API", return_value=results):
+            get_cruise_price(
+                account, booking, ship_dictionary,
+                automatic_URL=True,
+                paid_price_struct={"paidPrice": 3000.0},
+            )
+
+        mock_cfg.history.record_cabin_fare.assert_called_once()
+        kwargs = mock_cfg.history.record_cabin_fare.call_args.kwargs
+        assert kwargs["sail_date"] == "20260913"
+        assert kwargs["nights"] == 7
+
+    def test_addon_history_records_same_sail_date_and_nights_as_cabin_fare(self):
+        """
+        The add-on path (get_new_order_price) has always written the raw
+        booking sailDate/numberOfNights - this pins that behavior down for
+        the exact same booking used above, so the two paths can't drift
+        apart again.
+        """
+        account = make_account()
+        booking = {"bookingId": "1234567", "shipCode": "WN", "sailDate": "20260913", "numberOfNights": 7}
+        ctx = WatchItemContext(
+            prefix="pt_beverage", product="3005", passenger_ID="PAX1", passenger_name="Jim",
+            room="6543", paid_price=50.0, guest_age_string="adult", sales_unit=None,
+            for_watch=False, owner=True, reservations=[],
+        )
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "payload": {"title": "Deluxe Beverage Package", "startingFromPrice": {"adultPromotionalPrice": 40.0}}
+        }
+        mock_cfg = MagicMock()
+        mock_cfg.minimum_saving_alert = None
+        mock_cfg.currency_override = None
+
+        with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+             patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
+             patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=mock_resp):
+            get_new_order_price(account, booking, MagicMock(), ctx)
+
+        mock_cfg.history.record_addon.assert_called_once()
+        kwargs = mock_cfg.history.record_addon.call_args.kwargs
+        assert kwargs["sail_date"] == "20260913"
+        assert kwargs["nights"] == 7

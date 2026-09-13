@@ -12,6 +12,7 @@ test_alert_matrix.py):
     config.history.record_*.call_args.kwargs - the same "real object, mocked
     side effect" pattern already used for Apprise (A.5).
 """
+import json
 import os
 import pytest
 import sqlite3
@@ -24,8 +25,11 @@ from CheckRoyalCaribbeanPrice import (
     CruiseAppConfig,
     PriceHistory,
     WatchItemContext,
+    get_all_promotions,
     get_cruise_price,
+    get_final_payment_date,
     get_new_order_price,
+    get_voyages,
     load_config_objects,
     main,
 )
@@ -56,7 +60,8 @@ def test_price_history_is_noop_when_db_path_unset(tmp_path, monkeypatch):
 
 
 def test_price_history_creates_schema_on_first_use(tmp_path):
-    """Constructing against a real path creates the runs/price_points tables and all three indexes."""
+    """Constructing against a real path creates every table (price_points, bookings,
+    promos) and all of their indexes (PR 2 added bookings/promos to the #103 schema)."""
     db_path = tmp_path / "h.db"
     PriceHistory(str(db_path))
 
@@ -66,13 +71,15 @@ def test_price_history_creates_schema_on_first_use(tmp_path):
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()}
-        assert {"runs", "price_points"} <= tables
-        assert "promos" not in tables  # deferred to PR 2 (C.2 item 8)
+        assert {"runs", "price_points", "bookings", "promos"} <= tables
 
         indexes = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='index'"
         ).fetchall()}
-        assert {"idx_price_points_latest", "idx_price_points_history", "idx_price_points_run"} <= indexes
+        assert {
+            "idx_price_points_latest", "idx_price_points_history", "idx_price_points_run",
+            "idx_bookings_latest", "idx_promos_run",
+        } <= indexes
     finally:
         conn.close()
 
@@ -528,3 +535,400 @@ def test_get_new_order_price_records_not_available_for_passenger():
     assert kwargs["item_kind"] == "watchlist"
     assert kwargs["item_code"] == "pt_beverage/3005"
     assert kwargs["current_price"] is None and kwargs["notified"] is False
+
+
+# =====================================================================
+# PART 3: PR 2 - `bookings` / `promos` snapshot tables
+# =====================================================================
+
+def test_price_history_upgrades_103_era_db_in_place(tmp_path):
+    """Opening a database created with ONLY the #103 schema (runs + price_points,
+    written here by hand) must add bookings/promos via CREATE TABLE IF NOT EXISTS
+    and leave pre-existing rows completely untouched."""
+    db_path = tmp_path / "h.db"
+    # The exact #103/#104-era schema (pre-PR2), verbatim minus "IF NOT EXISTS"
+    # so this represents a database that already exists on disk.
+    legacy_103_schema = """
+    CREATE TABLE runs (
+        run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at       TEXT NOT NULL,
+        finished_at      TEXT,
+        status           TEXT NOT NULL DEFAULT 'started',
+        error_summary    TEXT
+    );
+
+    CREATE TABLE price_points (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id           INTEGER NOT NULL REFERENCES runs(run_id),
+        observed_at      TEXT NOT NULL,
+        account_label    TEXT,
+        reservation_id   TEXT,
+        ship_code        TEXT,
+        sail_date        TEXT,
+        nights           INTEGER,
+        item_kind        TEXT NOT NULL,
+        item_code        TEXT,
+        item_name        TEXT,
+        guest_id         TEXT,
+        guest_name       TEXT,
+        paid_price       REAL,
+        current_price    REAL,
+        currency         TEXT,
+        per_night        INTEGER NOT NULL DEFAULT 0,
+        discount_applied TEXT,
+        status           TEXT NOT NULL,
+        rebook_decision  TEXT,
+        notified         INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX idx_price_points_latest
+        ON price_points (reservation_id, item_code, guest_id, observed_at DESC);
+
+    CREATE INDEX idx_price_points_history
+        ON price_points (item_code, sail_date, observed_at);
+
+    CREATE INDEX idx_price_points_run
+        ON price_points (run_id);
+    """
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.executescript(legacy_103_schema)
+        conn.execute(
+            "INSERT INTO runs (run_id, started_at, status) VALUES (1, '2026-01-01T00:00:00', 'ok')"
+        )
+        conn.execute(
+            "INSERT INTO price_points (run_id, observed_at, reservation_id, item_kind, status) "
+            "VALUES (1, '2026-01-01T00:00:00', '1234567', 'cabin_fare', 'priced')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Constructing PriceHistory against this #103-era file must upgrade it in place
+    history = PriceHistory(str(db_path))
+    assert history.enabled is True
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        tables = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        assert {"runs", "price_points", "bookings", "promos"} <= tables
+
+        indexes = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index'"
+        ).fetchall()}
+        assert {"idx_bookings_latest", "idx_promos_run"} <= indexes
+
+        # The old row must be untouched
+        old_row = conn.execute(
+            "SELECT run_id, reservation_id, item_kind, status FROM price_points"
+        ).fetchone()
+        assert old_row == (1, "1234567", "cabin_fare", "priced")
+    finally:
+        conn.close()
+
+
+def test_price_history_record_booking_round_trip(tmp_path):
+    """record_booking() writes a `bookings` row that reads back with every column intact."""
+    db_path = tmp_path / "h.db"
+    history = PriceHistory(str(db_path))
+    history.start_run()
+
+    guests_json = json.dumps([{"name": "Matt", "id": "33333333", "age_bracket": "adult"}])
+    history.record_booking(
+        account_label="user@example.com",
+        reservation_id="1234567",
+        ship_code="WN",
+        ship_name="Wonder of the Seas",
+        sail_date="20270601",
+        nights=7,
+        stateroom_type="BALCONY",
+        stateroom_number=None,
+        stateroom_category="4D",
+        guest_count=1,
+        guests_json=guests_json,
+        loyalty_tier="DIAMOND",
+        loyalty_points=4500,
+        checkin_label="Opens 12/10/2026 08:00 AM",
+        final_payment_date="20270303",
+        past_final_payment=0,
+        balance_due=1,
+        booking_currency="USD",
+        friendly_name="Anniversary Cruise",
+    )
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM bookings").fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row["account_label"] == "user@example.com"
+    assert row["reservation_id"] == "1234567"
+    assert row["ship_code"] == "WN"
+    assert row["ship_name"] == "Wonder of the Seas"
+    assert row["sail_date"] == "20270601"
+    assert row["nights"] == 7
+    assert row["stateroom_type"] == "BALCONY"
+    assert row["stateroom_number"] is None
+    assert row["stateroom_category"] == "4D"
+    assert row["guest_count"] == 1
+    assert json.loads(row["guests_json"]) == [{"name": "Matt", "id": "33333333", "age_bracket": "adult"}]
+    assert row["loyalty_tier"] == "DIAMOND"
+    assert row["loyalty_points"] == 4500
+    assert row["checkin_label"] == "Opens 12/10/2026 08:00 AM"
+    assert row["final_payment_date"] == "20270303"
+    assert row["past_final_payment"] == 0
+    assert row["balance_due"] == 1
+    assert row["booking_currency"] == "USD"
+    assert row["friendly_name"] == "Anniversary Cruise"
+
+
+def test_price_history_record_promo_round_trip(tmp_path):
+    """record_promo() writes a `promos` row that reads back with every column intact."""
+    db_path = tmp_path / "h.db"
+    history = PriceHistory(str(db_path))
+    history.start_run()
+
+    history.record_promo(
+        account_label="user@example.com",
+        ship_code="WN",
+        sail_date="20270601",
+        promo_id="P1",
+        promo_title="Early Booking Bonus",
+        promo_line="[PROMO] Early Booking Bonus (Valid 2027-01-01 to 2027-03-01)",
+        promo_start="2027-01-01",
+        promo_end="2027-03-01",
+    )
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM promos").fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row["promo_id"] == "P1"
+    assert row["promo_title"] == "Early Booking Bonus"
+    assert row["promo_line"] == "[PROMO] Early Booking Bonus (Valid 2027-01-01 to 2027-03-01)"
+    assert row["promo_start"] == "2027-01-01"
+    assert row["promo_end"] == "2027-03-01"
+    assert row["ship_code"] == "WN"
+    assert row["sail_date"] == "20270601"
+    assert row["account_label"] == "user@example.com"
+
+
+def test_price_history_record_booking_and_promo_noop_when_disabled(tmp_path, monkeypatch):
+    """With db_path unset, record_booking/record_promo must be silent no-ops that
+    never touch the filesystem, exactly like the #103 methods."""
+    monkeypatch.chdir(tmp_path)
+    before = set(os.listdir(tmp_path))
+
+    history = PriceHistory(None)
+    history.record_booking(reservation_id="1234567", ship_code="WN")
+    history.record_promo(promo_id="P1", ship_code="WN")
+
+    after = set(os.listdir(tmp_path))
+    assert after == before, f"record_booking/record_promo created filesystem entries: {after - before}"
+
+
+def test_price_history_record_booking_failure_isolation(tmp_path):
+    """A record_booking write error disables the sink (like the #103 methods) instead
+    of raising and taking down the run."""
+    db_path = tmp_path / "h.db"
+    history = PriceHistory(str(db_path))
+    history.start_run()
+
+    with patch.object(history, "_connect", side_effect=sqlite3.OperationalError("disk I/O error")):
+        history.record_booking(reservation_id="1234567", ship_code="WN")
+
+    assert history.enabled is False
+    history.record_booking(reservation_id="7654321")  # silent no-op now
+
+    conn = sqlite3.connect(db_path)
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 0  # the failed write never landed, and nothing crashed
+
+
+# ---------------------------------------------------------------------------
+# get_voyages() integration: one record_booking call per booking, per run
+# ---------------------------------------------------------------------------
+def make_voyages_account() -> AccountInfo:
+    account = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    account.access = MagicMock()
+    account.access.token = "fake_token"
+    account.access.id = "fake_id"
+    account.loyalty_tier = "DIAMOND"
+    account.loyalty_points = 4500
+    return account
+
+
+def run_voyages_scenario(*, booking_extra=None):
+    """Drive the real get_voyages() against one mocked profileBookings response;
+    returns (mock_cfg, sail_date, booking) for assertions on record_booking."""
+    account = make_voyages_account()
+    sail_date = "20270601"
+    booking = {
+        "bookingId": "1234567",
+        "passengerId": "33333333",
+        "sailDate": sail_date,
+        "numberOfNights": 7,
+        "shipCode": "WN",
+        "stateroomNumber": "GTY",
+        "stateroomType": "B",
+        "bookingCurrency": "USD",
+        "passengersInStateroom": [
+            {"firstName": "matt", "passengerId": "33333333", "birthdate": "19800101", "stateroomCategoryCode": "4D"},
+            {"firstName": "jane", "passengerId": "44444444", "birthdate": "20200101", "stateroomCategoryCode": "4D"},
+        ],
+    }
+    if booking_extra:
+        booking.update(booking_extra)
+
+    def api_router(*args, **kwargs):
+        url = args[2] if len(args) > 2 else kwargs.get("url", "")
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "{}"
+        if "profileBookings" in url:
+            resp.json.return_value = {"payload": {"profileBookings": [booking]}}
+        else:
+            resp.json.return_value = {"payload": []}
+        return resp
+
+    mock_cfg = MagicMock()
+    mock_cfg.watch_list = []
+    mock_cfg.display_cruise_prices = False
+    mock_cfg.reservation_prices = {}
+    mock_cfg.reservation_names = {"1234567": "Anniversary Cruise"}
+    mock_cfg.show_promos = False
+    mock_cfg.date_display_format = "%m/%d/%Y"
+    mock_cfg.format_date = lambda d: str(d)
+    mock_cfg.paid_reservations = []
+    mock_cfg.history = MagicMock()
+
+    ship_dictionary = MagicMock()
+    ship_dictionary.get_ship.return_value = "Wonder of the Seas"
+    discounts = MagicMock()
+
+    with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
+         patch("CheckRoyalCaribbeanPrice._execute_api_request", side_effect=api_router), \
+         patch("CheckRoyalCaribbeanPrice.get_dining_and_prices",
+               return_value={"dining_selection": [], "prices": []}), \
+         patch("CheckRoyalCaribbeanPrice.get_checkin_info",
+               return_value=("Opens 12/10/2026 08:00 AM", None)), \
+         patch("CheckRoyalCaribbeanPrice.get_OBC", return_value=0.0), \
+         patch("CheckRoyalCaribbeanPrice.get_orders", MagicMock()):
+        get_voyages(account, discounts, ship_dictionary)
+
+    return mock_cfg, sail_date
+
+
+def test_get_voyages_calls_record_booking_with_full_snapshot():
+    """record_booking.call_args.kwargs carries reservation_id, ship_name, stateroom
+    fields (GTY -> None), guest_count, guests_json, loyalty, and final_payment_date."""
+    mock_cfg, sail_date = run_voyages_scenario()
+
+    mock_cfg.history.record_booking.assert_called_once()
+    kwargs = mock_cfg.history.record_booking.call_args.kwargs
+
+    assert kwargs["reservation_id"] == "1234567"
+    assert kwargs["ship_code"] == "WN"
+    assert kwargs["ship_name"] == "Wonder of the Seas"
+    assert kwargs["sail_date"] == sail_date
+    assert kwargs["nights"] == 7
+    assert kwargs["stateroom_type"] == "BALCONY"
+    assert kwargs["stateroom_number"] is None  # "GTY" -> None (not yet assigned)
+    assert kwargs["stateroom_category"] == "4D"
+    assert kwargs["guest_count"] == 2
+
+    guests = json.loads(kwargs["guests_json"])
+    assert {"name": "Matt", "id": "33333333", "age_bracket": "adult"} in guests
+    assert {"name": "Jane", "id": "44444444", "age_bracket": "child"} in guests
+
+    assert kwargs["loyalty_tier"] == "DIAMOND"
+    assert kwargs["loyalty_points"] == 4500
+    assert kwargs["checkin_label"] == "Opens 12/10/2026 08:00 AM"
+    assert kwargs["final_payment_date"] == get_final_payment_date(7, sail_date).strftime("%Y%m%d")
+    assert kwargs["past_final_payment"] == 0
+    assert kwargs["booking_currency"] == "USD"
+    assert kwargs["friendly_name"] == "Anniversary Cruise"
+    assert kwargs["account_label"] == "test_user"
+
+
+def test_get_voyages_record_booking_balance_due_tristate_true():
+    """An explicit balanceDue=True in the API payload maps to the tri-state 1."""
+    mock_cfg, _ = run_voyages_scenario(booking_extra={"balanceDue": True})
+    kwargs = mock_cfg.history.record_booking.call_args.kwargs
+    assert kwargs["balance_due"] == 1
+
+
+def test_get_voyages_record_booking_balance_due_tristate_false():
+    """An explicit balanceDue=False in the API payload maps to the tri-state 0."""
+    mock_cfg, _ = run_voyages_scenario(booking_extra={"balanceDue": False})
+    kwargs = mock_cfg.history.record_booking.call_args.kwargs
+    assert kwargs["balance_due"] == 0
+
+
+def test_get_voyages_record_booking_balance_due_tristate_unknown_ta_booking():
+    """No balance data and no TA/agency indicator -> derive_balance_due() returns
+    None (not the "TA_UNKNOWN" sentinel string) -> the tri-state stores NULL."""
+    mock_cfg, _ = run_voyages_scenario()
+    kwargs = mock_cfg.history.record_booking.call_args.kwargs
+    assert kwargs["balance_due"] is None
+
+
+# ---------------------------------------------------------------------------
+# get_all_promotions() integration: one record_promo call per promo
+# ---------------------------------------------------------------------------
+def test_get_all_promotions_calls_record_promo_once_per_promo():
+    """record_promo is called once per promo, carrying its title and validity dates."""
+    account = MagicMock()
+    account.username = "test_user"
+    account.api_brand = "royal"
+    booking = {"shipCode": "WN", "sailDate": "20270601", "bookingCurrency": "USD"}
+
+    homepage_promos = [
+        {"id": "P1", "startDate": "2027-06-01T00:00:00Z", "endDate": "2027-07-01T00:00:00Z",
+         "templates": [{"type": "HOME_HERO_LOCKUP", "categoryCode": "CRUISE_ONLY", "lockupMedia": {}}]},
+        {"id": "P2", "startDate": "2027-08-01T00:00:00Z", "endDate": "2027-09-01T00:00:00Z",
+         "templates": [{"type": "HOME_HERO_LOCKUP", "categoryCode": "", "lockupMedia": {}}]},
+    ]
+
+    def api_router(*args, **kwargs):
+        page = (kwargs.get("params") or {}).get("page")
+        resp = MagicMock()
+        resp.json.return_value = {"payload": homepage_promos if page == "homepage" else []}
+        return resp
+
+    mock_cfg = MagicMock()
+    mock_cfg.show_promos = True
+    mock_cfg.history = MagicMock()
+
+    with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
+         patch("CheckRoyalCaribbeanPrice._execute_api_request", side_effect=api_router):
+        get_all_promotions(account, booking)
+
+    assert mock_cfg.history.record_promo.call_count == 2
+    calls_by_id = {c.kwargs["promo_id"]: c.kwargs for c in mock_cfg.history.record_promo.call_args_list}
+
+    assert calls_by_id["P1"]["promo_title"] == "P1"
+    assert calls_by_id["P1"]["promo_start"] == "2027-06-01"
+    assert calls_by_id["P1"]["promo_end"] == "2027-07-01"
+    assert calls_by_id["P1"]["ship_code"] == "WN"
+    assert calls_by_id["P1"]["sail_date"] == "20270601"
+    assert calls_by_id["P1"]["account_label"] == "test_user"
+    assert "P1" in calls_by_id["P1"]["promo_line"]
+
+    assert calls_by_id["P2"]["promo_title"] == "P2"
+    assert calls_by_id["P2"]["promo_start"] == "2027-08-01"
+    assert calls_by_id["P2"]["promo_end"] == "2027-09-01"

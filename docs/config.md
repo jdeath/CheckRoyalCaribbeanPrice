@@ -115,7 +115,7 @@ reservationsPaidInFull:
   - '8912345'
 ```
 
-To keep a local history of every price check (for tracking trends over time), set historyDb to a file path. It is optional and off by default - with it unset, nothing changes and no file is created. When set, every cabin fare and add-on/watchlist price check made during a run is appended as one row to a local SQLite file (a `runs` table per script run, plus a `price_points` table with the paid price, current price, and decision for each item checked).
+To keep a local history of every price check (for tracking trends over time), set historyDb to a file path. It is optional and off by default - with it unset, nothing changes and no file is created. When set, every cabin fare and add-on/watchlist price check made during a run is appended as one row to a local SQLite file (a `runs` table per script run, plus a `price_points` table with the paid price, current price, and decision for each item checked). Each run also appends one `bookings` row per reservation (ship, stateroom, guests, loyalty tier, check-in and final-payment status) and one `promos` row per active sitewide promotion found. The database file contains your login emails and reservation IDs in plain text - never share or commit it.
 ```yaml
 historyDb: "price_history.db"
 ```
