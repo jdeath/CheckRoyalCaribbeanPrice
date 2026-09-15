@@ -1557,7 +1557,7 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
     if c_and_a_number and c_and_a_shared_points > 0:
         log(f"\tC&A: {c_and_a_number} {c_and_a_level} - {c_and_a_shared_points} Shared Points ({c_and_a_points} Individual Points)")
 
-        total_nights, total_trips = get_number_of_nights(account_info, c_and_a_number)
+        total_nights, total_trips = get_number_of_nights(account_info, c_and_a_number, brand="royal")
         if total_nights > 0:
             log(f"\tTotal Trips on Royal: {total_trips} - Total Nights: {total_nights}")
 
@@ -1577,7 +1577,7 @@ def get_profile(account_info: AccountInfo) -> Tuple[Optional[str], Optional[str]
         cc_shared = loyalty.get("captainsClubLoyaltyRelationshipPoints", 0)
         log(f"\tCaptain's Club Number: {captains_club_ID} {cc_level} TIER ({cc_shared} Shared Points, {cc_individual} Individual Points)")
 
-        total_nights, total_trips = get_number_of_nights(account_info, captains_club_ID)
+        total_nights, total_trips = get_number_of_nights(account_info, captains_club_ID, brand="celebrity")
         if total_nights > 0:
             log(f"\tTotal Trips on Celebrity: {total_trips} - Total Nights: {total_nights}")
 
@@ -3504,16 +3504,23 @@ def get_boarding_pass(account_info: AccountInfo, booking: Dict[str, Any], guest_
 ##############################
 # Metric Calculation functions
 ##############################
-def get_number_of_nights(account_info: AccountInfo, loyalty_number: str) -> Tuple[int, int]:
+def get_number_of_nights(account_info: AccountInfo, loyalty_number: str,
+                         brand: Optional[str] = None) -> Tuple[int, int]:
     """
     Queries cumulative night metrics and cruise totals for a specified loyalty profile.
 
     Queries corporate historical data points. Runs with 'on_failure="retry"' inside the
     request core so historical lookup dropouts won't crash critical root execution pipelines.
+
+    brand must match the loyalty PROGRAM being queried ("royal" for Crown &
+    Anchor numbers, "celebrity" for Captain's Club), not the account's login
+    brand: the profile shows both programs for either login, and querying a
+    number against the other program's endpoint returns HTTP 400 (issue #116).
+    Defaults to the account's brand for any caller that queries its own program.
     """
     total_nights, total_trips = -1, -1
 
-    url = f"https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/v1/guestAccounts/loyalty/history/summary"
+    url = f"https://aws-prd.api.rccl.com/en/{brand or account_info.api_brand}/web/v1/guestAccounts/loyalty/history/summary"
 
     # Request the information from the servers
     response = _execute_api_request(

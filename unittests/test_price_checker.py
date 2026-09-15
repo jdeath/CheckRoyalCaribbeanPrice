@@ -3735,3 +3735,37 @@ def test_main_all_accounts_succeed_exits_and_records_ok_unchanged():
     assert mock_get_voyages.call_count == 2
 
     mock_cfg.history.finish_run.assert_called_once_with("ok")
+
+
+# =====================================================================
+# LOYALTY NIGHTS BRAND ROUTING (issue #116)
+# The profile shows BOTH loyalty programs for either login, so the
+# history-summary URL must follow the PROGRAM being queried, not the
+# account's login brand - a C&A number against the celebrity endpoint
+# (or Captain's Club against royal) returns HTTP 400.
+# =====================================================================
+def test_get_number_of_nights_brand_follows_program_not_login():
+    from CheckRoyalCaribbeanPrice import get_number_of_nights, AccountInfo
+
+    celebrity_account = AccountInfo(username="test_user", password="pw", cruise_line="celebrity")
+    urls = []
+
+    def capture(account_info, method, url, **kwargs):
+        urls.append(url)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"payload": {"totalNights": 42, "totalTrips": 7}}
+        return mock_resp
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=capture):
+        # C&A lookup from a Celebrity login must hit the ROYAL endpoint
+        nights, trips = get_number_of_nights(celebrity_account, "123456789", brand="royal")
+        assert (nights, trips) == (42, 7)
+        # Captain's Club lookup pins celebrity explicitly
+        get_number_of_nights(celebrity_account, "987654321", brand="celebrity")
+        # No brand given: falls back to the account's own brand (old behavior)
+        get_number_of_nights(celebrity_account, "987654321")
+
+    assert "/en/royal/web/" in urls[0], urls[0]
+    assert "/en/celebrity/web/" in urls[1], urls[1]
+    assert "/en/celebrity/web/" in urls[2], urls[2]
