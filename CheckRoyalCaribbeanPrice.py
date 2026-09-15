@@ -2650,6 +2650,19 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     if is_gty and stateroom_types:
         return True, []
 
+    # Royal has begun renaming funnel subtype codes so they no longer equal the
+    # letters of their categories (Ovation interiors: booking-era code U with
+    # categories 2U/4U is now funnel subtype V; Navigator balconies: D -> DW).
+    # A booking still carrying the old code then fails the exact-match gate
+    # below even though its family is on sale - collect each row's lead-in
+    # category so a letters-based fallback can resolve the renamed code.
+    letter_matched_subtype = None
+
+    def _code_letters(code: Optional[str]) -> str:
+        return re.sub(r"[^A-Za-z]", "", code or "").upper()
+
+    wanted_letters = _code_letters(params.stateroom_subtype) or _code_letters(params.stateroom_category_code)
+
     for stateroom_type in stateroom_types:
         stateroom_subtypes = stateroom_type.get("stateroomSubtypes", [])
         for stateroom_subtype in stateroom_subtypes:
@@ -2671,6 +2684,14 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
             if cur_subtype_code == params.stateroom_subtype:
                 return True, []
 
+            # Remember the first non-guarantee subtype whose lead-in category shares
+            # the booking's letters (booked U/2U -> lead-in 4U -> funnel subtype V),
+            # in case the exact-match pass above never fires
+            if (letter_matched_subtype is None and wanted_letters
+                    and not stateroom_subtype.get("guarantee")
+                    and _code_letters(cur_category_code) == wanted_letters):
+                letter_matched_subtype = cur_subtype_code
+
             # Defensively extract pricing trees to protect against missing API sub-keys
             pricing_struct = stateroom_subtype.get("pricing", {})
             invoice_struct = pricing_struct.get("invoice", {}) if pricing_struct else {}
@@ -2685,6 +2706,17 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
                 "price": price,
                 "rooms_left": rooms_left
             })
+
+    # Letters fallback: the booked subtype code is not offered under that name,
+    # but a subtype whose lead-in category shares its letters is - Royal renamed
+    # the code. Adopt the current funnel code so the pricing POST downstream
+    # (which sends stateroomSubtypeCode alongside the booked categoryCode)
+    # speaks the vocabulary the API expects.
+    if letter_matched_subtype is not None:
+        log(f"\tSubtype code {params.stateroom_subtype} is no longer offered under that name; "
+            f"using current code {letter_matched_subtype} for the same category family")
+        params.stateroom_subtype = letter_matched_subtype
+        return True, []
 
     # Fall-through state: The loops completed without finding our exact cabin style.
     # The room is sold out, so we return False along with the collected alternative options.
