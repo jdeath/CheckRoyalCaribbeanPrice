@@ -2253,7 +2253,11 @@ def test_availability_matches_on_subtype_code_even_when_category_differs():
 
 
 def test_availability_false_when_subtype_code_absent():
-    params = _availability_params(subtype="2D", category_code="2D")
+    # A genuinely absent FAMILY: neither the subtype code nor its letters
+    # exist in the response. (A booked "2D" against funnel D/4D is not this
+    # case - the letters fallback resolves that as available on purpose; see
+    # test_availability_resolves_renamed_subtype_via_category_letters.)
+    params = _availability_params(subtype="Z", category_code="9Z")
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -3769,3 +3773,52 @@ def test_get_number_of_nights_brand_follows_program_not_login():
     assert "/en/royal/web/" in urls[0], urls[0]
     assert "/en/celebrity/web/" in urls[1], urls[1]
     assert "/en/celebrity/web/" in urls[2], urls[2]
+
+
+# =====================================================================
+# RENAMED SUBTYPE CODES (funnel vocabulary shift, e.g. U -> V on Ovation)
+# Royal renamed funnel subtype codes so they no longer equal the letters
+# of their categories. A booking carrying the old code must resolve to the
+# renamed funnel subtype via its lead-in category letters - and adopt the
+# new code so the downstream pricing POST speaks the current vocabulary.
+# =====================================================================
+def test_availability_resolves_renamed_subtype_via_category_letters():
+    # Booked 2U interior (booking-era subtype "U"); funnel now offers the
+    # family as subtype "V" with lead-in category "4U"
+    params = _availability_params(subtype="U", category_code="2U")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = _room_selection_rsc(code="V", category_code="4U")
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        available, alternates = check_if_room_is_available(params)
+    assert available is True
+    assert alternates == []
+    # The resolved funnel code replaces the stale one for the pricing POST
+    assert params.stateroom_subtype == "V"
+
+
+def test_availability_letters_fallback_does_not_false_positive():
+    """A genuinely different family must still read as unavailable: booked Z/9Z
+    finds only the D/4D row - no letters overlap, no match, alternates returned."""
+    params = _availability_params(subtype="Z", category_code="9Z")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = _room_selection_rsc(code="D", category_code="4D")
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        available, alternates = check_if_room_is_available(params)
+    assert available is False
+    assert len(alternates) == 1
+    assert params.stateroom_subtype == "Z"   # untouched on no-match
+
+
+def test_availability_exact_match_still_wins_unchanged():
+    """When the booking's code IS offered, behavior is byte-identical to before:
+    no rewrite, immediate available."""
+    params = _availability_params(subtype="D", category_code="2D")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = _room_selection_rsc(code="D", category_code="4D")
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=mock_resp):
+        available, alternates = check_if_room_is_available(params)
+    assert available is True and alternates == []
+    assert params.stateroom_subtype == "D"
