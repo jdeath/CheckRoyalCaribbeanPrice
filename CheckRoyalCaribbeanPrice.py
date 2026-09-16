@@ -2434,6 +2434,10 @@ def get_cruise_price(account_info: AccountInfo,
         elif desire_refund_price:
             temp_string += f" Non-refundable price is {base_price:.2f} {url_params.currency_code}"
 
+        if automatic_URL and past_final_payment_date:
+            temp_string += f"{YELLOW} Past Final Payment Date of {final_payment_date_display}{RESET}"
+            rebook_decision = "past_final_payment"
+            
         log(temp_string)
 
     config.history.record_cabin_fare(**history_common, current_price=price, status="priced",
