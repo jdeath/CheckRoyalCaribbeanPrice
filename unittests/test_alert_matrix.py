@@ -27,6 +27,7 @@ from CheckRoyalCaribbeanPrice import (
     WatchItemContext,
     get_cruise_price,
     get_new_order_price,
+    history,
 )
 
 
@@ -115,6 +116,7 @@ def run_cruise_scenario(
         paid_price_struct.update(struct_extra)
 
     apobj = MagicMock()
+    mock_history = MagicMock()
     mock_cfg = MagicMock()
     mock_cfg.apobj = apobj
     mock_cfg.minimum_saving_alert = minimum_saving_alert
@@ -127,6 +129,7 @@ def run_cruise_scenario(
 
     logged = []
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.history", mock_history), \
          patch("CheckRoyalCaribbeanPrice.log", side_effect=lambda m, *a, **k: logged.append(str(m))), \
          patch("CheckRoyalCaribbeanPrice.get_room_price_via_API", return_value=results):
         get_cruise_price(
@@ -184,12 +187,14 @@ def run_addon_scenario(
     )
 
     apobj = MagicMock()
+    mock_history = MagicMock()
     mock_cfg = MagicMock()
     mock_cfg.minimum_saving_alert = minimum_saving_alert
     mock_cfg.currency_override = None
 
     logged = []
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.history", mock_history), \
          patch("CheckRoyalCaribbeanPrice.log", side_effect=lambda m, *a, **k: logged.append(str(m))), \
          patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=mock_resp) as mock_net:
         get_new_order_price(account, booking, apobj, ctx)
@@ -501,11 +506,14 @@ class TestHistorySailDateNightsConsistency:
         mock_cfg.date_display_format = "%m/%d/%Y"
         mock_cfg.format_date = lambda d: str(d)
 
+        mock_history = MagicMock()
+
         ship_dictionary = MagicMock()
         ship_dictionary.get_ship.return_value = "Wonder of the Seas"
 
         results = {**build_available_response(sailing_nights=7), "base_fare": build_fare(2500.0)}
         with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+             patch("CheckRoyalCaribbeanPrice.history", mock_history), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
              patch("CheckRoyalCaribbeanPrice.get_room_price_via_API", return_value=results):
             get_cruise_price(
@@ -514,8 +522,8 @@ class TestHistorySailDateNightsConsistency:
                 paid_price_struct={"paidPrice": 3000.0},
             )
 
-        mock_cfg.history.record_cabin_fare.assert_called_once()
-        kwargs = mock_cfg.history.record_cabin_fare.call_args.kwargs
+        mock_history.record_cabin_fare.assert_called_once()
+        kwargs = mock_history.record_cabin_fare.call_args.kwargs
         assert kwargs["sail_date"] == "20260913"
         assert kwargs["nights"] == 7
 
@@ -541,12 +549,15 @@ class TestHistorySailDateNightsConsistency:
         mock_cfg.minimum_saving_alert = None
         mock_cfg.currency_override = None
 
+        mock_history = MagicMock()
+
         with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+             patch("CheckRoyalCaribbeanPrice.history", mock_history), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
              patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=mock_resp):
             get_new_order_price(account, booking, MagicMock(), ctx)
 
-        mock_cfg.history.record_addon.assert_called_once()
-        kwargs = mock_cfg.history.record_addon.call_args.kwargs
+        mock_history.record_addon.assert_called_once()
+        kwargs = mock_history.record_addon.call_args.kwargs
         assert kwargs["sail_date"] == "20260913"
         assert kwargs["nights"] == 7

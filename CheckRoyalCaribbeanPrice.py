@@ -132,8 +132,8 @@ MARKET_RULES: dict[str, Union[int, DurationRules]] = {
 
 # Process exit code contract for main() - a supervising scheduler can rely on
 # these three outcomes meaning exactly this and nothing else:
-#   0                    - full success: every account was checked
-#   1                    - fatal/total failure: an unhandled exception, or a
+#   EXIT_SUCCESS         - full success: every account was checked
+#   EXIT_TOTAL_FAILURE   - fatal/total failure: an unhandled exception, or a
 #                          module-level setup failure. This can happen before
 #                          any pricing ran, or partway through a multi-account
 #                          run after earlier accounts already succeeded and
@@ -154,6 +154,8 @@ MARKET_RULES: dict[str, Union[int, DurationRules]] = {
 #                          price-drop notifications to real users - so this
 #                          code is deliberately distinct from the fatal (1)
 #                          and success (0) cases.
+EXIT_SUCCESS = 0
+EXIT_TOTAL_FAILURE = 1
 EXIT_PARTIAL_FAILURE = 2
 
 # ANSI color codes
@@ -179,6 +181,9 @@ BLUE = '\033[94m'        # Bright blue text, default background, normal weight
 
 # Global storage of user config read from YAML
 config: CruiseAppConfig = None
+
+# Global storage of price history
+history: PriceHistory = None
 
 # Environmental overrides for terminals struggling with Unicode glyphs such as ↑ (e.g., MobaXterm)
 PROBLEM_ENVS = ["MOBAEXTRACTONTHEFLY", "MOBANOACL"]
@@ -616,7 +621,6 @@ class CruiseAppConfig:
 
     # Live Runtime Objects (Excluded from the initial YAML mapping)
     apobj: Optional[Apprise] = None
-    history: "PriceHistory" = field(default_factory=lambda: PriceHistory(None))
 
 
     def __str__(self):
@@ -641,97 +645,12 @@ class CruiseAppConfig:
             return str(date_str)   # malformed API date: show it raw, don't crash the run
 
 
-_PRICE_HISTORY_SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS runs (
-    run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    started_at       TEXT NOT NULL,
-    finished_at      TEXT,
-    status           TEXT NOT NULL DEFAULT 'started',
-    error_summary    TEXT
-);
-
-CREATE TABLE IF NOT EXISTS price_points (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id           INTEGER NOT NULL REFERENCES runs(run_id),
-    observed_at      TEXT NOT NULL,
-    account_label    TEXT,
-    reservation_id   TEXT,
-    ship_code        TEXT,
-    sail_date        TEXT,
-    nights           INTEGER,
-    item_kind        TEXT NOT NULL,
-    item_code        TEXT,
-    item_name        TEXT,
-    guest_id         TEXT,
-    guest_name       TEXT,
-    paid_price       REAL,
-    current_price    REAL,
-    currency         TEXT,
-    per_night        INTEGER NOT NULL DEFAULT 0,
-    discount_applied TEXT,
-    status           TEXT NOT NULL,
-    rebook_decision  TEXT,
-    notified         INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_price_points_latest
-    ON price_points (reservation_id, item_code, guest_id, observed_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_price_points_history
-    ON price_points (item_code, sail_date, observed_at);
-
-CREATE INDEX IF NOT EXISTS idx_price_points_run
-    ON price_points (run_id);
-
-CREATE TABLE IF NOT EXISTS bookings (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id           INTEGER NOT NULL REFERENCES runs(run_id),
-    observed_at      TEXT NOT NULL,
-    account_label    TEXT,                 -- account_info.username
-    reservation_id   TEXT NOT NULL,
-    ship_code        TEXT,
-    ship_name        TEXT,                 -- from the ShipRegistry the run already built
-    sail_date        TEXT,                 -- YYYYMMDD
-    nights           INTEGER,
-    stateroom_type   TEXT,                 -- e.g. BALCONY / INTERIOR / GTY label as the script prints it
-    stateroom_number TEXT,                 -- may be NULL (GTY not yet assigned)
-    stateroom_category TEXT,               -- e.g. 4D
-    guest_count      INTEGER,
-    guests_json      TEXT,                 -- [{"name": "...", "id": "...", "age_bracket": "adult"}]
-    loyalty_tier     TEXT,                 -- from get_profile(): C&A tier label; NULL if unknown
-    loyalty_points   INTEGER,
-    checkin_label    TEXT,                 -- the string the summary table prints (e.g. "Opens Dec 10 8:00 AM")
-    final_payment_date TEXT,               -- YYYYMMDD, from get_final_payment_date
-    past_final_payment INTEGER,            -- 0/1
-    balance_due      INTEGER,              -- 1 / 0 / NULL (unknown, TA bookings)
-    booking_currency TEXT,
-    friendly_name    TEXT                  -- reservationFriendlyNames entry if configured
-);
-CREATE INDEX IF NOT EXISTS idx_bookings_latest ON bookings (reservation_id, observed_at DESC);
-
-CREATE TABLE IF NOT EXISTS promos (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id           INTEGER NOT NULL REFERENCES runs(run_id),
-    observed_at      TEXT NOT NULL,
-    account_label    TEXT,
-    ship_code        TEXT,
-    sail_date        TEXT,
-    promo_id         TEXT,
-    promo_title      TEXT,
-    promo_line       TEXT,                 -- the human-readable line the script logs
-    promo_start      TEXT,
-    promo_end        TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_promos_run ON promos (run_id);
-"""
-
-
 class PriceHistory:
     """
     Opt-in, append-only SQLite price-history sink (config: historyDb).
 
     Every public method is a silent no-op when db_path is falsy, so the ~10
-    call sites throughout this script never need an `if config.history:`
+    call sites throughout this script never need an `if history:`
     guard - the object itself absorbs "feature off" and touches the
     filesystem not at all in that case. When enabled, each observation is
     committed immediately (one connection per call, WAL mode) so a crash
@@ -745,6 +664,90 @@ class PriceHistory:
     run as "partial_failure" instead.
     """
 
+    _PRICE_HISTORY_SCHEMA_SQL = """
+    CREATE TABLE IF NOT EXISTS runs (
+        run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at       TEXT NOT NULL,
+        finished_at      TEXT,
+        status           TEXT NOT NULL DEFAULT 'started',
+        error_summary    TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS price_points (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id           INTEGER NOT NULL REFERENCES runs(run_id),
+        observed_at      TEXT NOT NULL,
+        account_label    TEXT,
+        reservation_id   TEXT,
+        ship_code        TEXT,
+        sail_date        TEXT,
+        nights           INTEGER,
+        item_kind        TEXT NOT NULL,
+        item_code        TEXT,
+        item_name        TEXT,
+        guest_id         TEXT,
+        guest_name       TEXT,
+        paid_price       REAL,
+        current_price    REAL,
+        currency         TEXT,
+        per_night        INTEGER NOT NULL DEFAULT 0,
+        discount_applied TEXT,
+        status           TEXT NOT NULL,
+        rebook_decision  TEXT,
+        notified         INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_price_points_latest
+        ON price_points (reservation_id, item_code, guest_id, observed_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_price_points_history
+        ON price_points (item_code, sail_date, observed_at);
+
+    CREATE INDEX IF NOT EXISTS idx_price_points_run
+        ON price_points (run_id);
+
+    CREATE TABLE IF NOT EXISTS bookings (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id           INTEGER NOT NULL REFERENCES runs(run_id),
+        observed_at      TEXT NOT NULL,
+        account_label    TEXT,                 -- account_info.username
+        reservation_id   TEXT NOT NULL,
+        ship_code        TEXT,
+        ship_name        TEXT,                 -- from the ShipRegistry the run already built
+        sail_date        TEXT,                 -- YYYYMMDD
+        nights           INTEGER,
+        stateroom_type   TEXT,                 -- e.g. BALCONY / INTERIOR / GTY label as the script prints it
+        stateroom_number TEXT,                 -- may be NULL (GTY not yet assigned)
+        stateroom_category TEXT,               -- e.g. 4D
+        guest_count      INTEGER,
+        guests_json      TEXT,                 -- [{"name": "...", "id": "...", "age_bracket": "adult"}]
+        loyalty_tier     TEXT,                 -- from get_profile(): C&A tier label; NULL if unknown
+        loyalty_points   INTEGER,
+        checkin_label    TEXT,                 -- the string the summary table prints (e.g. "Opens Dec 10 8:00 AM")
+        final_payment_date TEXT,               -- YYYYMMDD, from get_final_payment_date
+        past_final_payment INTEGER,            -- 0/1
+        balance_due      INTEGER,              -- 1 / 0 / NULL (unknown, TA bookings)
+        booking_currency TEXT,
+        friendly_name    TEXT                  -- reservationFriendlyNames entry if configured
+    );
+    CREATE INDEX IF NOT EXISTS idx_bookings_latest ON bookings (reservation_id, observed_at DESC);
+
+    CREATE TABLE IF NOT EXISTS promos (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id           INTEGER NOT NULL REFERENCES runs(run_id),
+        observed_at      TEXT NOT NULL,
+        account_label    TEXT,
+        ship_code        TEXT,
+        sail_date        TEXT,
+        promo_id         TEXT,
+        promo_title      TEXT,
+        promo_line       TEXT,                 -- the human-readable line the script logs
+        promo_start      TEXT,
+        promo_end        TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_promos_run ON promos (run_id);
+    """
+
     def __init__(self, db_path: Optional[str] = None) -> None:
         self.enabled = bool(db_path)
         self.db_path = db_path
@@ -752,7 +755,7 @@ class PriceHistory:
         if self.enabled:
             try:
                 with closing(self._connect()) as conn:
-                    conn.executescript(_PRICE_HISTORY_SCHEMA_SQL)
+                    conn.executescript(self._PRICE_HISTORY_SCHEMA_SQL)
             except (sqlite3.Error, OSError) as e:
                 self._disable(e)
 
@@ -1001,7 +1004,7 @@ def _execute_api_request(
         error_msg = f"Can't contact cruise line servers; please try again later\n(program exception '{error}')"
         if on_failure == "exit":
             log(error_msg)
-            sys.exit(1)
+            sys.exit(EXIT_TOTAL_FAILURE)
         else:
             logging.warning(f"Non-critical API interaction skipped (exception: {error})")
             return None
@@ -1472,7 +1475,7 @@ def login(account_info: AccountInfo) -> APIAccess:
         response = session.post(f'https://www.{account_info.url_brand}.com/auth/oauth2/access_token', headers=headers, data=data, timeout=REQUEST_TIMEOUT)
     except Exception as e:
         log(f"Can't contact cruise line servers; please try again later\n(program exception '{e}')")
-        sys.exit(1)
+        sys.exit(EXIT_TOTAL_FAILURE)
 
     if response.status_code != 200:
         log(f"Login attempt got return code {response.status_code} for user {account_info.username}")
@@ -1490,7 +1493,7 @@ def login(account_info: AccountInfo) -> APIAccess:
             log(f"	Server said: {detail[:300]}")
 
         log(f"{account_info.cruise_line} website might be down, username/password incorrect, or have unsupported symbol in password. Quitting.")
-        sys.exit(1)
+        sys.exit(EXIT_TOTAL_FAILURE)
 
     # Parse out the account's ID and access token
     access_token = response.json().get("access_token")
@@ -1506,7 +1509,7 @@ def login(account_info: AccountInfo) -> APIAccess:
     except(IndexError, ValueError, KeyError, AttributeError, TypeError) as parse_err:
         # AttributeError/TypeError: a 200 with no access_token leaves it None
         log(f"Error parsing authentication token structure: {parse_err}")
-        sys.exit(1)
+        sys.exit(EXIT_TOTAL_FAILURE)
 
     # Store the server access value in an APIAccess object and return
     return APIAccess(
@@ -1890,7 +1893,7 @@ def get_voyages(
             }
             for g in guests
         ])
-        config.history.record_booking(
+        history.record_booking(
             reservation_id=str(reservation_ID),
             ship_code=ship_code,
             ship_name=ship_name,
@@ -2265,7 +2268,7 @@ def get_cruise_price(account_info: AccountInfo,
             # No fare data at all: bail out rather than comparing against a phantom
             # 0.00 price, which would fire a false "Rebook! New price of 0.00" alert
             log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
-            config.history.record_cabin_fare(**history_common, current_price=None,
+            history.record_cabin_fare(**history_common, current_price=None,
                                               status="no_price_data", rebook_decision=None, notified=False)
             return
 
@@ -2274,7 +2277,7 @@ def get_cruise_price(account_info: AccountInfo,
         # crashing on the first {price:.2f} format below
         if fare_struct.get("fare") is None:
             log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
-            config.history.record_cabin_fare(**history_common, current_price=None,
+            history.record_cabin_fare(**history_common, current_price=None,
                                               status="no_price_data", rebook_decision=None, notified=False)
             return
         price = fare_struct.get("fare") or 0.0
@@ -2350,7 +2353,7 @@ def get_cruise_price(account_info: AccountInfo,
             else:
                 log(f"\tNo alternative room inventory returned by the booking engine.")
 
-        config.history.record_cabin_fare(**history_common, current_price=None, status="not_for_sale",
+        history.record_cabin_fare(**history_common, current_price=None, status="not_for_sale",
                                           rebook_decision=None, notified=(not automatic_URL and apobj is not None))
         return
 
@@ -2360,7 +2363,7 @@ def get_cruise_price(account_info: AccountInfo,
     # Path 2: Standard Pricing Evaluation
     if paid_price is None:
         log(GREEN + f"{pre_string}:" + RESET + f" Current Price {price:.2f} {url_params.currency_code}")
-        config.history.record_cabin_fare(**history_common, current_price=price, status="priced",
+        history.record_cabin_fare(**history_common, current_price=price, status="priced",
                                           rebook_decision=None, notified=False)
         return
 
@@ -2440,7 +2443,7 @@ def get_cruise_price(account_info: AccountInfo,
             
         log(temp_string)
 
-    config.history.record_cabin_fare(**history_common, current_price=price, status="priced",
+    history.record_cabin_fare(**history_common, current_price=price, status="priced",
                                       rebook_decision=rebook_decision, notified=notified)
 
 
@@ -2796,7 +2799,7 @@ def get_new_order_price(
         # Record this too: for a watchlist item this is the "waiting for it to
         # become bookable" state, exactly what a back-in-stock history query
         # needs a row for. The payload never parsed, so item_name is unknown.
-        config.history.record_addon(
+        history.record_addon(
             item_kind="watchlist" if for_watch else "addon",
             reservation_id=str(reservation_ID) if reservation_ID is not None else None,
             account_label=account_info.username, ship_code=ship, sail_date=start_date,
@@ -2833,7 +2836,7 @@ def get_new_order_price(
     booking_eligibility = payload.get("bookingEligibility") or {}
     if booking_eligibility.get("reason") == "NO_STARTING_FROM_PRICE":
         log(YELLOW + f"\t{title}: Server returned no pricing data (currency mismatch or unavailable for reservation)." + RESET)
-        config.history.record_addon(**history_common, current_price=None, discount_applied=None,
+        history.record_addon(**history_common, current_price=None, discount_applied=None,
                                      status="no_price_data", rebook_decision=None, notified=False)
         return
 
@@ -2850,7 +2853,7 @@ def get_new_order_price(
             temp_string = YELLOW + f"\t{title} not available or already booked for {passenger_name.ljust(10)}" + RESET
 
         log(temp_string)
-        config.history.record_addon(**history_common, current_price=None, discount_applied=None,
+        history.record_addon(**history_common, current_price=None, discount_applied=None,
                                      status="no_longer_for_sale", rebook_decision=None, notified=False)
         return
 
@@ -2864,7 +2867,7 @@ def get_new_order_price(
         # would fire a false "price is lower / Book!" alert (same failure mode
         # already guarded for cruise fares)
         log(YELLOW + f"\t{title}: no current price returned; cannot compare" + RESET)
-        config.history.record_addon(**history_common, current_price=None, discount_applied=None,
+        history.record_addon(**history_common, current_price=None, discount_applied=None,
                                      status="no_price_data", rebook_decision=None, notified=False)
         return
 
@@ -2945,7 +2948,7 @@ def get_new_order_price(
             temp_string += f" (now {current_price:.2f} {currency})"
         log(temp_string)
 
-    config.history.record_addon(**history_common, current_price=current_price,
+    history.record_addon(**history_common, current_price=current_price,
                                  discount_applied=history_discount_applied, status="priced",
                                  rebook_decision=rebook_decision, notified=notified)
 
@@ -3324,7 +3327,7 @@ def get_all_promotions(account_info: AccountInfo, booking: Dict[str, Any]) -> No
                 promo_line += f" ({category_code})"
             promo_line += f" {date_range}"
 
-        config.history.record_promo(
+        history.record_promo(
             account_label=account_info.username, ship_code=ship, sail_date=start_date,
             promo_id=promo_ID, promo_title=promo_title, promo_line=promo_line,
             promo_start=promo_start, promo_end=promo_end,
@@ -3579,7 +3582,6 @@ def _calculate_passenger_metrics(
     sail_date: str,
     booking: Dict[str, Any],
     brand_code: str,
-#    display_prices: bool
 ) -> Dict[str, Any]:
     """
     Parses structural guest files to calculate age milestones, check-in windows, and demographic flags.
@@ -3906,12 +3908,6 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     # Set up the custom logger
     setup_hybrid_logging(config.log_file)
 
-    # Opt-in SQLite price-history sink; PriceHistory is a no-op when history_db is unset
-    history_db_path = config.history_db
-    if history_db_path and platform.system() == "iOS":
-        history_db_path = os.path.expanduser('~/Documents') + "/" + history_db_path
-    config.history = PriceHistory(history_db_path)
-
     if currency_override_present:
         log(YELLOW + f"Due to RCCL API updates, config file option 'currencyOverride' is deprecated" + RESET)
     if currency_present:
@@ -3992,7 +3988,7 @@ def main() -> None:
         # Watch list table rows
         collected_watch_rows: List[Dict[str, Any]] = []
 
-        config.history.start_run()
+        history.start_run()
 
         # Set Time with AM/PM or 24h based on locale
         locale.setlocale(locale.LC_TIME,'')
@@ -4023,8 +4019,8 @@ def main() -> None:
                     account.apobj.notify(body=f"This is only a test for account {account.username}. Apprise is set up correctly",
                                           title='Cruise Price Notification Test', body_format=NotifyFormat.TEXT)
 
-            config.history.finish_run("apprise_test")
-            sys.exit(0)   # quit() is a site-builtin, absent in frozen builds
+            history.finish_run("apprise_test")
+            sys.exit(EXIT_SUCCESS)   # quit() is a site-builtin, absent in frozen builds
 
         if config.minimum_saving_alert is not None:
             log(YELLOW + f"Only alerting for savings >= {config.minimum_saving_alert:.2f}" + RESET)
@@ -4220,7 +4216,7 @@ def main() -> None:
             # without the phase they can't tell a stale password from a
             # transient profile-API failure.
             failure_detail = ", ".join(f"{username} ({phase})" for username, phase in failed_accounts)
-            config.history.finish_run(
+            history.finish_run(
                 "partial_failure",
                 f"{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked: "
                 f"{failure_detail}",
@@ -4228,11 +4224,11 @@ def main() -> None:
             # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.
             sys.exit(EXIT_PARTIAL_FAILURE)
 
-        config.history.finish_run("ok")
+        history.finish_run("ok")
 
     except Exception as e:
         # Mark the price-history run as failed before the module-level handler reports it
-        config.history.finish_run("error", f"{type(e).__name__}: {e}")
+        history.finish_run("error", f"{type(e).__name__}: {e}")
         raise
 
 
@@ -4242,6 +4238,12 @@ if __name__ == "__main__":
     try:
         # Load everything once. Logging, Apprise, and YAML values are now armed.
         config = load_config_objects(config_path)
+
+        # Opt-in SQLite price-history sink; PriceHistory is a no-op when history_db is unset
+        history_db_path = config.history_db
+        if history_db_path and platform.system() == "iOS":
+            history_db_path = os.path.expanduser('~/Documents') + "/" + history_db_path
+        history = PriceHistory(history_db_path)
 
         # Now that the config object is fully built, pass control to main
         main()
@@ -4278,10 +4280,10 @@ if __name__ == "__main__":
 
             except requests.RequestException as req_err:
                 sys.stderr.write(f"Failed to download sample configuration file from GitHub: {req_err}\n")
-                sys.exit(1)
+                sys.exit(EXIT_TOTAL_FAILURE)
         else:
             print("Exiting. Please create a valid config.yaml file manually.")
-            sys.exit(1)
+            sys.exit(EXIT_TOTAL_FAILURE)
 
     except Exception as exc:
         error_summary = f"{type(exc).__name__}: {exc}"
@@ -4303,4 +4305,4 @@ if __name__ == "__main__":
                 body = f"Script failed at {timestamp}\n{error_summary}"
                 config.apobj.notify(body=body, title='Cruise Price Script Error', body_format=NotifyFormat.TEXT)
 
-        sys.exit(1)
+        sys.exit(EXIT_TOTAL_FAILURE)
