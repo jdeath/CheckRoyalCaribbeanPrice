@@ -19,4 +19,52 @@
 1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. The code will print the cheapest interior, outside view, balcony or suite available. These are probably GTY for each class and not the exact type of room you wanted. This is all the public cruise price API returns.
 1. If you only want to check the cruise prices with URL you provide, you do not need to have your `accountInfo` and/or `apprise` in your [config file](config.md), as they are not necessary.
 1. Should always give price in your current currency (except for OBC which is only in USD). If your currency is not supported, create an issue
-   
+
+## Notify when a cabin becomes available
+
+Set `notificationMode: availability` on an individual entry in `cruises` to receive
+an alert when its cabin subtype becomes available. Keep using the complete checkout
+URL for the desired sailing, cabin and passenger counts:
+
+```yaml
+cruises:
+  - cruiseURL: "YOUR_COMPLETE_CHECKOUT_URL"
+    notificationMode: availability
+
+cabinAvailabilityStateFile: /app/data/cabin-availability.sqlite3
+```
+
+This mode does not require `paidPrice` and does not apply `minimumSavingAlert`.
+It sends one **Cruise Room Available** alert, with the current price when returned
+and a booking link. It also alerts if the first successful check finds availability.
+An unavailable result appears in the console/report without sending a notification.
+A subsequent confirmed closure rearms the alert for the next reopening. It tracks
+subtype inventory, not a particular cabin number; confirm the booking on Royal's site.
+If the inventory row describes a different lead-in category, checkout must return
+a fare for the requested category before an alert can be sent. Missing or invalid
+counts are also uncertain until checkout confirms a fare. Ordinary price checks
+continue to attempt checkout for matching subtypes regardless of lead-in stock.
+Guarantee categories require a returned fare because the inventory endpoint does not
+identify them individually.
+
+State persists across scheduled runs and container restarts. Mount `/app/data` as a
+writable persistent volume in Docker. Outside Docker the default state path is
+`data/cabin-availability.sqlite3`, relative to the working directory. The database
+holds the latest state per search, not a report history. Changing search criteria
+creates a new watch state; deleting the file resets all cabin availability watches.
+Configure Apprise to deliver alerts. Failed deliveries remain pending for retry;
+failed or unrecognized API responses retain the previous state.
+Without Apprise, availability is reported in the console without treating it as
+a delivery failure or marking an alert delivered. Adding Apprise later allows an
+available cabin to trigger its first notification.
+
+A notification or state-storage failure affects only that watch. Remaining
+watches and the summary report still run; the process records a partial failure
+and exits with the existing partial-failure status. A missing inventory array or
+an incomplete response cannot rearm an alert. Explicit empty inventory arrays
+confirm closure; unrelated malformed rows do not invalidate a usable match.
+
+An omitted, empty or null `cruises` section disables prospective watches.
+
+Omit `notificationMode`, or set it to `price`, to keep existing price-watch behavior,
+including its required `paidPrice`. Availability mode uses the regular check schedule.
