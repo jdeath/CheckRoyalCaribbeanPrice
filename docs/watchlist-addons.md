@@ -44,3 +44,36 @@ To find the `prefix` and `product` values for items you want to watch:
 [WATCH] Deluxe Beverage Package - John (1234): Book! Deluxe Beverage Package Price is lower: 75.00 than 85.00
 [WATCH] Internet Package - Mary (1234): price is higher than watch price: 25.00 (now 30.00)
 ```
+
+### Ignore selected price notifications
+
+Use the top-level `ignoredPriceAlerts` list to mute a product for a specific cruise
+reservation. This also applies to automatically discovered booked add-ons, which
+are checked even when they do not appear in `watchList`.
+
+```yaml
+ignoredPriceAlerts:
+  - reservation: "1000001" # Fictional reservation; replace with yours
+    prefix: "pt_spa"      # Use the category from the product's Cruise Planner URL
+    product: "PRODUCT_CODE"
+    # guest: "GUEST_ID"   # Optional passenger ID, not a name
+```
+
+Each rule requires an exact reservation number, category `prefix` and `product`
+ID. Find the category and product in the Cruise Planner product URL as described
+above. The optional `guest` is Royal's passenger ID; it is also recorded as
+`guest_id` in the optional `historyDb` price history. Without `guest`, the rule
+applies to all passengers in that reservation. Quoted numbers are recommended;
+integer IDs are accepted too. Unknown keys and empty identifiers are rejected.
+
+The tool still checks and displays the price in the console, marked
+`Notification suppressed by ignoredPriceAlerts`. Optional watch JSON and price
+history still receive the result. Price history records
+`rebook_decision: suppressed_by_configuration` and `notified: false` for muted
+price drops. Other products, reservations and cabin alerts are unaffected,
+including other products on the same order.
+
+For example, this can mute a spa product whose advertised sale only applies to
+appointment times you do not want. It does not compare prices for your booked
+time. All appointments for that product within the rule's reservation/guest scope
+are muted. Remove the rule to resume its notifications on the next regular check.

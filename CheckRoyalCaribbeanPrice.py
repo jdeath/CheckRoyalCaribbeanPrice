@@ -478,6 +478,21 @@ class WatchItemContext:
     reservation_id: str = ""
 
 
+@dataclass(frozen=True)
+class PriceAlertExclusion:
+    """Mute one product's price notifications within a reservation."""
+    reservation: str
+    prefix: str
+    product: str
+    guest: Optional[str] = None
+
+    def matches(self, reservation: Any, ctx: WatchItemContext) -> bool:
+        return (self.reservation == str(reservation)
+                and self.prefix == str(ctx.prefix)
+                and self.product == str(ctx.product)
+                and (self.guest is None or self.guest == str(ctx.passenger_ID)))
+
+
 @dataclass
 class APIAccess:
     """
@@ -611,6 +626,7 @@ class CruiseAppConfig:
     # Complex Objects
     accounts: List[AccountInfo] = field(default_factory=list)
     watch_list: List[WatchListItem] = field(default_factory=list)
+    ignored_price_alerts: List[PriceAlertExclusion] = field(default_factory=list)
     prospective_cruises: List[ProspectiveCruise] = field(default_factory=list)
 
     # Mapping Dictionaries
@@ -3006,7 +3022,10 @@ def get_new_order_price(
         if not owner:
             text += "\tThis was booked by another in your party. They will have to cancel/rebook for you!"
 
-        if config.minimum_saving_alert is not None and saving_for_alert < config.minimum_saving_alert:
+        if any(rule.matches(reservation_ID, ctx) for rule in config.ignored_price_alerts):
+            log(YELLOW + text + " (Notification suppressed by ignoredPriceAlerts)" + RESET)
+            rebook_decision = "suppressed_by_configuration"
+        elif config.minimum_saving_alert is not None and saving_for_alert < config.minimum_saving_alert:
             text += f" ({saving_label} < minimumSavingAlert {config.minimum_saving_alert:.2f}; no notification sent)"
             log(YELLOW + text + RESET)
             rebook_decision = "suppressed_below_threshold"
@@ -3886,6 +3905,27 @@ def notifier_for(account_info: Optional[AccountInfo]) -> Optional[Apprise]:
     return config.apobj
 
 
+def parse_price_alert_exclusions(raw: Any) -> List[PriceAlertExclusion]:
+    """Require explicit identifiers so malformed rules cannot broaden a mute."""
+    if not isinstance(raw, list):
+        raise ValueError("ignoredPriceAlerts must be a list")
+    rules = []
+    for index, item in enumerate(raw):
+        label = f"ignoredPriceAlerts[{index}]"
+        if not isinstance(item, dict) or set(item) - {"reservation", "prefix", "product", "guest"}:
+            raise ValueError(f"{label} accepts only reservation, prefix, product and optional guest")
+        values = {}
+        for key in ("reservation", "prefix", "product", "guest"):
+            if key == "guest" and key not in item:
+                continue
+            value = item.get(key)
+            if type(value) not in (str, int) or not str(value).strip():
+                raise ValueError(f"{label}.{key} must be a nonempty identifier")
+            values[key] = str(value).strip()
+        rules.append(PriceAlertExclusion(**values))
+    return rules
+
+
 def load_config_objects(config_path: str) -> CruiseAppConfig:
     """
     Loads, sanitizes, and maps YAML configuration elements into structural dataclass attributes.
@@ -3982,6 +4022,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         apobj=apobj,
         accounts=accounts,
         watch_list=watch_list,
+        ignored_price_alerts=parse_price_alert_exclusions(data.get("ignoredPriceAlerts", [])),
         prospective_cruises=prospective_cruises,
         apprise_urls=apprise_urls,
         reservation_prices=data.get("reservationPricePaid", {}),
