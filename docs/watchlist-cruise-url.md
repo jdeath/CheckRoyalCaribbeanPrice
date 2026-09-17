@@ -40,6 +40,10 @@ and a booking link. It also alerts if the first successful check finds availabil
 An unavailable result appears in the console/report without sending a notification.
 A subsequent confirmed closure rearms the alert for the next reopening. It tracks
 subtype inventory, not a particular cabin number; confirm the booking on Royal's site.
+If the inventory row describes a different lead-in category, checkout must return
+a fare for the requested category before an alert can be sent. Missing or invalid
+counts are also uncertain until checkout confirms a fare. Ordinary price checks
+continue to attempt checkout for matching subtypes regardless of lead-in stock.
 Guarantee categories require a returned fare because the inventory endpoint does not
 identify them individually.
 
@@ -50,6 +54,17 @@ holds the latest state per search, not a report history. Changing search criteri
 creates a new watch state; deleting the file resets all cabin availability watches.
 Configure Apprise to deliver alerts. Failed deliveries remain pending for retry;
 failed or unrecognized API responses retain the previous state.
+Without Apprise, availability is reported in the console without treating it as
+a delivery failure or marking an alert delivered. Adding Apprise later allows an
+available cabin to trigger its first notification.
+
+A notification or state-storage failure affects only that watch. Remaining
+watches and the summary report still run; the process records a partial failure
+and exits with the existing partial-failure status. A missing inventory array or
+an incomplete response cannot rearm an alert. Explicit empty inventory arrays
+confirm closure; unrelated malformed rows do not invalidate a usable match.
+
+An omitted, empty or null `cruises` section disables prospective watches.
 
 Omit `notificationMode`, or set it to `price`, to keep existing price-watch behavior,
 including its required `paidPrice`. Availability mode uses the regular check schedule.

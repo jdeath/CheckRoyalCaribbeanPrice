@@ -2110,7 +2110,7 @@ def notify_cabin_availability(params: CruiseURLParams, result: dict, url: str,
             row = db.execute("SELECT available, notified FROM cabin_availability_v1 WHERE scope=?", (scope,)).fetchone()
             notified = row[1] if available and row and row[0] else 0
             sent = True
-            if available and not notified:
+            if available and not notified and notifier is not None and len(notifier) > 0:
                 lines = [label + " is now available."]
                 fare_key = "all_included" if params.all_included else "base"
                 fare_key += "_refundable_fare" if params.refundable else "_fare"
@@ -2126,7 +2126,7 @@ def notify_cabin_availability(params: CruiseURLParams, result: dict, url: str,
                     lines.append("Current price unavailable; check the booking page.")
                 lines.append(url)
                 try:
-                    sent = notifier is not None and notifier.notify(body="\n".join(lines),
+                    sent = notifier.notify(body="\n".join(lines),
                         title="Cruise Room Available", body_format=NotifyFormat.TEXT) is True
                 except Exception:
                     sent = False
@@ -2266,7 +2266,8 @@ def get_cruise_price(account_info: AccountInfo,
     cabin_scope = hashlib.sha256(json.dumps(asdict(url_params), sort_keys=True).encode()).hexdigest() if notification_mode == "availability" else None
 
     # Primary API pricing check pass
-    results = get_room_price_via_API(url_params, room_number)
+    api_options = {"inventory_mode": True} if not automatic_URL and notification_mode == "availability" else {}
+    results = get_room_price_via_API(url_params, room_number, **api_options)
     room_available = results.get("room_available")
 
     # Defensive Fallback: If a coupon code explicitly bricks availability, retry without it
@@ -2274,7 +2275,7 @@ def get_cruise_price(account_info: AccountInfo,
     if not fallback_available and url_params.coupon_code is not None:
         log(f"Coupon Code {url_params.coupon_code} may have failed, trying without using it")
         url_params.coupon_code = None
-        results = get_room_price_via_API(url_params, room_number)
+        results = get_room_price_via_API(url_params, room_number, **api_options)
         room_available = results.get("room_available")
 
     if not automatic_URL and notification_mode == "availability":
@@ -2584,9 +2585,10 @@ def get_cruise_price(account_info: AccountInfo,
                                       rebook_decision=rebook_decision, notified=notified)
 
 
-def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[str] = None) -> Dict[str, Any]:
+def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[str] = None,
+                           *, inventory_mode: bool = False) -> Dict[str, Any]:
     # Check room availability against the downstream checker
-    room_available, available_rooms = check_if_room_is_available(url_params)
+    room_available, available_rooms = check_if_room_is_available(url_params, inventory_mode=inventory_mode)
     results = {
         'sailing_nights': 0,
         'room_available': room_available,
@@ -2594,7 +2596,9 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
         'inventory_available': room_available
     }
 
-    if not room_available:
+    # A matching family with uncertain category inventory can still be priced by
+    # checkout. Preserve the legacy early return for ordinary price checks.
+    if room_available is False or (room_available is None and not inventory_mode):
         results['available_rooms'] = available_rooms
         return results
 
@@ -2711,11 +2715,15 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
                 'obc': invoice.get("onboardCredits", 0)
             }
 
+    if inventory_mode:
+        fare = (results.get('base_fare') or {}).get('fare')
+        if type(fare) in (int, float) and math.isfinite(fare) and fare > 0:
+            results['inventory_available'] = True
     results['available_rooms'] = available_rooms
     return results
 
 
-def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool], List[Dict[str, Any]]]:
+def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool = False) -> tuple[Optional[bool], List[Dict[str, Any]]]:
     """
     RSC Scraper Engine wrapper that verifies physical cabin availability on active voyages.
 
@@ -2773,7 +2781,7 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool],
         log("Unable to check room availability with server")
         # None = unknown, not confirmed unavailable.
         return None, []
-    if response.status_code != 200:
+    if inventory_mode and response.status_code != 200:
         return None, []
 
     # Extract structural array matrix out of the component text stream
@@ -2781,17 +2789,21 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool],
     rooms = _extract_json_array(response.text, "rooms")
 
     if not rooms:
-        return None, available_rooms
-    try:
-        stateroom_types = rooms[0]["options"]["stateroomTypes"]
-        if not isinstance(stateroom_types, list):
-            raise ValueError()
-        for room_type in stateroom_types:
-            subtypes = room_type["stateroomSubtypes"]
-            if not isinstance(subtypes, list) or any(not isinstance(r, dict) or not r.get("code") for r in subtypes):
+        # Missing/malformed is unknown; an explicit empty array confirms closure.
+        return (None if inventory_mode and rooms is None else False), available_rooms
+    if inventory_mode:
+        try:
+            stateroom_types = rooms[0]["options"]["stateroomTypes"]
+            if not isinstance(stateroom_types, list):
                 raise ValueError()
-    except (IndexError, AttributeError, KeyError, TypeError, ValueError):
-        return None, available_rooms
+        except (IndexError, AttributeError, KeyError, TypeError, ValueError):
+            return None, available_rooms
+    else:
+        # Preserve the parent project's pricing gate and missing-data behavior.
+        try:
+            stateroom_types = rooms[0].get("options", {}).get("stateroomTypes", [])
+        except (IndexError, AttributeError):
+            return False, available_rooms
 
     # --- GTY / CATEGORY OVERRIDE BYPASS ---
     # Unassigned guarantee inventory (e.g. 'XB', 'ZI', 'YO') and explicit config overrides
@@ -2815,11 +2827,14 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool],
     # below even though its family is on sale - collect each row's lead-in
     # category so a letters-based fallback can resolve the renamed code.
     letter_matched_subtype = None
+    incomplete_inventory = False
 
     def subtype_available(subtype):
+        if not inventory_mode:
+            return True  # Checkout, not lead-in stock, decides ordinary pricing.
+        if params.stateroom_category_code and subtype.get("categoryCode") != params.stateroom_category_code:
+            return None  # Lead-in stock does not establish a sister category's stock.
         stock = subtype.get("roomsLeft")
-        if stock is None:
-            return True  # Some available-subtype responses omit counts.
         if type(stock) not in (int, float) or not math.isfinite(stock) or stock < 0:
             return None
         return stock > 0
@@ -2830,8 +2845,17 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool],
     wanted_letters = _code_letters(params.stateroom_subtype) or _code_letters(params.stateroom_category_code)
 
     for stateroom_type in stateroom_types:
+        if inventory_mode and (not isinstance(stateroom_type, dict)
+                or not isinstance(stateroom_type.get("stateroomSubtypes"), list)):
+            incomplete_inventory = True
+            continue
         stateroom_subtypes = stateroom_type.get("stateroomSubtypes", [])
         for stateroom_subtype in stateroom_subtypes:
+            if inventory_mode and (not isinstance(stateroom_subtype, dict)
+                    or not isinstance(stateroom_subtype.get("code"), str)
+                    or not stateroom_subtype["code"].strip()):
+                incomplete_inventory = True
+                continue
             cur_subtype_code = stateroom_subtype.get("code")
             cur_category_code = stateroom_subtype.get("categoryCode")
 
@@ -2855,12 +2879,17 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool],
             # in case the exact-match pass above never fires
             if (letter_matched_subtype is None and wanted_letters
                     and not stateroom_subtype.get("guarantee")
+                    and (not inventory_mode or isinstance(cur_category_code, str))
                     and _code_letters(cur_category_code) == wanted_letters):
                 letter_matched_subtype = stateroom_subtype
 
             # Defensively extract pricing trees to protect against missing API sub-keys
             pricing_struct = stateroom_subtype.get("pricing", {})
+            if inventory_mode and not isinstance(pricing_struct, dict):
+                pricing_struct = {}
             invoice_struct = pricing_struct.get("invoice", {}) if pricing_struct else {}
+            if inventory_mode and not isinstance(invoice_struct, dict):
+                invoice_struct = {}
             price = invoice_struct.get("total") if invoice_struct else None
 
             rooms_left = stateroom_subtype.get("roomsLeft")
@@ -2880,17 +2909,17 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool],
     # speaks the vocabulary the API expects.
     if letter_matched_subtype is not None:
         available = subtype_available(letter_matched_subtype)
-        if available is not True:
+        if available is False:
             return available, []
         current_code = letter_matched_subtype["code"]
         log(f"\tSubtype code {params.stateroom_subtype} is no longer offered under that name; "
             f"using current code {current_code} for the same category family")
         params.stateroom_subtype = current_code
-        return True, []
+        return available, []
 
     # Fall-through state: The loops completed without finding our exact cabin style.
     # The room is sold out, so we return False along with the collected alternative options.
-    return False, available_rooms
+    return (None if incomplete_inventory else False), available_rooms
 
 
 ####################################
@@ -4016,7 +4045,12 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
 
     # Parse prospective cruises. Availability-only watches need no target price.
     prospective_cruises = []
-    for index, item in enumerate(data.get("cruises", [])):
+    cruise_entries = data.get("cruises")
+    if cruise_entries is None:
+        cruise_entries = []
+    if not isinstance(cruise_entries, list):
+        raise ValueError("cruises must be a list")
+    for index, item in enumerate(cruise_entries):
         mode = item.get("notificationMode", "price")
         if mode not in ("price", "availability"):
             raise ValueError(f"cruises[{index}].notificationMode must be price or availability")
@@ -4220,6 +4254,7 @@ def main() -> None:
         # checked, and so the persisted history row can still tell a stale
         # password from a transient profile-API failure after the fact.
         failed_accounts: List[Tuple[str, str]] = []
+        failed_watches: List[int] = []
 
         for account_info in config.accounts:
             log(f"\nUsing {account_info.friendly_name} for user {account_info.username}")
@@ -4342,40 +4377,45 @@ def main() -> None:
 
             # Establish a clean, isolated session for tracking
             anon_session = new_api_session()
-            for prospective_cruise in config.prospective_cruises:
+            try:
+                for watch_index, prospective_cruise in enumerate(config.prospective_cruises, 1):
 
-                # Build the mock AccountInfo structure with an anonymous access context
-                prospective_account = AccountInfo(
-                    username="AnonymousWatch",
-                    password="",
-                    cruise_line="royalcaribbean",
-                    access=APIAccess(token=None, id=None, session=anon_session)
-                )
+                    # Build the mock AccountInfo structure with an anonymous access context
+                    prospective_account = AccountInfo(
+                        username="AnonymousWatch",
+                        password="",
+                        cruise_line="royalcaribbean",
+                        access=APIAccess(token=None, id=None, session=anon_session)
+                    )
 
-                # Build the prospective booking structure
-                cruise_url = prospective_cruise.cruise_URL
-                paid_price = float(prospective_cruise.paid_price)
-                prospective_booking = {
-                    "url": cruise_url,
-                    "paidPriceStruct": {
-                        "paidPrice": paid_price
-                    },
-                    "finalPaymentDate": None,
-                    "shipCode": "",
-                    "sailDate": "",
-                    "packageCode": "",
-                    "stateroomType": "NONE"
-                }
+                    # Build the prospective booking structure
+                    cruise_url = prospective_cruise.cruise_URL
+                    paid_price = float(prospective_cruise.paid_price)
+                    prospective_booking = {
+                        "url": cruise_url,
+                        "paidPriceStruct": {
+                            "paidPrice": paid_price
+                        },
+                        "finalPaymentDate": None,
+                        "shipCode": "",
+                        "sailDate": "",
+                        "packageCode": "",
+                        "stateroomType": "NONE"
+                    }
 
-                # STRATEGY NOTE: 'automaticURL=False' forces the scraper to use manually extracted browser
-                # URL context components. This prevents the code from executing automated customer profile queries,
-                # keeping this entire script iteration running safely, anonymously, and unauthenticated.
-                prospective_target = {'paid_price': paid_price}
-                get_cruise_price(prospective_account, prospective_booking, ship_dictionary, automatic_URL=False, paid_price_struct=prospective_target,
-                                 notification_mode=getattr(prospective_cruise, "notification_mode", "price"))
+                    # STRATEGY NOTE: 'automaticURL=False' forces the scraper to use manually extracted browser
+                    # URL context components. This prevents the code from executing automated customer profile queries,
+                    # keeping this entire script iteration running safely, anonymously, and unauthenticated.
+                    prospective_target = {'paid_price': paid_price}
+                    try:
+                        get_cruise_price(prospective_account, prospective_booking, ship_dictionary, automatic_URL=False, paid_price_struct=prospective_target,
+                                         notification_mode=getattr(prospective_cruise, "notification_mode", "price"))
+                    except CabinAvailabilityError as exc:
+                        failed_watches.append(watch_index)
+                        log(RED + f"[FAILED] Cabin availability watch {watch_index}: {exc}; continuing with remaining watches." + RESET)
 
-            # Safely release the connection socket resources back to the OS
-            anon_session.close()
+            finally:
+                anon_session.close()
 
         # Summary table of upcoming check-in and final-payment dates for booked sailings
         payment_tracker.print_table()
@@ -4384,6 +4424,7 @@ def main() -> None:
         if config.output_watch_as_json:
             write_watch_price_json(collected_watch_rows, config.output_json_watch_file)
 
+        failure_summaries = []
         if failed_accounts:
             # At least one account never got checked this run. A quiet exit
             # 0 here would look identical to a fully-successful run to any
@@ -4401,11 +4442,15 @@ def main() -> None:
             # without the phase they can't tell a stale password from a
             # transient profile-API failure.
             failure_detail = ", ".join(f"{username} ({phase})" for username, phase in failed_accounts)
-            history.finish_run(
-                "partial_failure",
+            failure_summaries.append(
                 f"{len(failed_accounts)} of {len(config.accounts)} account(s) could not be checked: "
-                f"{failure_detail}",
-            )
+                f"{failure_detail}")
+        if failed_watches:
+            watch_summary = f"{len(failed_watches)} cabin availability watch(es) failed: " + ", ".join(map(str, failed_watches))
+            log(RED + watch_summary + ". See the [FAILED] lines above; pending alerts will retry." + RESET)
+            failure_summaries.append(watch_summary)
+        if failure_summaries:
+            history.finish_run("partial_failure", "; ".join(failure_summaries))
             # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.
             sys.exit(EXIT_PARTIAL_FAILURE)
 
