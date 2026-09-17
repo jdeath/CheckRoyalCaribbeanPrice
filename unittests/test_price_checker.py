@@ -1064,6 +1064,50 @@ def test_execute_api_request_hard_exit(mock_request):
     assert mock_request.call_count == 1
 
 
+@patch("time.sleep", return_value=None)
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
+def test_execute_api_request_retries_connection_errors_despite_port_443(mock_request, mock_sleep):
+    """A connect-phase failure to any HTTPS host carries "port 443" in its text
+    (requests phrasing shown; curl_cffi says "...port 443 after N ms"). The
+    status-from-text fallback must not read that 443 as a terminal HTTP 4xx -
+    these are exactly the transient errors retry exists for."""
+    mock_request.side_effect = requests.exceptions.ConnectionError(
+        "HTTPSConnectionPool(host='aws-prd.api.rccl.com', port=443): "
+        "Max retries exceeded with url: /test (Caused by NewConnectionError)")
+    result = _execute_api_request(
+        account_info=None, method="GET",
+        url="https://aws-prd.api.rccl.com/test", on_failure="retry", max_retries=3)
+    assert result is None
+    assert mock_request.call_count == 3   # was 1: '443' misread as terminal 4xx
+    assert mock_sleep.call_count == 2
+
+
+@patch("time.sleep", return_value=None)
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
+def test_execute_api_request_curl_style_port_text_still_retries(mock_request, mock_sleep):
+    mock_request.side_effect = Exception(
+        "Failed to connect to www.royalcaribbean.com port 443 after 130 ms: "
+        "Couldn't connect to server")
+    result = _execute_api_request(
+        account_info=None, method="GET",
+        url="https://www.royalcaribbean.com/x", on_failure="retry", max_retries=3)
+    assert result is None
+    assert mock_request.call_count == 3
+
+
+@patch("CheckRoyalCaribbeanPrice.requests.Session.request")
+def test_execute_api_request_text_4xx_still_fails_fast(mock_request):
+    """The fallback still recognizes genuine client-error text with no attached
+    .response (curl_cffi's HTTPError) and fails fast without retries."""
+    mock_request.side_effect = requests.exceptions.HTTPError(
+        "404 Client Error: Not Found for url: https://aws-prd.api.rccl.com/x")
+    result = _execute_api_request(
+        account_info=None, method="GET",
+        url="https://aws-prd.api.rccl.com/x", on_failure="retry", max_retries=3)
+    assert result is None
+    assert mock_request.call_count == 1
+
+
 @patch('CheckRoyalCaribbeanPrice._execute_api_request')
 def test_get_checkin_info_formats_opening_window_in_local_time(mock_net, base_account_info):
     """

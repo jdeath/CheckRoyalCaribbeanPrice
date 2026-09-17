@@ -125,6 +125,39 @@ class TestExecuteApiRequest(unittest.TestCase):
         self.assertEqual(mock_session_inst.request.call_count, 1)
 
 
+    @patch('BrowseRoyalCaribbeanPrice.time.sleep', return_value=None)
+    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    def test_execute_request_retries_connection_errors_despite_port_443(self, mock_session_cls, mock_sleep):
+        """Connect-phase failures carry "port 443" in their text; the
+        status-from-text fallback must not read that as HTTP 443 and skip
+        the retries these transient errors exist for."""
+        mock_session_inst = MagicMock()
+        mock_session_cls.return_value = mock_session_inst
+        mock_session_inst.request.side_effect = requests.exceptions.ConnectionError(
+            "HTTPSConnectionPool(host='www.royalcaribbean.com', port=443): "
+            "Max retries exceeded with url: /x (Caused by NewConnectionError)")
+
+        response = _execute_api_request("GET", "https://api.test.com/v1/endpoint", on_failure="retry")
+
+        self.assertIsNone(response)
+        self.assertEqual(mock_session_inst.request.call_count, 3)
+
+
+    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    def test_execute_request_text_4xx_without_response_fails_fast(self, mock_session_cls):
+        """curl_cffi's HTTPError may carry no .response; genuine client-error
+        TEXT is still terminal (no retries)."""
+        mock_session_inst = MagicMock()
+        mock_session_cls.return_value = mock_session_inst
+        mock_session_inst.request.side_effect = requests.exceptions.HTTPError(
+            "403 Client Error: Forbidden for url: https://www.royalcaribbean.com/x")
+
+        response = _execute_api_request("GET", "https://api.test.com/v1/endpoint", on_failure="retry")
+
+        self.assertIsNone(response)
+        self.assertEqual(mock_session_inst.request.call_count, 1)
+
+
 # ==============================================================================
 # FLEET & SAILING DISCOVERY TESTS
 # ==============================================================================
