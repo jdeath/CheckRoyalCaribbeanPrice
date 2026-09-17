@@ -779,6 +779,77 @@ def test_get_voyages_complete_execution_path():
         assert any("Cruise Fare - Total 4147.72" in s for s in log_outputs)
 
 
+def test_ledger_insurance_and_allin_flags_reach_pricing_overrides():
+    """The API-ledger path must hand get_cruise_price a paid_price_struct whose
+    keys apply_overrides() actually reads (tripInsurance / allInUpgrade). With
+    the snake_case spellings both flags were silently dropped, so insured or
+    all-included bookings were compared against a cheaper base fare and fired
+    false 'Rebook!' alerts."""
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+    account_info.access.token = "fake_token"
+    account_info.access.id = "fake_id"
+
+    discounts = CruiseURLParams(loyalty_number="123456", state="MD", dp340=False)
+    ship_registry = ShipRegistry()
+
+    def mock_api_router(*args, **kwargs):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = '{"rooms": []}'
+        url = args[2] if len(args) > 2 else kwargs.get("url", "")
+        if "profileBookings" in url:
+            mock_resp.json.return_value = {
+                "payload": {
+                    "profileBookings": [{
+                        "bookingId": "1234567",
+                        "passengerId": "33333333",
+                        "sailDate": "20261225",
+                        "numberOfNights": 7,
+                        "shipCode": "AL",
+                        "stateroomNumber": "6543",
+                        "stateroomType": "B",
+                        "passengersInStateroom": [{"firstName": "Matt", "lastName": "Smith",
+                                                   "bookingId": "1234567",
+                                                   "stateroomCategoryCode": "4D"}]
+                    }]
+                }
+            }
+        else:
+            mock_resp.json.return_value = {"payload": []}
+        return mock_resp
+
+    mock_metrics = {"passenger_names": "Matt Smith", "checkin_string": "Boarding Time 11:00",
+                    "category_code": "4D", "sub_type": "4D"}
+    ledger = {
+        "dining_selection": [],
+        "prices": [
+            {"priceTypeCode": "GROSS_TOTALS", "amount": 4147.72},
+            {"priceTypeCode": "TRIP_INSURANCE", "amount": 158.00},
+            {"priceTypeCode": "ALL_INCLUDED_PACKAGE", "amount": 400.00},
+        ],
+    }
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=mock_api_router), \
+         patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value=mock_metrics), \
+         patch('CheckRoyalCaribbeanPrice.get_dining_and_prices', return_value=ledger), \
+         patch('CheckRoyalCaribbeanPrice.get_checkin_info'), \
+         patch('CheckRoyalCaribbeanPrice.get_cruise_price') as mock_price:
+        get_voyages(account_info, discounts, ship_registry)
+
+    assert mock_price.called, "pricing was never invoked for the booking"
+    struct = mock_price.call_args.kwargs["paid_price_struct"]
+    assert struct["paid_price"] == 4147.72
+
+    # Writer/reader contract: the flags must survive into CruiseURLParams
+    # (is_royal=False: apply_overrides strips all-included on Royal by design,
+    # since the all-in fare is a Celebrity-only concept)
+    params = CruiseURLParams(is_royal=False)
+    params.apply_overrides(struct)
+    assert params.travel_insurance is True, "tripInsurance flag lost between ledger and pricing"
+    assert params.all_included is True, "allInUpgrade flag lost between ledger and pricing"
+
+
 def test_get_orders_complete_execution_path():
     """Exercise all loop iterations inside get_orders to guarantee execution path coverage."""
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
