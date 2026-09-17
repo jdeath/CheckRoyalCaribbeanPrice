@@ -3985,6 +3985,7 @@ def test_main_distinguishes_login_failure_from_profile_fetch_failure():
 
     # get_profile() was reached only for the account that actually logged in.
     mock_get_profile.assert_called_once_with(profile_bad_account)
+    good_access.session.close.assert_called_once()
     # Neither account made it to get_voyages() - both were skipped.
     mock_get_voyages.assert_not_called()
 
@@ -4033,6 +4034,32 @@ def test_main_distinguishes_login_failure_from_profile_fetch_failure():
     assert "badlogin@example.com (login)" in finish_summary
     assert "badprofile@example.com (profile)" in finish_summary
     assert exc_info.value.code == EXIT_PARTIAL_FAILURE
+
+
+def test_profile_failure_closes_session_before_error_notification():
+    account = AccountInfo(username="profile@example.invalid", password="fake")
+    account.apobj = MagicMock()
+    account.apobj.__len__.return_value = 1
+    access = APIAccess(token="fake-token", id="fake-account", session=MagicMock())
+    cfg = _make_multi_account_config([account])
+    cfg.notify_on_error = True
+
+    def failed_notification(**kwargs):
+        access.session.close.assert_called_once()
+        raise RuntimeError("notification failed")
+
+    account.apobj.notify.side_effect = failed_notification
+    with patch("CheckRoyalCaribbeanPrice.config", cfg), \
+         patch("CheckRoyalCaribbeanPrice.history"), \
+         patch("CheckRoyalCaribbeanPrice.log"), \
+         patch("CheckRoyalCaribbeanPrice.get_ship_dictionary_web"), \
+         patch("CheckRoyalCaribbeanPrice.login", return_value=access), \
+         patch("CheckRoyalCaribbeanPrice.get_profile", side_effect=RuntimeError("profile failed")), \
+         patch("CheckRoyalCaribbeanPrice.get_voyages") as voyages:
+        with pytest.raises(RuntimeError, match="notification failed"):
+            main()
+    access.session.close.assert_called_once()
+    voyages.assert_not_called()
 
 
 def test_main_all_accounts_succeed_exits_and_records_ok_unchanged():
