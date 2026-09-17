@@ -101,6 +101,7 @@ MARKET_RULES: dict[str, Union[int, DurationRules]] = {
     # Central & Northern European markets: flat 30 days
     "DEU": 30, "DE": 30,  # Germany
     "CHE": 30, "CH": 30,  # Switzerland
+    "CHS": 30,            # Switzerland - Royal's own market code (ISO is CHE)
     "NOR": 30, "NO": 30,  # Norway
     "SWE": 30, "SE": 30,  # Sweden
     "DNK": 30, "DK": 30,  # Denmark
@@ -1443,6 +1444,40 @@ def _booking_country_code(booking: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+# Unknown market codes we already warned about this run (warn once per code,
+# not once per booking - multi-booking accounts would otherwise spam it)
+_UNKNOWN_MARKETS_WARNED: set = set()
+
+
+def _booking_payment_market(booking: Dict[str, Any]) -> Optional[str]:
+    """
+    The market code the FINAL-PAYMENT rules should use: the first of
+    bookingMarketCountryCode / bookingOfficeCountryCode / countryCode that
+    MARKET_RULES actually knows.
+
+    This answers a different question than _booking_country_code (the right
+    helper for checkout-API pricing calls). Royal's market vocabulary is not
+    all ISO - Switzerland arrives as CHS - and resolve_lead_time silently
+    defaults unknown codes to the US windows, so a code the table doesn't
+    know must fall through to the next candidate instead of quietly turning
+    a 30-day market into a 90-day one. None -> caller gets the US default.
+    """
+    candidates = [(booking.get(key) or "").strip().upper()
+                  for key in ("bookingMarketCountryCode", "bookingOfficeCountryCode",
+                              "countryCode")]
+    for code in candidates:
+        if code in MARKET_RULES:
+            return code
+    unknown = [c for c in candidates if c]
+    if unknown and unknown[0] not in _UNKNOWN_MARKETS_WARNED:
+        _UNKNOWN_MARKETS_WARNED.add(unknown[0])
+        if log_warn:
+            log_warn(f"Booking market code(s) {'/'.join(dict.fromkeys(unknown))} not in "
+                     f"MARKET_RULES - using US final-payment windows. Please report the "
+                     f"code so the right window can be added.")
+    return None
+
+
 #
 # Profile and Session Management Functions #
 #
@@ -1811,12 +1846,11 @@ def get_voyages(
                     or res_entry.get("finalPaymentDate")
                 )
 
-        # Extract booking market indicators
-        market_code = (
-            booking.get("bookingOfficeCountryCode")
-            or booking.get("bookingMarketCountryCode")
-            or booking.get("countryCode")
-        )
+        # The MARKET the guest bought in governs the payment window, not the
+        # TA's own office country (a UK booking placed through a US agency
+        # follows the UK 56-day rule) - but only codes MARKET_RULES knows
+        # count, since Royal's market vocabulary is not all ISO (CHS).
+        market_code = _booking_payment_market(booking)
 
         final_payment_override = (
             yaml_payment_override
@@ -2194,8 +2228,13 @@ def get_cruise_price(account_info: AccountInfo,
     # A watchlist URL can omit or mangle sailDate; a far-future fallback keeps
     # the "past final payment" comparisons meaning "not past" instead of crashing
     try:
-        # Attempt extraction from url_params or booking payload if available in scope
-        market_code = getattr(url_params, "market_code", None)
+        # Resolve the payment market from the booking itself (a watchlist's
+        # synthetic booking has no country fields -> None -> US default).
+        # Previously this read a market_code attribute CruiseURLParams never
+        # had, so EVERY booking was evaluated against the US payment windows
+        # and a DEU-market drop 90-30 days out was mislabeled
+        # past-final-payment with its alert suppressed.
+        market_code = _booking_payment_market(booking)
         final_payment_override = None
         if paid_price_struct:
             final_payment_override = (
@@ -2461,7 +2500,9 @@ def get_cruise_price(account_info: AccountInfo,
 
         if automatic_URL and past_final_payment_date:
             temp_string += f"{YELLOW} Past Final Payment Date of {final_payment_date_display}{RESET}"
-            rebook_decision = "past_final_payment"
+            # distinct from "past_final_payment" (= a LOWER price you are locked
+            # out of) so history queries can tell the two situations apart
+            rebook_decision = "best_price_past_final_payment"
             
         log(temp_string)
 
