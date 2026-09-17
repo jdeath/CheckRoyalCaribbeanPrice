@@ -2942,68 +2942,75 @@ class TestFinalPaymentDate:
                 final_payment_date_override="invalid-date",
             )
 
-        # -------------------------------------------------------------------------
-        # 4. Integration: get_cruise_price Dictionary Processing
-        # -------------------------------------------------------------------------
-        @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
-        @patch("CheckRoyalCaribbeanPrice.notifier_for")
-        def test_get_cruise_price_processes_market_and_override(self, mock_notifier, mock_api_pricing):
-            """Verify get_cruise_price extracts market_code and finalPaymentDate override correctly."""
-            mock_api_pricing.return_value = {
-                "room_available": True,
-                "sailing_nights": 7,
-                "prices": {"stateroomPrice": 1000.0, "taxesAndFees": 100.0},
-            }
+    # -------------------------------------------------------------------------
+    # 4. Integration: get_cruise_price Dictionary Processing
+    # -------------------------------------------------------------------------
+    @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
+    @patch("CheckRoyalCaribbeanPrice.notifier_for")
+    def test_get_cruise_price_processes_market_and_override(self, mock_notifier, mock_api_pricing):
+        """Verify get_cruise_price extracts market_code and finalPaymentDate override correctly."""
+        mock_api_pricing.return_value = {
+            "room_available": True,
+            "sailing_nights": 7,
+            "prices": {"stateroomPrice": 1000.0, "taxesAndFees": 100.0},
+        }
 
-            mock_account = MagicMock()
-            mock_account.access.session = MagicMock()
+        mock_account = MagicMock()
+        mock_account.access.session = MagicMock()
 
-            mock_ship_registry = MagicMock()
-            mock_ship_registry.get_ship.return_value = "Test Ship"
+        mock_ship_registry = MagicMock()
+        mock_ship_registry.get_ship.return_value = "Test Ship"
 
-            # Target sailing: Dec 31, 2026 (7 nights)
-            # US default (90 days) -> Oct 2, 2026
-            # DEU market (30 days) -> Dec 1, 2026
-            # Override ("2026-11-15") -> Nov 15, 2026
-            booking_payload = {
-                "bookingId": "TEST12345",
-                "sailDate": "20261231",
-                "stateroomSubtype": "D1",
-                "bookingOfficeCountryCode": "DEU",
-                "passengers": [{"stateroomCategoryCode": "BALCONY", "birthdate": "19800101"}],
-            }
+        # Target sailing: Dec 31, 2026 (7 nights)
+        # US default (90 days) -> Oct 2, 2026
+        # DEU market (30 days) -> Dec 1, 2026
+        # Override ("2026-11-15") -> Nov 15, 2026
+        booking_payload = {
+            "bookingId": "TEST12345",
+            "sailDate": "20261231",
+            "stateroomSubtype": "D1",
+            "bookingOfficeCountryCode": "DEU",
+            "passengers": [{"stateroomCategoryCode": "BALCONY", "birthdate": "19800101"}],
+        }
 
-            # Case A: Market code DEU from booking yields Dec 1, 2026
-            with patch("CheckRoyalCaribbeanPrice.get_final_payment_date", wraps=get_final_payment_date) as spy_get_fp:
-                get_cruise_price(
-                    account_info=mock_account,
-                    booking=booking_payload,
-                    ship_dictionary=mock_ship_registry,
-                    paid_price_struct={"paidPrice": 1200.0, "duration": 7},
-                )
-                spy_get_fp.assert_called_once()
-                _, kwargs = spy_get_fp.call_args
-                assert kwargs.get("market_code") == "DEU"
-                assert spy_get_fp.spy_return == date(2026, 12, 1)
+        # unittest.mock has no pytest-mock spy_return; capture returns manually
+        captured = {}
 
-            # Case B: Explicit finalPaymentDate in paid_price_struct takes absolute priority
-            paid_struct_with_override = {
-                "paidPrice": 1200.0,
-                "duration": 7,
-                "finalPaymentDate": "2026-11-15",
-            }
+        def spy_fp(*args, **kwargs):
+            captured["ret"] = get_final_payment_date(*args, **kwargs)
+            return captured["ret"]
 
-            with patch("CheckRoyalCaribbeanPrice.get_final_payment_date", wraps=get_final_payment_date) as spy_get_fp:
-                get_cruise_price(
-                    account_info=mock_account,
-                    booking=booking_payload,
-                    ship_dictionary=mock_ship_registry,
-                    paid_price_struct=paid_struct_with_override,
-                )
-                spy_get_fp.assert_called_once()
-                _, kwargs = spy_get_fp.call_args
-                assert kwargs.get("final_payment_date_override") == "2026-11-15"
-            assert spy_get_fp.spy_return == date(2026, 11, 15)
+        # Case A: Market code DEU from booking yields Dec 1, 2026
+        with patch("CheckRoyalCaribbeanPrice.get_final_payment_date", side_effect=spy_fp) as spy_get_fp:
+            get_cruise_price(
+                account_info=mock_account,
+                booking=booking_payload,
+                ship_dictionary=mock_ship_registry,
+                paid_price_struct={"paidPrice": 1200.0, "duration": 7},
+            )
+            spy_get_fp.assert_called_once()
+            _, kwargs = spy_get_fp.call_args
+            assert kwargs.get("market_code") == "DEU"
+            assert captured["ret"] == date(2026, 12, 1)
+
+        # Case B: Explicit finalPaymentDate in paid_price_struct takes absolute priority
+        paid_struct_with_override = {
+            "paidPrice": 1200.0,
+            "duration": 7,
+            "finalPaymentDate": "2026-11-15",
+        }
+
+        with patch("CheckRoyalCaribbeanPrice.get_final_payment_date", side_effect=spy_fp) as spy_get_fp:
+            get_cruise_price(
+                account_info=mock_account,
+                booking=booking_payload,
+                ship_dictionary=mock_ship_registry,
+                paid_price_struct=paid_struct_with_override,
+            )
+            spy_get_fp.assert_called_once()
+            _, kwargs = spy_get_fp.call_args
+            assert kwargs.get("final_payment_date_override") == "2026-11-15"
+        assert captured["ret"] == date(2026, 11, 15)
 
     @patch("CheckRoyalCaribbeanPrice.config")
     @patch("CheckRoyalCaribbeanPrice._execute_api_request")
@@ -3059,6 +3066,98 @@ class TestFinalPaymentDate:
             market_code="UK",
             final_payment_date_override=None,
         )
+
+
+    @patch("CheckRoyalCaribbeanPrice.config")
+    @patch("CheckRoyalCaribbeanPrice._execute_api_request")
+    @patch("CheckRoyalCaribbeanPrice.get_dining_and_prices")
+    @patch("CheckRoyalCaribbeanPrice.get_final_payment_date")
+    def test_get_voyages_market_country_beats_ta_office_country(
+        self, mock_get_final_payment, mock_dining, mock_fetch_voyages, mock_config
+    ):
+        """A UK-market booking placed through a US TA office follows the UK
+        payment rules: bookingMarketCountryCode must win over the office code
+        (same preference _booking_country_code documents for pricing calls)."""
+        mock_config.date_display_format = "%Y-%m-%d"
+        mock_config.reservation_names = {}
+        mock_config.paid_reservations = []
+        mock_config.display_cruise_prices = False
+        mock_config.show_promos = False
+        mock_config.watch_list = []
+        mock_dining.return_value = {"dining_selection": [], "prices": []}
+        mock_get_final_payment.return_value = date(2026, 10, 20)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "payload": {
+                "profileBookings": [
+                    {
+                        "bookingId": "1234567",
+                        "shipCode": "AL",
+                        "sailDate": "2026-12-15",
+                        "numberOfNights": "7",
+                        "bookingOfficeCountryCode": "USA",
+                        "bookingMarketCountryCode": "GBR",
+                        "finalPaymentDate": None,
+                    }
+                ]
+            }
+        }
+        mock_fetch_voyages.return_value = mock_response
+
+        get_voyages(
+            account_info=MagicMock(),
+            discounts=MagicMock(),
+            ship_dictionary=MagicMock(),
+        )
+
+        mock_get_final_payment.assert_called_once_with(
+            7,
+            "2026-12-15",
+            market_code="GBR",
+            final_payment_date_override=None,
+        )
+
+    @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
+    @patch("CheckRoyalCaribbeanPrice.notifier_for")
+    def test_best_price_past_final_payment_records_distinct_decision(
+        self, mock_notifier, mock_api_pricing
+    ):
+        """'past_final_payment' historically meant a LOWER price you are locked
+        out of; a best-price booking past final payment (#119 display note)
+        must record a distinct value so history queries can tell them apart."""
+        import CheckRoyalCaribbeanPrice as CRCP
+
+        mock_notifier.return_value = None
+        mock_api_pricing.return_value = {
+            "room_available": True,
+            "sailing_nights": 7,
+            "base_fare": {"fare": 1100.0, "gratuities": 0.0, "insurance": 0.0, "obc": 0.0},
+        }
+        mock_account = MagicMock()
+        mock_account.access.session = MagicMock()
+        registry = MagicMock()
+        registry.get_ship.return_value = "Test Ship"
+        booking = {
+            "bookingId": "1234567",
+            "sailDate": "20261231",
+            "stateroomSubtype": "D1",
+            "passengersInStateroom": [{"stateroomCategoryCode": "4D", "birthdate": "19800101"}],
+        }
+        CRCP.config.history.record_cabin_fare.reset_mock()
+
+        get_cruise_price(
+            account_info=mock_account,
+            booking=booking,
+            ship_dictionary=registry,
+            paid_price_struct={"paidPrice": 1000.0, "duration": 7,
+                               "finalPaymentDate": "2020-01-01"},
+        )
+
+        kwargs = CRCP.config.history.record_cabin_fare.call_args.kwargs
+        assert kwargs["status"] == "priced"
+        assert kwargs["rebook_decision"] == "best_price_past_final_payment"
 
 
 class TestFinalPaymentIntegration:

@@ -1800,12 +1800,11 @@ def get_voyages(
                     or res_entry.get("finalPaymentDate")
                 )
 
-        # Extract booking market indicators
-        market_code = (
-            booking.get("bookingOfficeCountryCode")
-            or booking.get("bookingMarketCountryCode")
-            or booking.get("countryCode")
-        )
+        # Extract booking market indicators. The MARKET the guest bought in
+        # governs the payment window, not the TA's own office country (a UK
+        # booking placed through a US agency follows the UK 56-day rule) -
+        # same preference _booking_country_code documents for pricing calls.
+        market_code = _booking_country_code(booking) or booking.get("countryCode")
 
         final_payment_override = (
             yaml_payment_override
@@ -2179,8 +2178,12 @@ def get_cruise_price(account_info: AccountInfo,
     # A watchlist URL can omit or mangle sailDate; a far-future fallback keeps
     # the "past final payment" comparisons meaning "not past" instead of crashing
     try:
-        # Attempt extraction from url_params or booking payload if available in scope
-        market_code = getattr(url_params, "market_code", None)
+        # Attempt extraction from url_params or booking payload if available in
+        # scope. CruiseURLParams carries no market_code field today, so the
+        # getattr always fell through to None and EVERY booking was evaluated
+        # against the US payment windows - a DEU-market drop between 90 and 30
+        # days out was mislabeled past-final-payment and its alert suppressed.
+        market_code = getattr(url_params, "market_code", None) or _booking_country_code(booking)
         final_payment_override = None
         if paid_price_struct:
             final_payment_override = (
@@ -2436,7 +2439,9 @@ def get_cruise_price(account_info: AccountInfo,
 
         if automatic_URL and past_final_payment_date:
             temp_string += f"{YELLOW} Past Final Payment Date of {final_payment_date_display}{RESET}"
-            rebook_decision = "past_final_payment"
+            # distinct from "past_final_payment" (= a LOWER price you are locked
+            # out of) so history queries can tell the two situations apart
+            rebook_decision = "best_price_past_final_payment"
             
         log(temp_string)
 
