@@ -2147,6 +2147,18 @@ def get_cruise_price(account_info: AccountInfo,
                     number_of_adults += 1
                 else:
                     number_of_children += 1
+            else:
+                # No birthdate (TA-entered bookings): count as an adult, same
+                # as _calculate_passenger_metrics. Skipping the guest shrank
+                # the party - a 2-adult cabin priced as 1 adult compares a
+                # 1-guest fare against a 2-guest paid price -> false "Rebook!"
+                number_of_adults += 1
+
+        # The category often lives only at booking level (get_voyages also
+        # patches its resolved code there for downstream pricing); without
+        # this fallback such bookings priced as Unassigned/GTY "Not For Sale"
+        if not stateroom_category_code:
+            stateroom_category_code = booking.get("stateroomCategoryCode", "")
 
         metrics = {
             'num_adults': number_of_adults,
@@ -3723,7 +3735,10 @@ def _calculate_passenger_metrics(
         if not have_a_senior:
             have_a_senior = above_age_on_sail_date(birth_date, sail_date, 55)
 
-        if above_age_on_sail_date(birth_date, sail_date, 12):
+        if not birth_date or above_age_on_sail_date(birth_date, sail_date, 12):
+            # No birthdate on record (common on TA-entered bookings): price as
+            # an adult - above_age_on_sail_date() returns False for a missing
+            # date, which silently classified these guests as children
             num_adults += 1
         else:
             num_children += 1
