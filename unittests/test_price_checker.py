@@ -1380,6 +1380,37 @@ def test_get_ship_dictionary_web_handles_empty_or_missing_payload_keys():
         assert len(registry.ships) == 0
 
 
+def test_ship_registry_merges_celebrity_fleet_when_asked():
+    """Celebrity accounts printed raw ship codes ("EG") everywhere: the
+    registry was only ever fed from the ROYAL fleet endpoint. With
+    include_celebrity both brand fleets merge; without it (the common
+    Royal-only config) there is still exactly one request."""
+    def router(*args, **kwargs):
+        url = kwargs.get("url", args[2] if len(args) > 2 else "")
+        resp = MagicMock()
+        if "/en/royal/" in url:
+            resp.json.return_value = {"payload": {"ships": [
+                {"shipCode": "AL", "name": "Allure of the Seas"}]}}
+        else:
+            resp.json.return_value = {"payload": {"ships": [
+                {"shipCode": "EG", "name": "Celebrity Edge"}]}}
+        return resp
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=router) as mock_net:
+        registry = ShipRegistry()
+        get_ship_dictionary_web(registry, include_celebrity=True)
+
+    urls = [c.kwargs.get("url", "") for c in mock_net.call_args_list]
+    assert len(urls) == 2
+    assert any("/en/royal/" in u for u in urls) and any("/en/celebrity/" in u for u in urls)
+    assert registry.get_ship("AL") == "Allure of the Seas"
+    assert registry.get_ship("EG") == "Celebrity Edge"
+
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=router) as mock_net:
+        get_ship_dictionary_web(ShipRegistry())   # default: Royal only
+    assert len(mock_net.call_args_list) == 1
+
+
 def test_get_ship_dictionary_web_exception_handling_triggers_exit():
     """
     Ensure that any completely corrupt JSON structural response inside the parsing

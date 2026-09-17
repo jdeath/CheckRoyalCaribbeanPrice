@@ -1277,15 +1277,20 @@ def get_club_royale_tier(points: int) -> str | None:
 #
 # Fleet Discovery functions #
 #
-def get_ship_dictionary_web(registry: ShipRegistry) -> None:
+def get_ship_dictionary_web(registry: ShipRegistry, include_celebrity: bool = False) -> None:
     """
     Queries corporate servers to construct a dictionary tracking active fleet ship profiles.
 
     Populates an in-memory ship lookup container mapping corporate short codes
     (e.g., 'AL', 'SY') to user-friendly vessel names, preventing structural lookups
     from displaying blank codes during reporting.
+
+    The registry was only ever fed from the ROYAL fleet endpoint, so Celebrity
+    accounts printed raw ship codes ("EG") in every header and summary row;
+    include_celebrity merges that brand's fleet in with one extra request
+    (skipped for the common Royal-only configs).
     """
-    url: str = 'https://aws-prd.api.rccl.com/en/royal/web/v2/ships'
+    brands = ["royal"] + (["celebrity"] if include_celebrity else [])
     params: Dict[str, str] = {
         'sort': 'name',
     }
@@ -1294,25 +1299,26 @@ def get_ship_dictionary_web(registry: ShipRegistry) -> None:
         'Accept': 'application/json',
     }
 
-    # Centralized manager handles headers, global keys, try/except, and exit(1) on failure
-    response = _execute_api_request(
-        account_info=None,  # Public endpoint, no active account session required
-        method="GET",
-        url=url,
-        params=params,
-        headers=headers,
-        on_failure="retry"
-    )
+    for brand in brands:
+        # Centralized manager handles headers, global keys, try/except, and exit(1) on failure
+        response = _execute_api_request(
+            account_info=None,  # Public endpoint, no active account session required
+            method="GET",
+            url=f'https://aws-prd.api.rccl.com/en/{brand}/web/v2/ships',
+            params=params,
+            headers=headers,
+            on_failure="retry"
+        )
 
-    try:
-        ships = response.json().get("payload", {}).get("ships", [])
-        registry.add_from_payload(ships)
-    except Exception as e:
-        if response is None:
-            log(f"{YELLOW}[WARN] Fleet API unreachable. Falling back to raw ship codes.{RESET}")
-        else:
-            log(f"{YELLOW}[WARN] Fleet API schema parsing failed ({e}). Falling back to raw ship codes.{RESET}")
-        return
+        try:
+            ships = response.json().get("payload", {}).get("ships", [])
+            registry.add_from_payload(ships)
+        except Exception as e:
+            if response is None:
+                log(f"{YELLOW}[WARN] Fleet API ({brand}) unreachable. Falling back to raw ship codes.{RESET}")
+            else:
+                log(f"{YELLOW}[WARN] Fleet API ({brand}) schema parsing failed ({e}). Falling back to raw ship codes.{RESET}")
+            continue
 
 
 #
@@ -4113,7 +4119,9 @@ def main() -> None:
 
         # Generate the list of ship codes
         ship_dictionary = ShipRegistry()
-        get_ship_dictionary_web(ship_dictionary)
+        get_ship_dictionary_web(
+            ship_dictionary,
+            include_celebrity=any(a.is_celebrity for a in config.accounts))
 
         # Accounts that could not be checked this run, paired with which
         # phase failed (login or post-login profile fetch) - tracked so the
