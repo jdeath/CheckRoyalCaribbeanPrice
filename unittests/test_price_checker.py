@@ -3244,6 +3244,43 @@ class TestFinalPaymentDate:
             final_payment_date_override=None,
         )
 
+    def test_payment_market_skips_codes_the_rules_table_does_not_know(self):
+        """Royal's market vocabulary is not all ISO: the #99 booking carries
+        bookingMarketCountryCode=CHS (Switzerland; ISO is CHE) with a DEU
+        office. A code MARKET_RULES doesn't know must fall through to the
+        next candidate - resolve_lead_time silently defaults unknown codes
+        to the US windows, which would turn a 30-day market into 90 days."""
+        from CheckRoyalCaribbeanPrice import _booking_payment_market
+
+        # CHS is now a known alias, so the market wins directly
+        assert _booking_payment_market(
+            {"bookingMarketCountryCode": "CHS",
+             "bookingOfficeCountryCode": "DEU"}) == "CHS"
+        # a genuinely unknown market falls through to the known office code
+        assert _booking_payment_market(
+            {"bookingMarketCountryCode": "ZZX",
+             "bookingOfficeCountryCode": "DEU"}) == "DEU"
+        # nothing known -> None -> caller applies the US default
+        assert _booking_payment_market(
+            {"bookingMarketCountryCode": "ZZX",
+             "bookingOfficeCountryCode": "ZZY"}) is None
+        assert _booking_payment_market({}) is None
+
+    def test_chs_market_resolves_swiss_thirty_day_window(self):
+        """The real shape from #99: CHS market / DEU office, 7 nights,
+        sails 2026-12-27 -> final payment 30 days out, 2026-11-27 (via the
+        CHS alias; the DEU fallback would agree - both are 30-day markets)."""
+        from CheckRoyalCaribbeanPrice import _booking_payment_market
+
+        resolved = get_final_payment_date(
+            number_of_nights=7,
+            sail_date="2026-12-27",
+            market_code=_booking_payment_market(
+                {"bookingMarketCountryCode": "CHS",
+                 "bookingOfficeCountryCode": "DEU"}),
+        )
+        assert resolved == date(2026, 11, 27)
+
     @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
     @patch("CheckRoyalCaribbeanPrice.notifier_for")
     def test_best_price_past_final_payment_records_distinct_decision(
@@ -3435,6 +3472,7 @@ class TestFinalPaymentIntegration:
             "bookingId": "2002",
             "sailDate": "INVALID_DATE",
             "shipCode": "AL",
+            "bookingMarketCountryCode": "US",   # the field the code reads
             "url": "https://mock.rccl.com?sailDate=INVALID_DATE",
         }
 
@@ -3495,7 +3533,7 @@ class TestFinalPaymentIntegration:
             "bookingId": "3003",
             "sailDate": "2027-06-15",
             "shipCode": "AL",
-            "marketCode": "GBR",
+            "bookingMarketCountryCode": "GBR",   # the field the code reads
             "url": "https://mock.rccl.com?sailDate=2027-06-15&marketCode=GBR",
             "paidPriceStruct": {"paid_price": 1000.0},
         }
