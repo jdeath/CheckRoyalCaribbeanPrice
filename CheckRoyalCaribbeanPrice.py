@@ -1037,12 +1037,20 @@ def _execute_api_request(
                 resp_obj = getattr(e, "response", None)
                 status_code = getattr(resp_obj, "status_code", None)
                 # Fallback: curl_cffi's HTTPError does not always attach .response -
-                # parse the status out of the exception text ("404 Not Found") so a
-                # definitive client error is never misread as transient and retried
+                # parse the status out of the exception text ("404 Client Error")
+                # so a definitive client error is never misread as transient and
+                # retried. Match only HTTP-status phrasing: a bare \b[45]\d\d\b
+                # also matched the "port 443" in every HTTPS connection-failure
+                # message, misclassifying transient network errors as terminal
+                # 4xx and skipping every retry.
                 if status_code is None:
-                    match = re.search(r"\b([45]\d\d)\b", str(e))
+                    match = re.search(
+                        r"\b([45]\d\d)\s+(?:client|server)\s+error\b"
+                        r"|\bhttp(?:\s+error)?\s*:?\s*([45]\d\d)\b"
+                        r"|\bstatus(?:\s+code)?\s*:?\s*([45]\d\d)\b",
+                        str(e), re.IGNORECASE)
                     if match:
-                        status_code = int(match.group(1))
+                        status_code = int(next(g for g in match.groups() if g))
                 if status_code and 400 <= status_code < 500:
                     return _handle_terminal_failure(e)
 
