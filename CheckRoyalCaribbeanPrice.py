@@ -2343,8 +2343,8 @@ def get_cruise_price(account_info: AccountInfo,
     # queries and false-alert watchers). Leave a no_price_data row instead.
     if room_available is None or results.get('price_check_failed'):
         log(f"{YELLOW}{pre_string}: Could not check price (request failed); availability unknown{RESET}")
-        config.history.record_cabin_fare(**history_common, current_price=None,
-                                          status="no_price_data", rebook_decision=None, notified=False)
+        history.record_cabin_fare(**history_common, current_price=None,
+                                  status="no_price_data", rebook_decision=None, notified=False)
         return
 
     # Path 1: Room is completely unlisted or sold out
@@ -2823,7 +2823,7 @@ def get_new_order_price(
         # recording that status for a network error would poison exactly the
         # back-in-stock history queries it exists for.
         log(f"{prefix} {product}: could not check (request failed)")
-        config.history.record_addon(
+        history.record_addon(
             item_kind="watchlist" if for_watch else "addon",
             reservation_id=str(reservation_ID) if reservation_ID is not None else None,
             account_label=account_info.username, ship_code=ship, sail_date=start_date,

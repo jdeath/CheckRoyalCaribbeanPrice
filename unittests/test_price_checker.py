@@ -238,7 +238,7 @@ def test_checkout_post_failure_is_not_reported_as_not_for_sale(mock_global_confi
         )
 
     mock_global_config.notify.assert_not_called()
-    kwargs = CRCP.config.history.record_cabin_fare.call_args.kwargs
+    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
     assert kwargs["status"] == "no_price_data"
 
 
@@ -256,7 +256,7 @@ def test_availability_fetch_failure_is_not_reported_as_not_for_sale(mock_global_
         )
 
     mock_global_config.notify.assert_not_called()
-    kwargs = CRCP.config.history.record_cabin_fare.call_args.kwargs
+    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
     assert kwargs["status"] == "no_price_data"
 
 
@@ -278,7 +278,7 @@ def test_post_empty_rooms_still_reports_not_for_sale(mock_global_config, base_ac
 
     mock_global_config.notify.assert_called_once()
     assert "Not For Sale" in mock_global_config.notify.call_args[1]['body']
-    kwargs = CRCP.config.history.record_cabin_fare.call_args.kwargs
+    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
     assert kwargs["status"] == "not_for_sale"
 
 

@@ -578,9 +578,11 @@ def test_addon_fetch_failure_not_recorded_as_unavailable():
     )
     mock_cfg = MagicMock()
     mock_cfg.currency_override = None
+    mock_history = MagicMock()
 
     logged = []
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.history", mock_history), \
          patch("CheckRoyalCaribbeanPrice.log", side_effect=lambda m, *a, **k: logged.append(str(m))), \
          patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=None):
         get_new_order_price(account, booking, MagicMock(), ctx)
@@ -588,5 +590,5 @@ def test_addon_fetch_failure_not_recorded_as_unavailable():
     out = "\n".join(logged)
     assert "not available for passenger" not in out
     assert "could not check" in out
-    kwargs = mock_cfg.history.record_addon.call_args.kwargs
+    kwargs = mock_history.record_addon.call_args.kwargs
     assert kwargs["status"] == "no_price_data"
