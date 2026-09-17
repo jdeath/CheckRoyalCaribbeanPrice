@@ -14,10 +14,9 @@ These tests cover:
   - main(): the apprise_test path notifies both the global and per-account objects
 """
 import pytest
+from apprise import Apprise
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
-
-from apprise import Apprise
 
 from CheckRoyalCaribbeanPrice import (
 # ITEM 1 TEST: CONFIG LOADING: per-account apprise -> AccountInfo.apobj
@@ -28,6 +27,7 @@ from CheckRoyalCaribbeanPrice import (
     CruiseAppConfig,
     _build_apprise,
     get_cruise_price,
+    history,
     load_config_objects,
     main,
     notifier_for,
@@ -110,6 +110,7 @@ def run_price_drop_scenario(*, account, config_apobj, other_accounts=None):
     results = {**build_available_response(), "base_fare": build_fare(2500.0)}  # 2500 < 3000 paid: guaranteed drop
 
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.history", MagicMock()), \
          patch("CheckRoyalCaribbeanPrice.log"), \
          patch("CheckRoyalCaribbeanPrice.get_room_price_via_API", return_value=results):
         get_cruise_price(account, booking, ship_dictionary, automatic_URL=True,
@@ -294,6 +295,7 @@ class TestAppriseTestNotifiesAllNotifiers:
         mock_cfg.format_date = lambda d: str(d)
 
         with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+             patch("CheckRoyalCaribbeanPrice.history", MagicMock()), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()):
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -335,6 +337,7 @@ class TestAppriseTestNotifiesAllNotifiers:
         mock_cfg.format_date = lambda d: str(d)
 
         with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+             patch("CheckRoyalCaribbeanPrice.history", MagicMock()), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()):
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -366,6 +369,7 @@ class TestAppriseTestNotifiesAllNotifiers:
         assert account_without.apobj is None
 
         with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+             patch("CheckRoyalCaribbeanPrice.history", MagicMock()), \
              patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
              patch("CheckRoyalCaribbeanPrice.get_ship_dictionary_web") as ship_dictionary_mock, \
              patch("CheckRoyalCaribbeanPrice.CheckinPaymentTracker.print_table"):
