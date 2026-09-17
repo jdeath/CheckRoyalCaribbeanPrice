@@ -550,3 +550,32 @@ class TestHistorySailDateNightsConsistency:
         kwargs = mock_cfg.history.record_addon.call_args.kwargs
         assert kwargs["sail_date"] == "20260913"
         assert kwargs["nights"] == 7
+
+
+def test_addon_fetch_failure_not_recorded_as_unavailable():
+    """A failed catalog request is 'could not check', NOT 'not available for
+    passenger' - that status marks the waiting-to-be-bookable state that
+    back-in-stock history queries key on, and a network error must not
+    pollute it."""
+    account = make_account()
+    booking = {"bookingId": "1234567", "shipCode": "WN", "sailDate": "20270819",
+               "numberOfNights": 7}
+    ctx = WatchItemContext(
+        prefix="pt_beverage", product="3005", passenger_ID="PAX1",
+        passenger_name="Jim", room="6543", paid_price=100.0,
+        guest_age_string="adult", for_watch=True, reservations=[],
+    )
+    mock_cfg = MagicMock()
+    mock_cfg.currency_override = None
+
+    logged = []
+    with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.log", side_effect=lambda m, *a, **k: logged.append(str(m))), \
+         patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=None):
+        get_new_order_price(account, booking, MagicMock(), ctx)
+
+    out = "\n".join(logged)
+    assert "not available for passenger" not in out
+    assert "could not check" in out
+    kwargs = mock_cfg.history.record_addon.call_args.kwargs
+    assert kwargs["status"] == "no_price_data"
