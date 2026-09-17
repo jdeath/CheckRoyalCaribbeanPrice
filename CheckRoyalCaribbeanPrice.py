@@ -1859,8 +1859,12 @@ def get_voyages(
             paid_price_struct['reservation'] = reservation_ID
             paid_price_struct['paid_price'] = gross_totals
             paid_price_struct['gratuities'] = prepaid_grats_flag
-            paid_price_struct['trip_insurance'] = insurance_flag
-            paid_price_struct['all_in_upgrade'] = all_included_flag
+            # NOTE: keys must match what CruiseURLParams.apply_overrides reads
+            # (camelCase) - the old snake_case spellings were silently ignored,
+            # so insured / all-included bookings compared against a cheaper
+            # base fare and fired false "Rebook!" alerts
+            paid_price_struct['tripInsurance'] = insurance_flag
+            paid_price_struct['allInUpgrade'] = all_included_flag
             log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
         # Record this booking for the end-of-run check-in / final-payment summary table.
