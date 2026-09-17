@@ -2337,6 +2337,16 @@ def get_cruise_price(account_info: AccountInfo,
     final_payment_date_display = final_payment_date.strftime(config.date_display_format)
     past_final_payment_date = date.today() > final_payment_date
 
+    # Path 0: the availability/pricing request itself FAILED. That is not the
+    # same as sold out: don't push "Cruise Room Not Available" and don't
+    # record not_for_sale (a network blip would poison back-in-stock history
+    # queries and false-alert watchers). Leave a no_price_data row instead.
+    if room_available is None or results.get('price_check_failed'):
+        log(f"{YELLOW}{pre_string}: Could not check price (request failed); availability unknown{RESET}")
+        history.record_cabin_fare(**history_common, current_price=None,
+                                  status="no_price_data", rebook_decision=None, notified=False)
+        return
+
     # Path 1: Room is completely unlisted or sold out
     if not room_available:
         text_string = f"{pre_string} Not For Sale"
@@ -2539,11 +2549,15 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
             rooms = response_json.get("rooms")
         except Exception:
              rooms = None
+             # unparseable body = request failure, not "sold out"
+             results['price_check_failed'] = True
     else:
         rooms = None
+        results['price_check_failed'] = True
 
     if not rooms:
-        log("Room Price Not Found")
+        log("Room price request failed" if results.get('price_check_failed')
+            else "Room Price Not Found")
         results['room_available'] = False
         results['available_rooms'] = available_rooms
         return results
@@ -2640,7 +2654,10 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
 
     if response is None:
         log("Unable to check room availability with server")
-        return False, []
+        # None = "could not check" - distinct from False = "confirmed not
+        # for sale", so a failed request is never reported (or pushed) as
+        # Not For Sale downstream
+        return None, []
 
     # Extract structural array matrix out of the component text stream
     available_rooms = []
@@ -2800,6 +2817,22 @@ def get_new_order_price(
     # Get the information on the watched item from the server
     url = f'https://aws-prd.api.rccl.com/en/{account_info.api_brand}/web/commerce-api/catalog/v2/{ship}/categories/{prefix}/products/{product}'
     response = _execute_api_request(account_info, "GET", url, params=params)
+
+    if response is None:
+        # The catalog request failed - NOT "not available for passenger":
+        # recording that status for a network error would poison exactly the
+        # back-in-stock history queries it exists for.
+        log(f"{prefix} {product}: could not check (request failed)")
+        history.record_addon(
+            item_kind="watchlist" if for_watch else "addon",
+            reservation_id=str(reservation_ID) if reservation_ID is not None else None,
+            account_label=account_info.username, ship_code=ship, sail_date=start_date,
+            nights=number_of_nights or None,
+            item_code=f"{prefix}/{product}", guest_id=str(passenger_ID) if passenger_ID is not None else None,
+            guest_name=passenger_name, paid_price=paid_price, currency=currency,
+            per_night=int(per_day_price), current_price=None,
+            status="no_price_data", rebook_decision=None, notified=False)
+        return
 
     try:
         payload = response.json().get("payload")

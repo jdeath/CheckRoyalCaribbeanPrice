@@ -218,6 +218,70 @@ def test_watchlist_cruise_not_for_sale_sends_notification(mock_global_config, ba
     assert "Not For Sale" in mock_global_config.notify.call_args[1]['body']
 
 
+_WATCH_URL = "https://www.royalcaribbean.com/booking/landing?shipCode=WN&sailDate=2026-11-15&r0d=SUITE"
+
+
+def test_checkout_post_failure_is_not_reported_as_not_for_sale(mock_global_config, base_account_info):
+    """Availability says on-sale but the checkout POST fails (network / retries
+    exhausted): that is NOT 'Not For Sale'. No push, no not_for_sale history
+    row - a network blip used to false-alert watchers and poison back-in-stock
+    queries with a permanent not_for_sale/notified=1 record."""
+    import CheckRoyalCaribbeanPrice as CRCP
+
+    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(True, [])), \
+         patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=None):
+        get_cruise_price(
+            account_info=base_account_info,
+            booking={"url": _WATCH_URL, "stateroomType": "SUITE"},
+            ship_dictionary=ShipRegistry(),
+            automatic_URL=False
+        )
+
+    mock_global_config.notify.assert_not_called()
+    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
+    assert kwargs["status"] == "no_price_data"
+
+
+def test_availability_fetch_failure_is_not_reported_as_not_for_sale(mock_global_config, base_account_info):
+    """check_if_room_is_available returning None (its request failed) must not
+    be pushed or recorded as Not For Sale either."""
+    import CheckRoyalCaribbeanPrice as CRCP
+
+    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(None, [])):
+        get_cruise_price(
+            account_info=base_account_info,
+            booking={"url": _WATCH_URL, "stateroomType": "SUITE"},
+            ship_dictionary=ShipRegistry(),
+            automatic_URL=False
+        )
+
+    mock_global_config.notify.assert_not_called()
+    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
+    assert kwargs["status"] == "no_price_data"
+
+
+def test_post_empty_rooms_still_reports_not_for_sale(mock_global_config, base_account_info):
+    """Control: a checkout POST that SUCCEEDS with no rooms is a genuine
+    sold-out - the watchlist push and the not_for_sale row are unchanged."""
+    import CheckRoyalCaribbeanPrice as CRCP
+
+    empty_resp = MagicMock()
+    empty_resp.json.return_value = {"rooms": []}
+    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(True, [])), \
+         patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=empty_resp):
+        get_cruise_price(
+            account_info=base_account_info,
+            booking={"url": _WATCH_URL, "stateroomType": "SUITE"},
+            ship_dictionary=ShipRegistry(),
+            automatic_URL=False
+        )
+
+    mock_global_config.notify.assert_called_once()
+    assert "Not For Sale" in mock_global_config.notify.call_args[1]['body']
+    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
+    assert kwargs["status"] == "not_for_sale"
+
+
 def test_available_rooms_listed_when_sold_out(mock_global_config, base_account_info):
     """
     The 'Available Rooms' fallback must actually print the alternatives:
@@ -1637,7 +1701,9 @@ def test_check_if_room_is_available_network_exception_tolerance():
     ):
         try:
             available, alternate_rooms = check_if_room_is_available(url_params)
-            assert available is False
+            # None = "could not check" (request failed) - deliberately distinct
+            # from False = "confirmed not for sale"
+            assert available is None
             assert alternate_rooms == []
         except Exception as err:
             pytest.fail(f"check_if_room_is_available leaked a raw unhandled exception: {err}")
