@@ -3907,6 +3907,8 @@ def notifier_for(account_info: Optional[AccountInfo]) -> Optional[Apprise]:
 
 def parse_price_alert_exclusions(raw: Any) -> List[PriceAlertExclusion]:
     """Require explicit identifiers so malformed rules cannot broaden a mute."""
+    if raw is None:
+        return []  # A YAML section with all rules commented out is null.
     if not isinstance(raw, list):
         raise ValueError("ignoredPriceAlerts must be a list")
     rules = []

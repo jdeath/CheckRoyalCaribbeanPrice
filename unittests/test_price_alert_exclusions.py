@@ -87,7 +87,7 @@ def test_other_products_in_same_order_are_not_muted_and_removal_restores_alert(a
     assert 'ignoredPriceAlerts' not in body
 
 
-@pytest.mark.parametrize('raw', [None, {}, 'TEST1', [None], [{}],
+@pytest.mark.parametrize('raw', [False, 0, '', {}, 'TEST1', [None], [{}],
     [dict(reservation=1, prefix='pt_spa')],
     [dict(reservation=True, prefix='pt_spa', product='TEST1')],
     [dict(reservation=1, prefix=' ', product='TEST1')],
@@ -108,3 +108,20 @@ def test_config_loads_optional_rules_and_normalizes_numeric_ids(tmp_path, monkey
         dict(reservation=1000001, prefix='pt_internet', product=1234, guest=2000001)]}))
     assert c.load_config_objects(str(path)).ignored_price_alerts == [
         c.PriceAlertExclusion('1000001', 'pt_internet', '1234', '2000001')]
+
+
+@pytest.mark.parametrize('section', ['', 'ignoredPriceAlerts:\n', 'ignoredPriceAlerts: []\n'])
+def test_empty_exclusion_section_disables_exclusions(tmp_path, monkeypatch, section):
+    monkeypatch.setattr(c, 'setup_hybrid_logging', Mock())
+    path = tmp_path/'config.yaml'
+    path.write_text(section)
+    assert c.load_config_objects(str(path)).ignored_price_alerts == []
+
+
+@pytest.mark.parametrize('value', [False, 0, '', {}, 'invalid'])
+def test_invalid_section_types_still_fail_config_load(tmp_path, monkeypatch, value):
+    monkeypatch.setattr(c, 'setup_hybrid_logging', Mock())
+    path = tmp_path/'config.yaml'
+    path.write_text(yaml.safe_dump({'ignoredPriceAlerts': value}))
+    with pytest.raises(ValueError, match='ignoredPriceAlerts must be a list'):
+        c.load_config_objects(str(path))

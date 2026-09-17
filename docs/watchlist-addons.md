@@ -50,6 +50,8 @@ To find the `prefix` and `product` values for items you want to watch:
 Use the top-level `ignoredPriceAlerts` list to mute a product for a specific cruise
 reservation. This also applies to automatically discovered booked add-ons, which
 are checked even when they do not appear in `watchList`.
+Rules apply to booked add-ons and manual product watches evaluated for that
+reservation; they do not mute watches without a reservation number.
 
 ```yaml
 ignoredPriceAlerts:
@@ -77,3 +79,5 @@ For example, this can mute a spa product whose advertised sale only applies to
 appointment times you do not want. It does not compare prices for your booked
 time. All appointments for that product within the rule's reservation/guest scope
 are muted. Remove the rule to resume its notifications on the next regular check.
+An omitted, empty or null `ignoredPriceAlerts` section disables exclusions.
+Other section types (such as `false`, `0` or a mapping) remain configuration errors.
