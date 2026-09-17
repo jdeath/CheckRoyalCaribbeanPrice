@@ -3270,7 +3270,9 @@ class TestFinalPaymentDate:
             "stateroomSubtype": "D1",
             "passengersInStateroom": [{"stateroomCategoryCode": "4D", "birthdate": "19800101"}],
         }
-        CRCP.config.history.record_cabin_fare.reset_mock()
+        # the price-history sink is the module-global `history` (PR #115
+        # refactor), patched per-test by the autouse mock_global_history fixture
+        CRCP.history.record_cabin_fare.reset_mock()
 
         get_cruise_price(
             account_info=mock_account,
@@ -3280,7 +3282,7 @@ class TestFinalPaymentDate:
                                "finalPaymentDate": "2020-01-01"},
         )
 
-        kwargs = CRCP.config.history.record_cabin_fare.call_args.kwargs
+        kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
         assert kwargs["status"] == "priced"
         assert kwargs["rebook_decision"] == "best_price_past_final_payment"
 
