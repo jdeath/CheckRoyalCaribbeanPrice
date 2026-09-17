@@ -4062,6 +4062,37 @@ def test_profile_failure_closes_session_before_error_notification():
     voyages.assert_not_called()
 
 
+def test_profile_cleanup_failure_preserves_skip_and_continue():
+    failed = AccountInfo(username="profile@example.invalid", password="fake")
+    healthy = AccountInfo(username="healthy@example.invalid", password="fake")
+    failed_access = APIAccess(token="fake", id="fake", session=MagicMock())
+    healthy_access = APIAccess(token="fake", id="fake", session=MagicMock())
+    failed_access.session.close.side_effect = RuntimeError("cleanup failed")
+    cfg = _make_multi_account_config([failed, healthy])
+    cfg.notify_on_error = True
+    failed.apobj = MagicMock()
+    failed.apobj.__len__.return_value = 1
+    with patch("CheckRoyalCaribbeanPrice.config", cfg), \
+         patch("CheckRoyalCaribbeanPrice.history") as run_history, \
+         patch("CheckRoyalCaribbeanPrice.log") as logged, \
+         patch("CheckRoyalCaribbeanPrice.get_ship_dictionary_web"), \
+         patch("CheckRoyalCaribbeanPrice.login", side_effect=[failed_access, healthy_access]), \
+         patch("CheckRoyalCaribbeanPrice.get_profile", side_effect=[RuntimeError("profile failed"), ("FL", "TEST", 0)]), \
+         patch("CheckRoyalCaribbeanPrice.get_voyages") as voyages, \
+         patch("CheckRoyalCaribbeanPrice.time.sleep"):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+    assert exc_info.value.code == EXIT_PARTIAL_FAILURE
+    assert voyages.call_count == 1
+    assert voyages.call_args.args[0] is healthy
+    failed_access.session.close.assert_called_once()
+    healthy_access.session.close.assert_called_once()
+    assert failed.apobj.notify.call_args.kwargs['title'] == 'Cruise Price Account Profile Fetch Failed'
+    assert any('Session cleanup failed' in str(call) for call in logged.call_args_list)
+    assert run_history.finish_run.call_args.args[0] == 'partial_failure'
+    assert '(profile)' in run_history.finish_run.call_args.args[1]
+
+
 def test_main_all_accounts_succeed_exits_and_records_ok_unchanged():
     """Baseline: with no failures, current behavior is unchanged - every
     account is processed, the history run finishes 'ok', and the process

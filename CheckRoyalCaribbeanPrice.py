@@ -4160,7 +4160,10 @@ def main() -> None:
                 # Release its authenticated session before error notification,
                 # which can itself raise.
                 if account_phase == "profile":
-                    account_info.access.session.close()
+                    try:
+                        account_info.access.session.close()
+                    except Exception:
+                        log(YELLOW + "Session cleanup failed after profile lookup failure; continuing." + RESET)
                 failed_accounts.append((account_info.username, account_phase))
                 if account_phase == "login":
                     skip_reason = "could not be logged in"
