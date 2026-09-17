@@ -1,6 +1,8 @@
 from __future__ import annotations
 import argparse
 import base64
+import hashlib
+import math
 import json
 import locale
 import logging
@@ -44,6 +46,7 @@ except ImportError:
 from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
@@ -582,6 +585,7 @@ class ProspectiveCruise:
     cruise_URL: str
     paid_price: float
     loyalty_number: Optional[str] = None
+    notification_mode: str = "price"
 
 
 @dataclass
@@ -598,6 +602,7 @@ class CruiseAppConfig:
     request_timeout: int = REQUEST_TIMEOUT
     log_file: Optional[str] = None
     history_db: Optional[str] = None
+    cabin_availability_state_file: str = "data/cabin-availability.sqlite3"
     output_watch_as_json: bool = False
     output_json_watch_file: Optional[str] = "output-json-watch.txt"
     apprise_urls: List[str] = field(default_factory=list)
@@ -2082,12 +2087,66 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
     return result
 
 
+class CabinAvailabilityError(Exception):
+    """A cabin availability notification or its persistent state failed."""
+
+
+def notify_cabin_availability(params: CruiseURLParams, result: dict, url: str,
+                              ships: ShipRegistry, notifier: Optional[Apprise], scope: str) -> None:
+    """Persist latest availability; acknowledge only successful notifications."""
+    available = result.get("room_available")
+    label = f"{config.format_date(params.sail_date)} {ships.get_ship(params.ship_code)} {params.cabin_class_string} {params.stateroom_subtype}"
+    if available is not True and available is not False:
+        log(f"{YELLOW}{label}: availability unknown; previous state retained{RESET}")
+        return
+    log(f"{GREEN if available else YELLOW}{label}: {'Available' if available else 'Not For Sale'}{RESET}")
+    path = Path(config.cabin_availability_state_file).expanduser()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with closing(sqlite3.connect(path, timeout=30)) as db:
+            db.execute("CREATE TABLE IF NOT EXISTS cabin_availability_v1 (scope TEXT PRIMARY KEY, available INTEGER NOT NULL, notified INTEGER NOT NULL)")
+            db.commit()
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT available, notified FROM cabin_availability_v1 WHERE scope=?", (scope,)).fetchone()
+            notified = row[1] if available and row and row[0] else 0
+            sent = True
+            if available and not notified:
+                lines = [label + " is now available."]
+                fare_key = "all_included" if params.all_included else "base"
+                fare_key += "_refundable_fare" if params.refundable else "_fare"
+                fare = result.get(fare_key) or {}
+                price = fare.get("fare")
+                if price is not None:
+                    if params.prepaid_grats:
+                        price += fare.get("gratuities") or 0
+                    if params.travel_insurance:
+                        price += fare.get("insurance") or 0
+                    lines.append(f"Current price: {price:.2f} {params.currency_code}")
+                else:
+                    lines.append("Current price unavailable; check the booking page.")
+                lines.append(url)
+                try:
+                    sent = notifier is not None and notifier.notify(body="\n".join(lines),
+                        title="Cruise Room Available", body_format=NotifyFormat.TEXT) is True
+                except Exception:
+                    sent = False
+                notified = int(sent)
+            db.execute("INSERT INTO cabin_availability_v1 VALUES (?, ?, ?) ON CONFLICT(scope) DO UPDATE SET available=excluded.available, notified=excluded.notified",
+                       (scope, int(available), notified))
+            db.commit()
+    except (OSError, sqlite3.Error) as exc:
+        raise CabinAvailabilityError("Cannot update cabin availability state; check cabinAvailabilityStateFile") from exc
+    if not sent:
+        raise CabinAvailabilityError("Cabin availability notification not confirmed; will retry on the next check")
+
+
 def get_cruise_price(account_info: AccountInfo,
                      booking: Dict[str, Any],
                      ship_dictionary: ShipRegistry,
                      automatic_URL: bool = True,
                      paid_price_struct: Dict[str, Any] = None,
-                     discounts: Optional[DiscountProfile] = None
+                     discounts: Optional[DiscountProfile] = None,
+                     notification_mode: str = "price"
 ) -> None:
     """
     Performs dynamic live web-pricing evaluations for a specific stateroom or prospective cruise.
@@ -2203,16 +2262,31 @@ def get_cruise_price(account_info: AccountInfo,
 
     room_number = None
 
+    # Identity is based on normalized search criteria, before any coupon fallback.
+    cabin_scope = hashlib.sha256(json.dumps(asdict(url_params), sort_keys=True).encode()).hexdigest() if notification_mode == "availability" else None
+
     # Primary API pricing check pass
     results = get_room_price_via_API(url_params, room_number)
     room_available = results.get("room_available")
 
     # Defensive Fallback: If a coupon code explicitly bricks availability, retry without it
-    if not room_available and url_params.coupon_code is not None:
+    fallback_available = results.get("inventory_available", room_available) if notification_mode == "availability" else room_available
+    if not fallback_available and url_params.coupon_code is not None:
         log(f"Coupon Code {url_params.coupon_code} may have failed, trying without using it")
         url_params.coupon_code = None
         results = get_room_price_via_API(url_params, room_number)
         room_available = results.get("room_available")
+
+    if not automatic_URL and notification_mode == "availability":
+        results = dict(results, room_available=results.get("inventory_available", room_available))
+        # Guarantee categories bypass exact inventory matching in the legacy checker.
+        # Require a returned fare before treating that bypass as positive inventory.
+        codes = (url_params.stateroom_subtype, url_params.stateroom_category_code)
+        if any(code and (code in {"GTY", "XB", "YO", "ZI", "WS", "XN", "CB"} or code.endswith("GTY")) for code in codes):
+            if results["room_available"] and not (results.get("base_fare") or {}).get("fare"):
+                results["room_available"] = None
+        notify_cabin_availability(url_params, results, provided_url, ship_dictionary, apobj, cabin_scope)
+        return
 
     # === Localized Night Count Extraction ===
     # Prioritize the clean parsed values from the watchlist or configuration properties.
@@ -2515,7 +2589,9 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
     room_available, available_rooms = check_if_room_is_available(url_params)
     results = {
         'sailing_nights': 0,
-        'room_available': room_available
+        'room_available': room_available,
+        # Keep room-selection evidence separate from checkout price results.
+        'inventory_available': room_available
     }
 
     if not room_available:
@@ -2639,7 +2715,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
     return results
 
 
-def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict[str, Any]]]:
+def check_if_room_is_available(params: CruiseURLParams) -> tuple[Optional[bool], List[Dict[str, Any]]]:
     """
     RSC Scraper Engine wrapper that verifies physical cabin availability on active voyages.
 
@@ -2695,9 +2771,9 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
 
     if response is None:
         log("Unable to check room availability with server")
-        # None = "could not check" - distinct from False = "confirmed not
-        # for sale", so a failed request is never reported (or pushed) as
-        # Not For Sale downstream
+        # None = unknown, not confirmed unavailable.
+        return None, []
+    if response.status_code != 200:
         return None, []
 
     # Extract structural array matrix out of the component text stream
@@ -2705,12 +2781,17 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     rooms = _extract_json_array(response.text, "rooms")
 
     if not rooms:
-        return False, available_rooms
-
+        return None, available_rooms
     try:
-        stateroom_types = rooms[0].get("options", {}).get("stateroomTypes", [])
-    except (IndexError, AttributeError):
-        return False, available_rooms
+        stateroom_types = rooms[0]["options"]["stateroomTypes"]
+        if not isinstance(stateroom_types, list):
+            raise ValueError()
+        for room_type in stateroom_types:
+            subtypes = room_type["stateroomSubtypes"]
+            if not isinstance(subtypes, list) or any(not isinstance(r, dict) or not r.get("code") for r in subtypes):
+                raise ValueError()
+    except (IndexError, AttributeError, KeyError, TypeError, ValueError):
+        return None, available_rooms
 
     # --- GTY / CATEGORY OVERRIDE BYPASS ---
     # Unassigned guarantee inventory (e.g. 'XB', 'ZI', 'YO') and explicit config overrides
@@ -2734,6 +2815,14 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     # below even though its family is on sale - collect each row's lead-in
     # category so a letters-based fallback can resolve the renamed code.
     letter_matched_subtype = None
+
+    def subtype_available(subtype):
+        stock = subtype.get("roomsLeft")
+        if stock is None:
+            return True  # Some available-subtype responses omit counts.
+        if type(stock) not in (int, float) or not math.isfinite(stock) or stock < 0:
+            return None
+        return stock > 0
 
     def _code_letters(code: Optional[str]) -> str:
         return re.sub(r"[^A-Za-z]", "", code or "").upper()
@@ -2759,7 +2848,7 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
             # lead-in, which made every such booking read as "Not For Sale". The precise
             # price is unaffected: the checkout POST below still uses the booked category.
             if cur_subtype_code == params.stateroom_subtype:
-                return True, []
+                return subtype_available(stateroom_subtype), []
 
             # Remember the first non-guarantee subtype whose lead-in category shares
             # the booking's letters (booked U/2U -> lead-in 4U -> funnel subtype V),
@@ -2767,7 +2856,7 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
             if (letter_matched_subtype is None and wanted_letters
                     and not stateroom_subtype.get("guarantee")
                     and _code_letters(cur_category_code) == wanted_letters):
-                letter_matched_subtype = cur_subtype_code
+                letter_matched_subtype = stateroom_subtype
 
             # Defensively extract pricing trees to protect against missing API sub-keys
             pricing_struct = stateroom_subtype.get("pricing", {})
@@ -2790,9 +2879,13 @@ def check_if_room_is_available(params: CruiseURLParams) -> tuple[bool, List[Dict
     # (which sends stateroomSubtypeCode alongside the booked categoryCode)
     # speaks the vocabulary the API expects.
     if letter_matched_subtype is not None:
+        available = subtype_available(letter_matched_subtype)
+        if available is not True:
+            return available, []
+        current_code = letter_matched_subtype["code"]
         log(f"\tSubtype code {params.stateroom_subtype} is no longer offered under that name; "
-            f"using current code {letter_matched_subtype} for the same category family")
-        params.stateroom_subtype = letter_matched_subtype
+            f"using current code {current_code} for the same category family")
+        params.stateroom_subtype = current_code
         return True, []
 
     # Fall-through state: The loops completed without finding our exact cabin style.
@@ -3921,15 +4014,19 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     # DESIGN NOTE:  YAML keys will remain camel_case instead of snake_case
     # to not interfere with config files already created by existing script users
 
-    # Parse prospective cruises
-    prospective_cruises = [
-        ProspectiveCruise(
-            cruise_URL=c["cruiseURL"],
-            paid_price=float(c["paidPrice"]),
-            loyalty_number=c.get("loyaltyNumber")
-        )
-        for c in data.get("cruises", [])
-    ]
+    # Parse prospective cruises. Availability-only watches need no target price.
+    prospective_cruises = []
+    for index, item in enumerate(data.get("cruises", [])):
+        mode = item.get("notificationMode", "price")
+        if mode not in ("price", "availability"):
+            raise ValueError(f"cruises[{index}].notificationMode must be price or availability")
+        prospective_cruises.append(ProspectiveCruise(
+            cruise_URL=item["cruiseURL"],
+            paid_price=float(item.get("paidPrice", 0) if mode == "availability" else item["paidPrice"]),
+            loyalty_number=item.get("loyaltyNumber"), notification_mode=mode))
+    cabin_state_file = data.get("cabinAvailabilityStateFile", "data/cabin-availability.sqlite3")
+    if not isinstance(cabin_state_file, str) or not cabin_state_file.strip():
+        raise ValueError("cabinAvailabilityStateFile must be a nonempty file path")
 
     # Parse watch list
     watch_list = []
@@ -3977,6 +4074,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
         history_db=data.get("historyDb"),
+        cabin_availability_state_file=cabin_state_file,
         output_watch_as_json=data.get("outputWatchAsJson",False),
         output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
         apobj=apobj,
@@ -4273,7 +4371,8 @@ def main() -> None:
                 # URL context components. This prevents the code from executing automated customer profile queries,
                 # keeping this entire script iteration running safely, anonymously, and unauthenticated.
                 prospective_target = {'paid_price': paid_price}
-                get_cruise_price(prospective_account, prospective_booking, ship_dictionary, automatic_URL=False, paid_price_struct=prospective_target)
+                get_cruise_price(prospective_account, prospective_booking, ship_dictionary, automatic_URL=False, paid_price_struct=prospective_target,
+                                 notification_mode=getattr(prospective_cruise, "notification_mode", "price"))
 
             # Safely release the connection socket resources back to the OS
             anon_session.close()
