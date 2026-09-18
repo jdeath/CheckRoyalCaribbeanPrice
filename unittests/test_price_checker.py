@@ -1927,6 +1927,56 @@ def test_get_new_order_price_writes_json_watch_record(tmp_path):
 # ============================================================================
 # ITEM 13 TESTS: EXTRA METRIC CALCULATION Scope Isolation & String Resiliency
 # ============================================================================
+def test_metrics_counts_birthdateless_guest_as_adult():
+    """A guest with no birthdate on record (TA-entered bookings) must price as
+    an adult: above_age_on_sail_date() returns False for a missing date, which
+    silently classified them as children (wrong fare basis)."""
+    booking = {"stateroomType": "B", "stateroomSubtype": "D8"}
+    guests = [
+        {"firstName": "Matt", "birthdate": "19800101", "stateroomCategoryCode": "4D"},
+        {"firstName": "Pat", "stateroomCategoryCode": "4D"},   # no birthdate
+    ]
+    metrics = _calculate_passenger_metrics(
+        guests=guests, sail_date="20270510", booking=booking, brand_code="R")
+    assert metrics["num_adults"] == 2
+    assert metrics["num_children"] == 0
+
+
+def test_path_b_birthdateless_guest_and_top_level_category_reach_pricing(
+        mock_global_config, base_account_info):
+    """Path B rebuilt its own passenger/category metrics and disagreed with
+    _calculate_passenger_metrics twice over: a guest with no birthdate was
+    counted as NOBODY (a 2-adult cabin priced as 1 adult -> false 'Rebook!'),
+    and a category present only at booking level (where get_voyages also
+    patches its resolved code) never reached the pricing request at all
+    (-> 'Unassigned/GTY Not For Sale')."""
+    booking = {
+        "bookingId": "1234567",
+        "sailDate": "20270510",
+        "shipCode": "WN",
+        "packageCode": "WN07X123",
+        "stateroomType": "B",
+        "stateroomSubtype": "4D",
+        "stateroomCategoryCode": "4B",            # booking level only
+        "passengersInStateroom": [
+            {"firstName": "Matt", "birthdate": "19800101"},
+            {"firstName": "Pat"},                  # no birthdate
+        ],
+    }
+    with patch('CheckRoyalCaribbeanPrice.get_room_price_via_API',
+               return_value={"room_available": False}) as mock_price:
+        get_cruise_price(
+            account_info=base_account_info,
+            booking=booking,
+            ship_dictionary=ShipRegistry(),
+            automatic_URL=True,
+        )
+
+    url_params = mock_price.call_args[0][0]
+    assert int(url_params.number_of_adults) == 2, "birthdate-less guest dropped from the party"
+    assert url_params.stateroom_category_code == "4B", "booking-level category never reached pricing"
+
+
 def test_calculate_passenger_metrics_gty_scope_isolation():
     """
     Verify that guess logic for one guest's GTY category code does not
