@@ -33,6 +33,9 @@ accountInfo:
 apprise: # Optional global fallback for accounts without their own apprise: list
   - url: "mailto://user:password@gmail.com"
 ```
-The `apprise_test` self-test and the `notifyOnError` script-failure notification always use the
-top-level `apprise:` list (plus, during `apprise_test`, each configured account's own list gets a
-test message too, so a bad per-account URL is caught early).
+The `apprise_test` self-test and the `notifyOnError` notification for a FATAL script failure
+use the top-level `apprise:` list (plus, during `apprise_test`, each configured account's own
+list gets a test message too, so a bad per-account URL is caught early). A per-account failure
+- a login or profile fetch that fails for one account while the run continues - follows the
+same per-account/global resolution as price alerts: it goes to that account's own `apprise:`
+list when one is configured, and only otherwise to the top-level list.

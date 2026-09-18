@@ -24,14 +24,15 @@ If you are looking for a specific ship or sail date, you may also specify them o
   - Please note that you may need to adjust the date format for your particular locale setting (for example, '5/10/2027' insead of '05/10/2027')
 
 You may sort the resulting list per category alphabetically, by price, or using the default order from Royal Caribbean's servers.  Some examples are:
-- `python BrowseRoyalCaribbeanPrice.py -o alpha` or `python BrowseRoyalCaribbeanPrice.py -o price`
+- `python BrowseRoyalCaribbeanPrice.py -k alpha` or `python BrowseRoyalCaribbeanPrice.py -k price`
 
 Command-line options may be used in any combination.  They are:
 - -c, --currency: currency (default: System currency) (e.g USD, GBP, DKK or others)
 - -s, --ship: The ship to browse for; do not include 'of the Seas' after the ship name (Royal Caribbean) or 'Celebrity' before it (Celebrity)
-- -d, --saildate: Date of the sailing to browse for (date format is mm/dd/yy)
+- -d, --saildate: Date of the sailing to browse for, exactly as shown in the sailing list (your locale's date format, e.g. 01/15/2026)
 - -k, --sortkey: Sort each category alphabetically, by price (lowest to highest), or the default order from the server (default)
 - -o, --sortorder: Sort each category in ascending or descending order, based on the sortkey value
+- -a, --activitysort: Sort onboard activities by date, alphabetically, or the default order from the server (default)
 - -w, --watchlistcodes: Display the codes for each product to put in `CheckRoyalCaribbeanPrice.py` product watchlist function (default no display)
 - -l, --logfile: Output also saves to file (eg. output.txt)
    

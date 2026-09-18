@@ -7,3 +7,10 @@ output-json-celebrity.txt
 output-json-royal.txt
 output-royal.txt
 .DS_Store
+output.txt
+output-json-watch.txt
+*.db
+*.db-wal
+*.db-shm
+build/
+dist/
