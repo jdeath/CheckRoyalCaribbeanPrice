@@ -14,6 +14,8 @@ username = ""
 password = ""
 cruiseLineName =  "royalcaribbean"
 #cruiseLineName = "celebritycruises"
+# aws-prd API brand segment, same mapping the main checker's api_brand uses
+apiBrand = "royal" if cruiseLineName == "royalcaribbean" else "celebrity"
 
 #########################
 # Do Not Edit Below Here
@@ -40,7 +42,7 @@ def main():
         global shipDictionary
         shipDictionary = getShipDictionary()
         
-        reservationFriendlyNames = []
+        reservationFriendlyNames = {}   # id -> display name (was a list: .get() crashed the moment it was populated)
         apobj = None
         print(cruiseLineName + " " + username)
         session = requests.session()
@@ -58,7 +60,9 @@ def login(username,password,session,cruiseLineName):
     }
     
     urlSafePassword  = quote(password, safe='')
-    data = 'grant_type=password&username=' + username +  '&password=' + urlSafePassword + '&scope=openid+profile+email+vdsid'
+    # the username must be form-encoded too: a raw '+' (plus-addressed email)
+    # decodes server-side as a space and the login fails as the wrong user
+    data = 'grant_type=password&username=' + quote(username, safe='') +  '&password=' + urlSafePassword + '&scope=openid+profile+email+vdsid'
     
     response = session.post('https://www.'+cruiseLineName+'.com/auth/oauth2/access_token', headers=headers, data=data)
     
@@ -70,7 +74,10 @@ def login(username,password,session,cruiseLineName):
     
     list_of_strings = access_token.split(".")
     string1 = list_of_strings[1]
-    decoded_bytes = base64.b64decode(string1 + '==')
+    # JWT segments are base64URL: standard b64decode silently DROPS -/_
+    # characters (validate=False), shifting every later byte and crashing the
+    # json parse whenever the payload happens to contain such a byte
+    decoded_bytes = base64.urlsafe_b64decode(string1.replace('+', '-').replace('/', '_') + '==')
     auth_info = json.loads(decoded_bytes.decode('utf-8'))
     accountId = auth_info["sub"]
     return access_token,accountId,session
@@ -91,11 +98,11 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
     'Req-App-Id': 'Royal.Web.PlanMyCruise',
     'Req-App-Vers': '1.81.3',
     'Content-Type': 'application/json',
-    'Origin': 'https://www.royalcaribbean.com',
+    'Origin': 'https://www.' + cruiseLineName + '.com',
     'DNT': '1',
     'Sec-GPC': '1',
     'Connection': 'keep-alive',
-    'Referer': 'https://www.royalcaribbean.com/',
+    'Referer': 'https://www.' + cruiseLineName + '.com/',
     'Sec-Fetch-Dest': 'empty',
     'Sec-Fetch-Mode': 'cors',
     'Sec-Fetch-Site': 'cross-site',
@@ -131,7 +138,7 @@ def getInCartPricePrice(access_token,accountId,session,reservationId,ship,startD
     }
 
     response = requests.post(
-        'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/cart/v1/price',
+        'https://aws-prd.api.rccl.com/en/' + apiBrand + '/web/commerce-api/cart/v1/price',
         params=params,
         headers=headers,
         json=json_data,
@@ -171,7 +178,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
     }
     
     response = session.get(
-        'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/catalog/v2/' + ship + '/categories/' + prefix + '/products/' + str(product),
+        'https://aws-prd.api.rccl.com/en/' + apiBrand + '/web/commerce-api/catalog/v2/' + ship + '/categories/' + prefix + '/products/' + str(product),
         params=params,
         headers=headers,
     )
@@ -214,7 +221,7 @@ def getNewBeveragePrice(access_token,accountId,session,reservationId,ship,startD
             promotionTitle = promoDescription.get("displayName")
             text += '\n Promotion:' + promotionTitle
             
-        text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.royalcaribbean.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
+        text += '\n' + 'Cancel Order ' + orderDate + ' ' + orderCode + ' at https://www.' + cruiseLineName + '.com/account/cruise-planner/order-history?bookingId=' + reservationId + '&shipCode=' + ship + "&sailDate=" + startDate
         
         if not owner:
             text += " " + "This was booked by another in your party. They will have to cancel/rebook for you!"
@@ -236,7 +243,7 @@ def getLoyalty(access_token,accountId,session):
         'AppKey': appKey,
         'account-id': accountId,
     }
-    response = session.get('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', headers=headers)
+    response = session.get('https://aws-prd.api.rccl.com/en/' + apiBrand + '/web/v1/guestAccounts/loyalty/info', headers=headers)
 
     loyalty = response.json().get("payload").get("loyaltyInformation")
     cAndANumber = loyalty.get("crownAndAnchorId")
@@ -297,7 +304,9 @@ def getVoyages(access_token,accountId,session,apobj,cruiseLineName,reservationFr
         if str(reservationId) in reservationFriendlyNames:
             reservationDisplay += " (" + reservationFriendlyNames.get(str(reservationId)) + ")"
         sailDateDisplay = datetime.strptime(sailDate, "%Y%m%d").strftime(dateDisplayFormat)
-        print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary[shipCode] + " Room " + booking.get("stateroomNumber") + " (" + passengerNames + ")")
+        # GTY bookings have stateroomNumber null; a brand-new ship may not be
+        # in the fleet dictionary yet - neither should crash the listing
+        print(reservationDisplay + ": " + sailDateDisplay + " " + shipDictionary.get(shipCode, shipCode) + " Room " + str(booking.get("stateroomNumber") or "GTY") + " (" + passengerNames + ")")
         if booking.get("balanceDue") is True:
             print(YELLOW + reservationDisplay + ": " + "Remaining Cruise Payment Balance is " + str(booking.get("balanceDueAmount")) + RESET)
 
@@ -328,13 +337,16 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
     }
     
     response = requests.get(
-        'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/' + ship + '/orderHistory',
+        'https://aws-prd.api.rccl.com/en/' + apiBrand + '/web/commerce-api/calendar/v1/' + ship + '/orderHistory',
         params=params,
         headers=headers,
     )
  
     # Check for my orders and orders others booked for me
-    for order in response.json().get("payload").get("myOrders") + response.json().get("payload").get("ordersOthersHaveBookedForMe"):
+    # either order array can be missing/null, and an error body has no payload
+    # at all - none of those should crash the whole run
+    payload = (response.json() or {}).get("payload") or {}
+    for order in (payload.get("myOrders") or []) + (payload.get("ordersOthersHaveBookedForMe") or []):
         orderCode = order.get("orderCode")
 
         # Match Order Date with Website (assuming Website follows locale)
@@ -347,7 +359,7 @@ def getOrders(access_token,accountId,session,reservationId,passengerId,ship,star
             
             # Get Order Details
             response = requests.get(
-                'https://aws-prd.api.rccl.com/en/royal/web/commerce-api/calendar/v1/' + ship + '/orderHistory/' + orderCode,
+                'https://aws-prd.api.rccl.com/en/' + apiBrand + '/web/commerce-api/calendar/v1/' + ship + '/orderHistory/' + orderCode,
                 params=params,
                 headers=headers,
             )
