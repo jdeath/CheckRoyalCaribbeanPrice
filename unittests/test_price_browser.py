@@ -1,6 +1,8 @@
 import json
+import logging
 import pytest
 import requests
+import sys
 import unittest
 
 from unittest.mock import patch, MagicMock
@@ -17,6 +19,7 @@ from BrowseRoyalCaribbeanPrice import (
     get_sailings_web,
     get_web_categories,
     main,
+    print_and_sort_products,
     print_all_products
 )
 
@@ -839,6 +842,7 @@ class TestBrowseInteractiveAndBrandEdgeCases:
     @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
     @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
     @patch('BrowseRoyalCaribbeanPrice.log')
+    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='99')
     def test_interactive_ship_selection_out_of_bounds(self, mock_input, mock_log, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
@@ -851,6 +855,7 @@ class TestBrowseInteractiveAndBrandEdgeCases:
     @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
     @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
     @patch('BrowseRoyalCaribbeanPrice.log')
+    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='not_a_number')
     def test_interactive_ship_selection_non_numeric(self, mock_input, mock_log, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
@@ -863,6 +868,7 @@ class TestBrowseInteractiveAndBrandEdgeCases:
     @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
     @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
     @patch('BrowseRoyalCaribbeanPrice.log')
+    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='q')
     def test_interactive_ship_selection_quit(self, mock_input, mock_log, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
@@ -879,6 +885,7 @@ class TestBrowseInteractiveAndBrandEdgeCases:
     @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
     @patch('BrowseRoyalCaribbeanPrice.get_sailings_web')
     @patch('BrowseRoyalCaribbeanPrice.log')
+    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='55')
     def test_interactive_sailing_selection_out_of_bounds(
         self, mock_input, mock_log, mock_get_sailings, mock_get_ships, mock_logging
@@ -930,3 +937,135 @@ class TestBrowseInteractiveAndBrandEdgeCases:
         # Verify is_royal=False passed into API pricing and MDR locations
         mock_get_price.assert_called_once_with('USD', 'APAP07W001', '20261115', 2, 0, False)
         mock_get_mdr.assert_called_once_with('AP', '20261115', False)
+
+
+# ==============================================================================
+# BROWSE HARDENING (failure vs sold-out, payload variants, locale, prompts)
+# ==============================================================================
+class TestBrowseHardening:
+
+    def _run_price(self, response):
+        logged = []
+        with patch('BrowseRoyalCaribbeanPrice._execute_api_request', return_value=response) as net, \
+             patch('BrowseRoyalCaribbeanPrice.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
+            get_cruise_price_from_API("USD", "WN07X123", "2027-05-10", 2, 0, True)
+        return logged, net
+
+    @pytest.mark.parametrize("rooms_payload", [
+        ["$L2a"],                                     # RSC reference string first
+        [{"options": None}],                          # null options tree
+        [{"options": {"stateroomTypes": [
+            {"name": "Balcony", "stateroomSubtypes": None}]}}],   # null subtype list
+    ])
+    def test_rsc_payload_variants_do_not_crash(self, rooms_payload):
+        """Next.js flight payload variants crashed the whole run with
+        AttributeError/TypeError before products or activities printed."""
+        resp = MagicMock()
+        resp.text = json.dumps({"rooms": rooms_payload})
+        logged, _ = self._run_price(resp)
+        assert any("sold out" in m for m in logged)   # degraded, not crashed
+
+    def test_failed_request_is_not_reported_as_sold_out(self):
+        """A None response (403/timeout, unretried) printed the same 'Sailing
+        is sold out' a genuinely sold-out sailing gets - actively misinforming
+        in the current Akamai climate."""
+        logged, _ = self._run_price(None)
+        assert any("Could not retrieve cabin prices" in m for m in logged)
+        assert not any("sold out" in m for m in logged)
+
+    def test_rsc_request_uses_plain_requests_like_the_main_checker(self):
+        """The main checker deliberately disables TLS impersonation on
+        room-selection/type-and-subtype (issue #88); Browse must send the
+        same shape of request."""
+        resp = MagicMock()
+        resp.text = json.dumps({"rooms": []})
+        _, net = self._run_price(resp)
+        assert net.call_args.kwargs.get("use_impersonation") is False
+
+    def test_voyage_without_saildate_is_skipped_not_fatal(self):
+        """One partial voyage record killed the whole sailing menu with
+        strptime(None) before anything displayed."""
+        resp = MagicMock()
+        resp.json.return_value = {"payload": {"voyages": [
+            {"voyageCode": "Y456", "duration": 5},                       # no sailDate
+            {"voyageCode": "Y789", "duration": 7, "sailDate": "20270510",
+             "voyageDescription": "7 Night Test"},
+        ]}}
+        with patch('BrowseRoyalCaribbeanPrice._execute_api_request', return_value=resp), \
+             patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
+            sailings = get_sailings_web("WN")
+        assert [s['date'] for s in sailings] == ["20270510"]
+
+    def test_logging_reinit_does_not_recurse(self):
+        """setup_hybrid_logging computed real_stdout and then ignored it: a
+        second call chained the console handler into the previous
+        PrintRedirector and the first log() hit RecursionError."""
+        import BrowseRoyalCaribbeanPrice as b
+        saved_stdout, saved_handlers = sys.stdout, logging.getLogger().handlers[:]
+        try:
+            b.setup_hybrid_logging(None)
+            b.setup_hybrid_logging(None)
+            b.log("reinit-ok")           # raised RecursionError before the fix
+        finally:
+            sys.stdout = saved_stdout
+            root = logging.getLogger()
+            root.handlers.clear()
+            root.handlers.extend(saved_handlers)
+
+    def test_zero_dollar_prices_are_suppressed(self):
+        """'$0.00' cleaned to '0.00' slipped past the string compares and
+        printed free items as costing 0.00 USD."""
+        products = [
+            {"id": "P1", "title": "ZeroDollar",
+             "price": [{"formattedPromotionalPrice": "$0.00"}]},
+            {"id": "P2", "title": "RealItem",
+             "price": [{"formattedPromotionalPrice": "$54.99"}]},
+        ]
+        logged = []
+        with patch('BrowseRoyalCaribbeanPrice.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
+            print_and_sort_products(products, "default", "asc", "USD", "shorex", False)
+        out = "\n".join(logged)
+        assert "54.99" in out
+        assert "ZeroDollar" not in out
+
+    def test_empty_locale_currency_falls_back_to_usd(self):
+        """Bare C/POSIX locales (cron, containers without LANG) yield an empty
+        int_curr_symbol; every pricing query then carried currencyCode=''."""
+        import BrowseRoyalCaribbeanPrice as b
+        with patch('BrowseRoyalCaribbeanPrice.locale.setlocale'), \
+             patch('BrowseRoyalCaribbeanPrice.locale.localeconv',
+                   return_value={"int_curr_symbol": ""}), \
+             patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
+            assert b.get_system_currency() == "USD"
+        with patch('BrowseRoyalCaribbeanPrice.locale.setlocale'), \
+             patch('BrowseRoyalCaribbeanPrice.locale.localeconv',
+                   return_value={"int_curr_symbol": "EUR "}):
+            assert b.get_system_currency() == "EUR"
+
+    def test_saildate_format_no_longer_depends_on_currency_flag(self):
+        """The locale used for the -d comparison was only set as a side effect
+        of get_system_currency(): passing -c changed which date format -d
+        accepted. main() now sets the locale unconditionally."""
+        import BrowseRoyalCaribbeanPrice as b
+        with patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging'), \
+             patch('BrowseRoyalCaribbeanPrice.locale.setlocale') as set_loc, \
+             patch('BrowseRoyalCaribbeanPrice.get_ships_web', return_value=[]), \
+             patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
+            b.main(['-c', 'USD', '-s', 'Nonexistent'])
+        assert any(c.args[1] == '' for c in set_loc.call_args_list), \
+            "locale never set when -c bypasses get_system_currency()"
+
+    def test_prompts_refuse_non_tty_stdin_cleanly(self):
+        """Under cron/pipes the ship menu crashed with a raw EOFError
+        traceback; now it explains and exits."""
+        import BrowseRoyalCaribbeanPrice as b
+        logged = []
+        with patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging'), \
+             patch('BrowseRoyalCaribbeanPrice.get_system_currency', return_value="USD"), \
+             patch('BrowseRoyalCaribbeanPrice.get_ships_web',
+                   return_value=[{"name": "Wonder of the Seas", "code": "WN"}]), \
+             patch('BrowseRoyalCaribbeanPrice.sys.stdin') as stdin, \
+             patch('BrowseRoyalCaribbeanPrice.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
+            stdin.isatty.return_value = False
+            b.main([])
+        assert any("Non-interactive run" in m for m in logged)
