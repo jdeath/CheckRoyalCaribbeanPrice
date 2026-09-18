@@ -4,7 +4,8 @@ accountInfo: # Optional, Only needed if you want to check your own cruise addons
     state: "CA" # Optional. Will pull from your account if not set. Override to use different state/province for cabin prices. 
     senior: false # Optional. Will pull from booking if not set. Override to force for cabin prices. 
     military: false # Optional, use military discount for cabin prices. Must be set to true to if military, not in account
-    police: false # Optional, use police/fire/emt discount for cabin prices. Must be set to true to if want to use, not in account
+    police: false # Optional, use police/emt discount for cabin prices. Must be set to true to if want to use, not in account
+    fire: false # Optional, use firefighter discount for cabin prices (separate flag from police). Must be set to true to if want to use, not in account
     apprise: # Optional, per-account notification URLs. Same shape as the top-level apprise: list below.
       - url: "ntfy://user-topic" # Alerts found while checking THIS account go only here.
                                   # Accounts without their own apprise: fall back to the global list.
@@ -44,5 +45,5 @@ showPromos: true # Optional, show active sitewide promotions for each sailing
 dateDisplayFormat: "%m/%d/%Y" # Optional, only needed if you want to override the system's default date display formatting
 logFile: "output.txt"
 # historyDb: "price_history.db" # Optional (off by default). Uncomment to append every price check to a local SQLite file for history/trends
-outputWatchAsJson: true # Optional, if true, will write the watchlist price results to a JSON file for external consumption
-outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file
+# outputWatchAsJson: true # Optional (off by default). Uncomment to write the watchlist price results to a JSON file for external consumption
+# outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file
