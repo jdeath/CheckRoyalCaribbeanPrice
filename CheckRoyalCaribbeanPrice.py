@@ -4171,6 +4171,14 @@ def main() -> None:
                 account_phase = "profile"
                 state_from_profile, loyalty_number, c_and_a_points = get_profile(account_info)
             except (SystemExit, Exception) as account_err:
+                # A failed profile lookup skips the voyage cleanup below.
+                # Release its authenticated session before error notification,
+                # which can itself raise.
+                if account_phase == "profile":
+                    try:
+                        account_info.access.session.close()
+                    except Exception:
+                        log(YELLOW + "Session cleanup failed after profile lookup failure; continuing." + RESET)
                 failed_accounts.append((account_info.username, account_phase))
                 if account_phase == "login":
                     skip_reason = "could not be logged in"
