@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Check Royal Caribbean Price
 // @namespace    http://tampermonkey.net/
-// @version      1.0.6
-// @description  Check cruise prices, add-on prices, and watch list directly in-browser
+// @version      1.0.7
+// @description  Check add-on prices and your watch list directly in-browser
 // @author       jdeath / ported to Greasemonkey
 // @match        https://www.royalcaribbean.com/*
 // @match        https://www.celebritycruises.com/*
@@ -180,7 +180,12 @@
       '    if (f) { _rcclTokenData.accessToken = f; _rcclTokenData.key = "__INITIAL_STATE__"; }\n' +
       '  }\n' +
       '  if (_rcclTokenData.accessToken) {\n' +
-      '    try { var _p = JSON.parse(atob(_rcclTokenData.accessToken.split(".")[1] + "==")); _rcclTokenData.accountId = _p.sub; _rcclTokenData.email = _p.email || _p.preferred_username || ""; } catch(e){}\n' +
+      '    try {\n' +
+      '      var _s = _rcclTokenData.accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");\n' +
+      '      _s += "==".slice(0, (4 - _s.length % 4) % 4);\n' +
+      '      var _p = JSON.parse(atob(_s));\n' +
+      '      _rcclTokenData.accountId = _p.sub; _rcclTokenData.email = _p.email || _p.preferred_username || "";\n' +
+      '    } catch(e){}\n' +
       '  }\n' +
       '})();\n';
     document.head.appendChild(script);
@@ -339,9 +344,17 @@
   /* ============================================================
      Date helpers
      ============================================================ */
+  function parseLocalDate(str) {
+    // Date-only ISO strings parse as UTC midnight per the ES spec, so
+    // rendering them with toLocaleDateString showed every date a day early
+    // for viewers west of UTC. Build the Date from local components instead.
+    var m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(str || '');
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(str);
+  }
+
   function formatDate(isoStr) {
     if (!isoStr) return '';
-    var d = new Date(isoStr.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'));
+    var d = isoStr instanceof Date ? isoStr : parseLocalDate(isoStr);
     return d.toLocaleDateString(undefined, DATE_FMT_OPTIONS);
   }
 
@@ -351,15 +364,15 @@
   }
 
   function aboveAgeOnSailDate(birthDate, sailDate, threshold) {
-    var b = new Date(birthDate);
-    var s = new Date(sailDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'));
+    var b = parseLocalDate(birthDate);
+    var s = parseLocalDate(sailDate);
     var age = s.getFullYear() - b.getFullYear();
     if ((s.getMonth() * 100 + s.getDate()) < (b.getMonth() * 100 + b.getDate())) age -= 1;
     return age >= threshold;
   }
 
   function getFinalPaymentDate(numberOfNights, sailDate) {
-    var sail = new Date(sailDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'));
+    var sail = parseLocalDate(sailDate);
     var deadline = 75;
     if (numberOfNights >= 15) deadline = 120;
     else if (numberOfNights >= 5) deadline = 90;
@@ -977,7 +990,7 @@
     var pastFinalPayment = new Date() > finalPaymentDate;
 
     if (booking.balanceDue === true) {
-      appendHTML('<div style="color:#cc0;">Remaining balance: ' + booking.balanceDueAmount + ' due ' + formatDate(finalPaymentDate.toISOString().slice(0, 10)) + '</div>');
+      appendHTML('<div style="color:#cc0;">Remaining balance: ' + booking.balanceDueAmount + ' due ' + formatDate(finalPaymentDate) + '</div>');
     }
 
     // OBC
