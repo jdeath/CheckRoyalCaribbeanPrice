@@ -26,6 +26,7 @@ except ImportError:
 
 import sqlite3
 import sys
+import tempfile
 import traceback
 import time
 import yaml
@@ -43,7 +44,7 @@ except ImportError:
     Apprise = None
     NotifyFormat = None
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -602,7 +603,7 @@ class CruiseAppConfig:
     request_timeout: int = REQUEST_TIMEOUT
     log_file: Optional[str] = None
     history_db: Optional[str] = None
-    cabin_availability_state_file: str = "data/cabin-availability.sqlite3"
+    cabin_availability_state_file: str = "data/cabin-availability.json"
     output_watch_as_json: bool = False
     output_json_watch_file: Optional[str] = "output-json-watch.txt"
     apprise_urls: List[str] = field(default_factory=list)
@@ -2091,6 +2092,69 @@ class CabinAvailabilityError(Exception):
     """A cabin availability notification or its persistent state failed."""
 
 
+@contextmanager
+def cabin_state_lock(path: Path):
+    """Lock a stable sidecar across read/notify/replace, including other processes."""
+    # Locking the JSON itself would lose protection when os.replace swaps its inode.
+    # OS locks are released on process exit; leave the sidecar in place, even empty.
+    with open(str(path) + ".lock", "a+b") as lock:
+        if os.name == "nt":
+            import msvcrt
+            lock.seek(0, os.SEEK_END)
+            if lock.tell() == 0:
+                lock.write(b"\0")
+                lock.flush()
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def read_cabin_state(path: Path) -> dict:
+    """Missing state starts fresh; invalid existing state must never reset alerts."""
+    try:
+        with path.open(encoding="utf-8") as stream:
+            state = json.load(stream)
+    except FileNotFoundError:
+        return {}
+    if not isinstance(state, dict) or any(
+        not isinstance(row, dict)
+        or not isinstance(row.get("url"), str)
+        or type(row.get("available")) is not bool
+        or type(row.get("notified")) is not bool
+        or (row["notified"] and not row["available"])
+        for row in state.values()
+    ):
+        raise ValueError("Invalid cabin availability state")
+    return state
+
+
+def write_cabin_state(path: Path, state: dict) -> None:
+    """Replace a complete JSON file atomically; retain the old file on failure."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=path.name + ".", suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(state, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+
+
 def notify_cabin_availability(params: CruiseURLParams, result: dict, url: str,
                               ships: ShipRegistry, notifier: Optional[Apprise], scope: str) -> None:
     """Persist latest availability; acknowledge only successful notifications."""
@@ -2103,12 +2167,10 @@ def notify_cabin_availability(params: CruiseURLParams, result: dict, url: str,
     path = Path(config.cabin_availability_state_file).expanduser()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(path, timeout=30)) as db:
-            db.execute("CREATE TABLE IF NOT EXISTS cabin_availability_v1 (scope TEXT PRIMARY KEY, available INTEGER NOT NULL, notified INTEGER NOT NULL)")
-            db.commit()
-            db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT available, notified FROM cabin_availability_v1 WHERE scope=?", (scope,)).fetchone()
-            notified = row[1] if available and row and row[0] else 0
+        with cabin_state_lock(path):
+            state = read_cabin_state(path)
+            row = state.get(scope, {})
+            notified = bool(available and row.get("available") and row.get("notified"))
             sent = True
             if available and not notified and notifier is not None and len(notifier) > 0:
                 lines = [label + " is now available."]
@@ -2130,12 +2192,13 @@ def notify_cabin_availability(params: CruiseURLParams, result: dict, url: str,
                         title="Cruise Room Available", body_format=NotifyFormat.TEXT) is True
                 except Exception:
                     sent = False
-                notified = int(sent)
-            db.execute("INSERT INTO cabin_availability_v1 VALUES (?, ?, ?) ON CONFLICT(scope) DO UPDATE SET available=excluded.available, notified=excluded.notified",
-                       (scope, int(available), notified))
-            db.commit()
-    except (OSError, sqlite3.Error) as exc:
-        raise CabinAvailabilityError("Cannot update cabin availability state; check cabinAvailabilityStateFile") from exc
+                notified = sent
+            updated = {"url": url, "available": available, "notified": notified}
+            if row != updated:
+                state[scope] = updated
+                write_cabin_state(path, state)
+    except (OSError, ValueError, ImportError) as exc:
+        raise CabinAvailabilityError("Cannot update cabin availability state; check cabinAvailabilityStateFile, JSON contents and overlapping checks") from exc
     if not sent:
         raise CabinAvailabilityError("Cabin availability notification not confirmed; will retry on the next check")
 
@@ -4058,7 +4121,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
             cruise_URL=item["cruiseURL"],
             paid_price=float(item.get("paidPrice", 0) if mode == "availability" else item["paidPrice"]),
             loyalty_number=item.get("loyaltyNumber"), notification_mode=mode))
-    cabin_state_file = data.get("cabinAvailabilityStateFile", "data/cabin-availability.sqlite3")
+    cabin_state_file = data.get("cabinAvailabilityStateFile", "data/cabin-availability.json")
     if not isinstance(cabin_state_file, str) or not cabin_state_file.strip():
         raise ValueError("cabinAvailabilityStateFile must be a nonempty file path")
 
