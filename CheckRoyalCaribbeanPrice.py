@@ -1567,7 +1567,10 @@ def login(account_info: AccountInfo) -> APIAccess:
         if len(list_of_strings) < 2:
             raise ValueError("Token does not contain a valid JWT payload segment.")
         string1 = list_of_strings[1]
-        decoded_bytes = base64.b64decode(string1 + '==')
+        # JWT segments are base64URL: standard b64decode silently drops -/_
+        # (validate=False), shifting later bytes and failing the json parse
+        # for tokens whose payload contains such a byte
+        decoded_bytes = base64.urlsafe_b64decode(string1.replace('+', '-').replace('/', '_') + '==')
         auth_info = json.loads(decoded_bytes.decode('utf-8'))
         account_ID = auth_info["sub"]
     except(IndexError, ValueError, KeyError, AttributeError, TypeError) as parse_err:
