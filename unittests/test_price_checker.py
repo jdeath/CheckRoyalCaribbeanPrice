@@ -924,6 +924,65 @@ def test_ledger_insurance_and_allin_flags_reach_pricing_overrides():
     assert params.all_included is True, "allInUpgrade flag lost between ledger and pricing"
 
 
+def test_reservation_price_paid_dict_of_dicts_prices_not_crashes():
+    """reservationPricePaid entries may be dicts ({paidPrice, finalPayment...})
+    - the payment-override path reads that shape explicitly, but the paid-price
+    path did float(dict) and the TypeError killed the entire run at the first
+    booking."""
+    import CheckRoyalCaribbeanPrice as CRCP
+    account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
+    account_info.access = MagicMock()
+    account_info.access.token = "fake_token"
+    account_info.access.id = "fake_id"
+
+    def mock_api_router(*args, **kwargs):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        url = args[2] if len(args) > 2 else kwargs.get("url", "")
+        if "profileBookings" in url:
+            mock_resp.json.return_value = {"payload": {"profileBookings": [{
+                "bookingId": "1234567", "passengerId": "33333333",
+                "sailDate": "20261225", "numberOfNights": 7, "shipCode": "AL",
+                "stateroomNumber": "6543", "stateroomType": "B",
+                "passengersInStateroom": [{"firstName": "Matt", "lastName": "Smith",
+                                           "stateroomCategoryCode": "4D"}]}]}}
+        else:
+            mock_resp.json.return_value = {"payload": []}
+        return mock_resp
+
+    CRCP.config.reservation_prices = {
+        "1234567": {"paidPrice": 900.0, "finalPaymentDaysBeforeSailing": 90}}
+    CRCP.config.display_cruise_prices = True
+    mock_metrics = {"passenger_names": "Matt Smith", "checkin_string": "Boarding Time 11:00",
+                    "category_code": "4D", "sub_type": "4D"}
+    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=mock_api_router), \
+         patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value=mock_metrics), \
+         patch('CheckRoyalCaribbeanPrice.get_dining_and_prices',
+               return_value={"dining_selection": [], "prices": []}), \
+         patch('CheckRoyalCaribbeanPrice.get_checkin_info'), \
+         patch('CheckRoyalCaribbeanPrice.get_cruise_price') as mock_price:
+        get_voyages(account_info, CruiseURLParams(), ShipRegistry())
+
+    assert mock_price.called
+    assert mock_price.call_args.kwargs["paid_price_struct"]["paid_price"] == 900.0
+
+
+def test_null_passenger_array_does_not_crash_pricing(mock_global_config, base_account_info):
+    """'passengersInStateroom': null (present-but-null) crashed get_cruise_price
+    Path B with a TypeError, killing every remaining booking and account."""
+    booking = {"bookingId": "1234567", "sailDate": "20270510", "shipCode": "WN",
+               "stateroomType": "B", "stateroomSubtype": "4D",
+               "passengersInStateroom": None}
+    with patch('CheckRoyalCaribbeanPrice.get_room_price_via_API',
+               return_value={"room_available": False}):
+        get_cruise_price(
+            account_info=base_account_info,
+            booking=booking,
+            ship_dictionary=ShipRegistry(),
+            automatic_URL=True,
+        )   # reaching here without TypeError is the assertion
+
+
 def test_get_orders_complete_execution_path():
     """Exercise all loop iterations inside get_orders to guarantee execution path coverage."""
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
@@ -2079,6 +2138,30 @@ def test_load_config_objects_handles_none_values_safely(tmp_path):
         assert config.output_json_watch_file == "output-json-watch.txt"
 
 
+def test_load_config_objects_tolerates_null_sections(tmp_path):
+    """A user who comments out every entry of a section leaves 'watchList:'
+    with a null value - .get(key, []) returns that None and iteration crashed
+    config load with a bare TypeError before logging was even set up."""
+    yaml_content = """
+    accountInfo:
+      - username: "test_user"
+        password: "password123"
+        apprise:
+    watchList:
+    cruises:
+    apprise:
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml_content)
+
+    with patch('CheckRoyalCaribbeanPrice.setup_hybrid_logging'):
+        config = load_config_objects(str(config_file))
+    assert isinstance(config, CruiseAppConfig)
+    assert config.watch_list == []
+    assert config.prospective_cruises == []
+    assert config.apobj is None
+
+
 def test_load_config_objects_expands_environment_variables(tmp_path, monkeypatch):
     """
     Ensure values that are exactly ${VAR_NAME} are replaced from the
@@ -2588,6 +2671,34 @@ def _summary_row(**overrides):
     }
     row.update(overrides)
     return row
+
+
+def test_summary_table_never_drops_rows_on_unexpected_balance_value(monkeypatch):
+    """balance_due can arrive as a raw API value (1, 'true') rather than the
+    four expected shapes. The color list skipped its append for such rows, so
+    zip() silently dropped the LAST table row and shifted colors onto the
+    wrong rows. Every row must render regardless of the value."""
+    captured = []
+    mock_cfg = MagicMock()
+    mock_cfg.date_display_format = "%Y-%m-%d"
+    mock_cfg.format_date = lambda d: str(d)
+    script_module = sys.modules[CheckinPaymentTracker.__module__]
+    monkeypatch.setattr(script_module, "config", mock_cfg)
+    monkeypatch.setattr(script_module, "log", lambda msg: captured.append(str(msg)))
+
+    tracker = CheckinPaymentTracker()
+    tracker.rows.extend([
+        _summary_row(name="Wonder of the Seas (7123)", balance_due=1),   # raw int
+        _summary_row(name="Icon of the Seas (11418)", sail_date="20271018",
+                     dedupe_key="7654321|20271018", balance_due=True),
+    ])
+    tracker.print_table()
+
+    out = "\n".join(captured)
+    assert "Wonder of the Seas (7123)" in out
+    assert "Icon of the Seas (11418)" in out, "row dropped by pay_colors desync"
+    # and the recognized row keeps its balance-due annotation
+    assert "(balance due)" in out
 
 
 def test_checkin_payment_summary_table_renders_and_flags(monkeypatch):

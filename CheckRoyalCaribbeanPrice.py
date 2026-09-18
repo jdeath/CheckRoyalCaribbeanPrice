@@ -922,7 +922,12 @@ class CheckinPaymentTracker:
                 elif r["balance_due"] == "TA_UNKNOWN":
                     pay += " (contact TA for balance)"
                     pay_colors.append(YELLOW)
-                elif r["balance_due"] is None:
+                else:
+                    # None, or any unexpected raw API value (1, "true", ...):
+                    # ALWAYS append a color - a skipped append desynced
+                    # pay_colors from table, and the zip() below silently
+                    # dropped the last row(s) and shifted colors onto the
+                    # wrong rows
                     pay += " (status unknown)"
                     pay_colors.append(YELLOW)
             else:
@@ -1782,7 +1787,7 @@ def get_voyages(
         sail_date = booking.get("sailDate")
         number_of_nights = int(booking.get("numberOfNights") or 0)
         ship_code = booking.get("shipCode")
-        guests = booking.get("passengersInStateroom", [])
+        guests = booking.get("passengersInStateroom") or []
         package_code = booking.get("packageCode")
         booking_currency = booking.get("bookingCurrency")
         booking_office_country_code = booking.get("bookingOfficeCountryCode")
@@ -1996,6 +2001,12 @@ def get_voyages(
             if isinstance(reservation_price_paid, dict) and reservation_price_paid:
                 if str(reservation_ID) in reservation_price_paid:
                     paid_price = reservation_price_paid.get(str(reservation_ID))
+                    if isinstance(paid_price, dict):
+                        # dict-of-dicts shape - the same entries the payment
+                        # override reads finalPaymentDaysBeforeSailing from;
+                        # float(dict) crashed the whole run here
+                        paid_price = paid_price.get("paidPrice",
+                                                    paid_price.get("paid_price"))
                     if paid_price is not None:
                         paid_price_struct['paid_price'] = float(paid_price)
             elif isinstance(reservation_price_paid, list):
@@ -2140,7 +2151,7 @@ def get_cruise_price(account_info: AccountInfo,
     else:
         # Path B: Active reservation processing fallback.
         # Dynamically calculate passenger counts from the live profile payload.
-        guests = booking.get("passengersInStateroom", booking.get("passengers", []))
+        guests = booking.get("passengersInStateroom") or booking.get("passengers") or []
         sail_date = booking.get("sailDate", "")
 
         number_of_adults = 0
@@ -3970,9 +3981,9 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
             fire=a.get("fire", False),
             police=a.get("police", False),
             cruise_line=a.get("cruiseLine", "royalcaribbean"),
-            apobj=_build_apprise(a.get("apprise", []))
+            apobj=_build_apprise(a.get("apprise") or [])
         )
-        for a in data.get("accountInfo", [])
+        for a in (data.get("accountInfo") or [])
     ]
 
     # DESIGN NOTE:  YAML keys will remain camel_case instead of snake_case
@@ -3985,12 +3996,12 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
             paid_price=float(c["paidPrice"]),
             loyalty_number=c.get("loyaltyNumber")
         )
-        for c in data.get("cruises", [])
+        for c in (data.get("cruises") or [])
     ]
 
     # Parse watch list
     watch_list = []
-    for w in data.get("watchList", []):
+    for w in (data.get("watchList") or []):
         # Map out the mandatory fields that MUST exist
         item_kwargs = {
             "name": w["name"],
@@ -4012,10 +4023,10 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         watch_list.append(WatchListItem(**item_kwargs))
 
     # Parse Apprise URLs safely
-    apprise_urls = [item["url"] for item in data.get("apprise", []) if "url" in item]
+    apprise_urls = [item["url"] for item in (data.get("apprise") or []) if "url" in item]
 
     # Build the apprise object natively (apprise is an optional dependency)
-    apobj = _build_apprise(data.get("apprise", []))
+    apobj = _build_apprise(data.get("apprise") or [])
 
     # Safe initialization of minimum_saving_alert to allow None as well as 0.0
     raw_alert = data.get("minimumSavingAlert", None)
