@@ -134,8 +134,12 @@ class PrintRedirector:
     and silently pipes them through our logger so they write to the terminal AND the text log file
     at the same time, without changing all 'print' statements to 'logging.info'.
     """
-    def __init__(self, logger_func: Any) -> None:
+    def __init__(self, logger_func: Any, wrapped_stream: Any = None) -> None:
         self.logger_func = logger_func
+        # setup_hybrid_logging's unwrap loop looks for this on re-initialization;
+        # without it the new console handler wrote back into the redirector and
+        # the first log() after a second setup call hit RecursionError
+        self._wrapped_stream = wrapped_stream
 
 
     def write(self, buf: str) -> None:
@@ -349,6 +353,12 @@ def get_system_currency() -> str:
 
     # Extract the international currency symbol (e.g., "USD ")
     international_symbol = conventions.get('int_curr_symbol', '').strip()
+    if not international_symbol:
+        # Bare C/POSIX locales (cron, containers without LANG) carry no
+        # currency convention - an empty currencyCode would make every
+        # pricing query undefined. Fall back loudly.
+        log("No currency in the system locale; defaulting to USD (use -c to override)")
+        return "USD"
     return international_symbol
 
 
@@ -485,6 +495,9 @@ def get_sailings_web(ship_code: str) -> List[Dict[str, Any]]:
             continue
 
         sail_date = voyage.get("sailDate")
+        if not sail_date:
+            # a partial voyage record must not kill the whole sailing menu
+            continue
         duration = voyage.get("duration")
         voyage_code = voyage.get("voyageCode")
         voyage_description = voyage.get("voyageDescription")
@@ -900,7 +913,10 @@ def print_and_sort_products(
         # Remove any currency codes/$/Pound Sign and spaces
         price = re.sub(r'[^0-9\.]', '', str(price))
         price = price.replace(" ", "")
-        if price == "0" or price == "0.0" or price == "":
+        try:
+            if not price or float(price) == 0:
+                continue
+        except ValueError:
             continue
 
         sales_unit = price_struct.get("salesUnit") or {}
@@ -1249,11 +1265,27 @@ def get_cruise_price_from_API(
         url=f"https://www.{base_host}/room-selection/type-and-subtype",
         params=params,
         headers=headers,
-        on_failure="skip"
+        on_failure="skip",
+        # The main checker deliberately hits this endpoint WITHOUT TLS
+        # impersonation (issue #88: it misbehaves under curl_cffi on some
+        # networks); keep the two scripts consistent
+        use_impersonation=False
     )
 
-    rooms = _extract_json_array(response.text, "rooms") if response else None
-    stateroom_types = rooms[0].get("options", {}).get("stateroomTypes", []) if rooms else []
+    if response is None:
+        # a failed request is NOT a sold-out sailing
+        log("         Could not retrieve cabin prices (request failed)")
+        return
+
+    rooms = _extract_json_array(response.text, "rooms")
+    stateroom_types = []
+    if rooms:
+        try:
+            # RSC flight payloads can put a reference string first or nulls in
+            # the tree - the same shapes the main checker guards against
+            stateroom_types = (rooms[0].get("options") or {}).get("stateroomTypes") or []
+        except AttributeError:
+            stateroom_types = []
 
     # An empty room list means the sailing is entirely sold out across all staterooms
     if not stateroom_types:
@@ -1267,7 +1299,7 @@ def get_cruise_price_from_API(
 
         # Cheapest bookable sub-category in this class (some are sold out / unpriced)
         cheapest_price = None
-        for stateroom_subtype in stateroom_type.get("stateroomSubtypes", []):
+        for stateroom_subtype in stateroom_type.get("stateroomSubtypes") or []:
             pricing = stateroom_subtype.get("pricing") or {}
             invoice = pricing.get("invoice") or {}
             total = invoice.get("total")
@@ -1602,7 +1634,7 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     while isinstance(real_stdout, PrintRedirector):
         real_stdout = getattr(real_stdout, '_wrapped_stream', None) or sys.__stdout__
 
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler(real_stdout)
     console_handler.setFormatter(logging.Formatter('%(message)s'))
     if platform.system() == "iOS":
         console_handler.addFilter(StripAnsiFilter())
@@ -1632,14 +1664,14 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
     log_err = easy_log_instance.error
 
     # 6. Intercept raw standard print statements system-wide
-    sys.stdout = PrintRedirector(root_logger.info)
+    sys.stdout = PrintRedirector(root_logger.info, wrapped_stream=real_stdout)
 
 
 def main(args: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Browse Royal Caribbean Price")
     parser.add_argument('-c', '--currency', type=str, default='System', help='currency (default: System Setting)')
     parser.add_argument('-s', '--ship', type=str, help='Ship')
-    parser.add_argument('-d', '--saildate', type=str, help='Sail Date (mm/dd/yy format)')
+    parser.add_argument('-d', '--saildate', type=str, help='Sail Date exactly as shown in the sailing list (locale date format, e.g. 01/15/2026)')
     parser.add_argument('-o', '--sortorder', choices=['asc', 'desc'], default="asc", dest="sort_order", help='Set sorting order')
     parser.add_argument('-k', '--sortkey', choices=['price', 'alpha', 'default'], default="default", dest="sort_key", help='Set value to sort on')
     parser.add_argument('-w', '--watchlistcodes', action='store_true', dest="watchlist_codes", help='Show Codes For Watchlist')
@@ -1650,6 +1682,16 @@ def main(args: list[str] | None = None) -> None:
     # Logging must exist before get_system_currency: its locale-failure branch
     # calls log(), which is None until setup_hybrid_logging has run
     setup_hybrid_logging(args.log_file)
+
+    # The sailing menu renders dates with the locale's %x, and -d is compared
+    # against that same rendering. Set the locale unconditionally: previously
+    # it was only set as a side effect of get_system_currency(), so passing
+    # -c silently CHANGED the accepted -d format (C-locale 01/15/26 vs
+    # en_US 01/15/2026 for the same sailing).
+    try:
+        locale.setlocale(locale.LC_ALL, '')
+    except locale.Error:
+        pass
 
     currency = args.currency
     if currency == "System":
@@ -1671,6 +1713,9 @@ def main(args: list[str] | None = None) -> None:
             return
     else:
         # User chooses a ship dynamically from the interactive terminal menu
+        if not sys.stdin.isatty():
+            log("Non-interactive run: pass -s SHIP (and -d SAILDATE) to select without prompts")
+            return
         log("Select Ship:")
         for i, ship in enumerate(ships):
             log(f"{BLUE}{i}{RESET}) {GREEN}{ship['name']}{RESET}")
@@ -1708,6 +1753,9 @@ def main(args: list[str] | None = None) -> None:
                 return
         else:
             # User chooses a cruise itinerary target from the prompt menu
+            if not sys.stdin.isatty():
+                log("Non-interactive run: pass -d SAILDATE to select without prompts")
+                return
             log("")
             log("Select sailing:")
             for i, sailing in enumerate(sailings):
