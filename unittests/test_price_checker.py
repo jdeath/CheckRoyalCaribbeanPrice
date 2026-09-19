@@ -45,6 +45,7 @@ from CheckRoyalCaribbeanPrice import (
     ShipRegistry,
     WatchItemContext,
     _booking_country_code,
+    _booking_payment_market,
     _build_checkout_url,
     _calculate_passenger_metrics,
     _execute_api_request,
@@ -226,10 +227,10 @@ def test_checkout_post_failure_is_not_reported_as_not_for_sale(mock_global_confi
     exhausted): that is NOT 'Not For Sale'. No push, no not_for_sale history
     row - a network blip used to false-alert watchers and poison back-in-stock
     queries with a permanent not_for_sale/notified=1 record."""
-    import CheckRoyalCaribbeanPrice as CRCP
 
     with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(True, [])), \
-         patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=None):
+         patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=None), \
+         patch('CheckRoyalCaribbeanPrice.history') as mock_history:
         get_cruise_price(
             account_info=base_account_info,
             booking={"url": _WATCH_URL, "stateroomType": "SUITE"},
@@ -238,16 +239,16 @@ def test_checkout_post_failure_is_not_reported_as_not_for_sale(mock_global_confi
         )
 
     mock_global_config.notify.assert_not_called()
-    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
+    kwargs = mock_history.record_cabin_fare.call_args.kwargs
     assert kwargs["status"] == "no_price_data"
 
 
 def test_availability_fetch_failure_is_not_reported_as_not_for_sale(mock_global_config, base_account_info):
     """check_if_room_is_available returning None (its request failed) must not
     be pushed or recorded as Not For Sale either."""
-    import CheckRoyalCaribbeanPrice as CRCP
 
-    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(None, [])):
+    with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(None, [])), \
+         patch('CheckRoyalCaribbeanPrice.history') as mock_history:
         get_cruise_price(
             account_info=base_account_info,
             booking={"url": _WATCH_URL, "stateroomType": "SUITE"},
@@ -256,18 +257,18 @@ def test_availability_fetch_failure_is_not_reported_as_not_for_sale(mock_global_
         )
 
     mock_global_config.notify.assert_not_called()
-    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
+    kwargs = mock_history.record_cabin_fare.call_args.kwargs
     assert kwargs["status"] == "no_price_data"
 
 
 def test_post_empty_rooms_still_reports_not_for_sale(mock_global_config, base_account_info):
     """Control: a checkout POST that SUCCEEDS with no rooms is a genuine
     sold-out - the watchlist push and the not_for_sale row are unchanged."""
-    import CheckRoyalCaribbeanPrice as CRCP
 
     empty_resp = MagicMock()
     empty_resp.json.return_value = {"rooms": []}
     with patch('CheckRoyalCaribbeanPrice.check_if_room_is_available', return_value=(True, [])), \
+         patch('CheckRoyalCaribbeanPrice.history') as mock_history, \
          patch('CheckRoyalCaribbeanPrice._execute_api_request', return_value=empty_resp):
         get_cruise_price(
             account_info=base_account_info,
@@ -278,7 +279,7 @@ def test_post_empty_rooms_still_reports_not_for_sale(mock_global_config, base_ac
 
     mock_global_config.notify.assert_called_once()
     assert "Not For Sale" in mock_global_config.notify.call_args[1]['body']
-    kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
+    kwargs = mock_history.record_cabin_fare.call_args.kwargs
     assert kwargs["status"] == "not_for_sale"
 
 
@@ -929,7 +930,6 @@ def test_reservation_price_paid_dict_of_dicts_prices_not_crashes():
     - the payment-override path reads that shape explicitly, but the paid-price
     path did float(dict) and the TypeError killed the entire run at the first
     booking."""
-    import CheckRoyalCaribbeanPrice as CRCP
     account_info = AccountInfo(username="test_user", password="password", cruise_line="royal")
     account_info.access = MagicMock()
     account_info.access.token = "fake_token"
@@ -950,12 +950,15 @@ def test_reservation_price_paid_dict_of_dicts_prices_not_crashes():
             mock_resp.json.return_value = {"payload": []}
         return mock_resp
 
-    CRCP.config.reservation_prices = {
+    mock_config = CruiseAppConfig()
+    mock_config.reservation_prices = {
         "1234567": {"paidPrice": 900.0, "finalPaymentDaysBeforeSailing": 90}}
-    CRCP.config.display_cruise_prices = True
+    mock_config.display_cruise_prices = True
+
     mock_metrics = {"passenger_names": "Matt Smith", "checkin_string": "Boarding Time 11:00",
                     "category_code": "4D", "sub_type": "4D"}
-    with patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=mock_api_router), \
+    with patch('CheckRoyalCaribbeanPrice.config', mock_config), \
+         patch('CheckRoyalCaribbeanPrice._execute_api_request', side_effect=mock_api_router), \
          patch('CheckRoyalCaribbeanPrice._calculate_passenger_metrics', return_value=mock_metrics), \
          patch('CheckRoyalCaribbeanPrice.get_dining_and_prices',
                return_value={"dining_selection": [], "prices": []}), \
@@ -3477,7 +3480,6 @@ class TestFinalPaymentDate:
         office. A code MARKET_RULES doesn't know must fall through to the
         next candidate - resolve_lead_time silently defaults unknown codes
         to the US windows, which would turn a 30-day market into 90 days."""
-        from CheckRoyalCaribbeanPrice import _booking_payment_market
 
         # CHS is now a known alias, so the market wins directly
         assert _booking_payment_market(
@@ -3497,7 +3499,6 @@ class TestFinalPaymentDate:
         """The real shape from #99: CHS market / DEU office, 7 nights,
         sails 2026-12-27 -> final payment 30 days out, 2026-11-27 (via the
         CHS alias; the DEU fallback would agree - both are 30-day markets)."""
-        from CheckRoyalCaribbeanPrice import _booking_payment_market
 
         resolved = get_final_payment_date(
             number_of_nights=7,
@@ -3511,12 +3512,11 @@ class TestFinalPaymentDate:
     @patch("CheckRoyalCaribbeanPrice.get_room_price_via_API")
     @patch("CheckRoyalCaribbeanPrice.notifier_for")
     def test_best_price_past_final_payment_records_distinct_decision(
-        self, mock_notifier, mock_api_pricing
+        self, mock_notifier, mock_api_pricing, mock_global_history
     ):
         """'past_final_payment' historically meant a LOWER price you are locked
         out of; a best-price booking past final payment (#119 display note)
         must record a distinct value so history queries can tell them apart."""
-        import CheckRoyalCaribbeanPrice as CRCP
 
         mock_notifier.return_value = None
         mock_api_pricing.return_value = {
@@ -3524,6 +3524,7 @@ class TestFinalPaymentDate:
             "sailing_nights": 7,
             "base_fare": {"fare": 1100.0, "gratuities": 0.0, "insurance": 0.0, "obc": 0.0},
         }
+
         mock_account = MagicMock()
         mock_account.access.session = MagicMock()
         registry = MagicMock()
@@ -3536,7 +3537,7 @@ class TestFinalPaymentDate:
         }
         # the price-history sink is the module-global `history` (PR #115
         # refactor), patched per-test by the autouse mock_global_history fixture
-        CRCP.history.record_cabin_fare.reset_mock()
+        mock_global_history.record_cabin_fare.reset_mock()
 
         get_cruise_price(
             account_info=mock_account,
@@ -3546,7 +3547,7 @@ class TestFinalPaymentDate:
                                "finalPaymentDate": "2020-01-01"},
         )
 
-        kwargs = CRCP.history.record_cabin_fare.call_args.kwargs
+        kwargs = mock_global_history.record_cabin_fare.call_args.kwargs
         assert kwargs["status"] == "priced"
         assert kwargs["rebook_decision"] == "best_price_past_final_payment"
 

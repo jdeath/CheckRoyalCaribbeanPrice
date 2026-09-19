@@ -5,7 +5,10 @@ import json
 
 from unittest.mock import patch, MagicMock
 
-import PhonePriceCheck as phone
+from PhonePriceCheck import (
+    getOrders,
+    login
+)
 
 
 def _token_with(payload: dict) -> str:
@@ -27,7 +30,7 @@ def test_login_encodes_username_and_decodes_urlsafe_token():
     session.post.side_effect = lambda url, headers=None, data=None: (
         captured.__setitem__("data", data) or resp)
 
-    token, account_id, _ = phone.login(
+    token, account_id, _ = login(
         "jim+cruise@example.com", "p&ss w+rd", session, "royalcaribbean")
 
     assert "username=jim%2Bcruise%40example.com" in captured["data"]
@@ -40,8 +43,8 @@ def test_get_orders_tolerates_missing_order_arrays():
     for payload in ({"myOrders": None}, {}, None):
         resp = MagicMock()
         resp.json.return_value = {"payload": payload} if payload is not None else {}
-        with patch.object(phone.requests, "get", return_value=resp):
-            phone.getOrders("tok", "acct", MagicMock(), "1234567", "PAX1",
+        with patch("PhonePriceCheck.requests.get", return_value=resp):
+            getOrders("tok", "acct", MagicMock(), "1234567", "PAX1",
                             "WN", "20270510", 7, None)
 
 
@@ -51,13 +54,13 @@ def test_order_history_path_follows_brand():
     checker's api_brand mapping."""
     resp = MagicMock()
     resp.json.return_value = {"payload": {}}
-    with patch.object(phone.requests, "get", return_value=resp) as get:
-        phone.getOrders("tok", "acct", MagicMock(), "1234567", "PAX1",
+    with patch("PhonePriceCheck.requests.get", return_value=resp) as get:
+        getOrders("tok", "acct", MagicMock(), "1234567", "PAX1",
                         "WN", "20270510", 7, None)
     assert "/en/royal/web/commerce-api/calendar/v1/WN/orderHistory" in get.call_args.args[0]
 
-    with patch.object(phone, "apiBrand", "celebrity"), \
-         patch.object(phone.requests, "get", return_value=resp) as get:
-        phone.getOrders("tok", "acct", MagicMock(), "1234567", "PAX1",
+    with patch("PhonePriceCheck.apiBrand", "celebrity"), \
+         patch("PhonePriceCheck.requests.get", return_value=resp) as get:
+        getOrders("tok", "acct", MagicMock(), "1234567", "PAX1",
                         "EG", "20270510", 7, None)
     assert "/en/celebrity/web/commerce-api/calendar/v1/EG/orderHistory" in get.call_args.args[0]
