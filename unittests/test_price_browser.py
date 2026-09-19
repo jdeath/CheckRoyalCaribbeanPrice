@@ -17,10 +17,12 @@ from BrowseRoyalCaribbeanPrice import (
     get_ships_web,
     get_sailing_details_web,
     get_sailings_web,
+    get_system_currency,
     get_web_categories,
     main,
     print_and_sort_products,
-    print_all_products
+    print_all_products,
+    setup_hybrid_logging
 )
 
 
@@ -1000,12 +1002,14 @@ class TestBrowseHardening:
         """setup_hybrid_logging computed real_stdout and then ignored it: a
         second call chained the console handler into the previous
         PrintRedirector and the first log() hit RecursionError."""
-        import BrowseRoyalCaribbeanPrice as b
         saved_stdout, saved_handlers = sys.stdout, logging.getLogger().handlers[:]
         try:
-            b.setup_hybrid_logging(None)
-            b.setup_hybrid_logging(None)
-            b.log("reinit-ok")           # raised RecursionError before the fix
+            setup_hybrid_logging(None)
+            setup_hybrid_logging(None)
+
+            # Re-import log locally to fetch the rebound function reference post-init
+            from BrowseRoyalCaribbeanPrice import log
+            log("reinit-ok")  # raised RecursionError before the fix
         finally:
             sys.stdout = saved_stdout
             root = logging.getLogger()
@@ -1031,34 +1035,31 @@ class TestBrowseHardening:
     def test_empty_locale_currency_falls_back_to_usd(self):
         """Bare C/POSIX locales (cron, containers without LANG) yield an empty
         int_curr_symbol; every pricing query then carried currencyCode=''."""
-        import BrowseRoyalCaribbeanPrice as b
         with patch('BrowseRoyalCaribbeanPrice.locale.setlocale'), \
              patch('BrowseRoyalCaribbeanPrice.locale.localeconv',
                    return_value={"int_curr_symbol": ""}), \
              patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
-            assert b.get_system_currency() == "USD"
+            assert get_system_currency() == "USD"
         with patch('BrowseRoyalCaribbeanPrice.locale.setlocale'), \
              patch('BrowseRoyalCaribbeanPrice.locale.localeconv',
                    return_value={"int_curr_symbol": "EUR "}):
-            assert b.get_system_currency() == "EUR"
+            assert get_system_currency() == "EUR"
 
     def test_saildate_format_no_longer_depends_on_currency_flag(self):
         """The locale used for the -d comparison was only set as a side effect
         of get_system_currency(): passing -c changed which date format -d
         accepted. main() now sets the locale unconditionally."""
-        import BrowseRoyalCaribbeanPrice as b
         with patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging'), \
              patch('BrowseRoyalCaribbeanPrice.locale.setlocale') as set_loc, \
              patch('BrowseRoyalCaribbeanPrice.get_ships_web', return_value=[]), \
              patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
-            b.main(['-c', 'USD', '-s', 'Nonexistent'])
+            main(['-c', 'USD', '-s', 'Nonexistent'])
         assert any(c.args[1] == '' for c in set_loc.call_args_list), \
             "locale never set when -c bypasses get_system_currency()"
 
     def test_prompts_refuse_non_tty_stdin_cleanly(self):
         """Under cron/pipes the ship menu crashed with a raw EOFError
         traceback; now it explains and exits."""
-        import BrowseRoyalCaribbeanPrice as b
         logged = []
         with patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging'), \
              patch('BrowseRoyalCaribbeanPrice.get_system_currency', return_value="USD"), \
@@ -1067,5 +1068,5 @@ class TestBrowseHardening:
              patch('BrowseRoyalCaribbeanPrice.sys.stdin') as stdin, \
              patch('BrowseRoyalCaribbeanPrice.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
             stdin.isatty.return_value = False
-            b.main([])
+            main([])
         assert any("Non-interactive run" in m for m in logged)
