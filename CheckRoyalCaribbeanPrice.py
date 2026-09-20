@@ -2545,7 +2545,7 @@ def get_cruise_price(account_info: AccountInfo,
             # distinct from "past_final_payment" (= a LOWER price you are locked
             # out of) so history queries can tell the two situations apart
             rebook_decision = "best_price_past_final_payment"
-            
+
         log(temp_string)
 
     history.record_cabin_fare(**history_common, current_price=price, status="priced",
@@ -3906,24 +3906,40 @@ def expand_env_vars(value: Any) -> Any:
     return value
 
 
-def _build_apprise(items: List[Dict]) -> Optional[Apprise]:
-    """
-    Builds an Apprise object from a list of {url: ...} dicts, as found under an
-    apprise: key in config.yaml (top-level or per-account). Apprise is an
-    optional dependency, so this mirrors the existing None-sentinel handling.
+def build_apprise(items: List[Dict[str, Any]]) -> Optional[Any]:
+    """Builds an Apprise object from a list of {url: ...} dicts, as found under an
+    apprise: key in config.yaml (top-level or per-account).
 
-    Returns None when the list is empty, or when apprise: is configured but the
-    apprise package is not installed (notifications are disabled with a warning).
+    Apprise is an optional dependency, so notifications are disabled with a warning
+    if apprise: is configured but the apprise package is not installed.
+
+    Args:
+        items (List[Dict[str, Any]]): List of dictionary configs (e.g. [{'url': '...'}]).
+
+    Returns:
+        Optional[Apprise]: A configured Apprise notifier, or None.
     """
-    urls = [item["url"] for item in items if "url" in item]
-    apobj = None
-    if urls and Apprise is None:
-        logging.warning("apprise: is configured in config.yaml but the apprise package "
-                        "is not installed - notifications are disabled. pip install apprise")
-    elif urls:
-        apobj = Apprise()
-        for url in urls:
-            apobj.add(url)
+    if not items:
+        return None
+
+    urls = [
+        item["url"]
+        for item in items
+        if isinstance(item, dict) and "url" in item
+    ]
+    if not urls:
+        return None
+
+    if Apprise is None:
+        logging.warning(
+            "apprise: is configured in config.yaml but the apprise package "
+            "is not installed - notifications are disabled. Run: pip install apprise"
+        )
+        return None
+
+    apobj = Apprise()
+    for url in urls:
+        apobj.add(url)
     return apobj
 
 
@@ -3968,10 +3984,16 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     currency_present = False
     currency_override_present = False
 
-    with open(config_path, 'r') as file:
-        # an empty config.yaml parses to None - fail with clear messages below,
-        # not an AttributeError on data.get
-        data = expand_env_vars(yaml.safe_load(file)) or {}    # Parse accounts
+    try:
+        with open(config_path, "r", encoding="utf-8") as file:
+            raw_data = yaml.safe_load(file)
+    except UnicodeDecodeError:
+        # Fallback for legacy non-UTF-8 files saved on Windows (e.g., CP1252/ANSI)
+        with open(config_path, "r") as file:
+            raw_data = yaml.safe_load(file)
+
+    # Handle empty files (yaml.safe_load returns None for empty files)
+    data = expand_env_vars(raw_data or {})
 
     # Parse accounts
     accounts = [
@@ -3984,7 +4006,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
             fire=a.get("fire", False),
             police=a.get("police", False),
             cruise_line=a.get("cruiseLine", "royalcaribbean"),
-            apobj=_build_apprise(a.get("apprise") or [])
+            apobj=build_apprise(a.get("apprise") or [])
         )
         for a in (data.get("accountInfo") or [])
     ]
@@ -4029,7 +4051,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
     apprise_urls = [item["url"] for item in (data.get("apprise") or []) if "url" in item]
 
     # Build the apprise object natively (apprise is an optional dependency)
-    apobj = _build_apprise(data.get("apprise") or [])
+    apobj = build_apprise(data.get("apprise") or [])
 
     # Safe initialization of minimum_saving_alert to allow None as well as 0.0
     raw_alert = data.get("minimumSavingAlert", None)
