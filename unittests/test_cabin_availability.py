@@ -1,6 +1,7 @@
 """Cabin transition alerts use synthetic searches and mocked transports."""
 import json
-import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
@@ -13,7 +14,7 @@ URL = ('https://www.royalcaribbean.com/checkout/guest-info?shipCode=ST&packageCo
 
 @pytest.fixture
 def cabin(tmp_path, monkeypatch):
-    config = c.CruiseAppConfig(cabin_availability_state_file=str(tmp_path/'state.sqlite3'))
+    config = c.CruiseAppConfig(cabin_availability_state_file=str(tmp_path/'state.json'))
     config.apobj = MagicMock()
     config.apobj.__len__.return_value = 1
     config.apobj.notify.return_value = True
@@ -40,8 +41,7 @@ def test_open_close_reopen_and_unknown_transitions_survive_runs(cabin):
     for state in [False, None, False, True, True]:
         deliver(cabin, state)
     assert config.apobj.notify.call_count == 2
-    with sqlite3.connect(config.cabin_availability_state_file) as db:
-        assert db.execute('SELECT COUNT(*) FROM cabin_availability_v1').fetchone()[0] == 1
+    assert len(c.read_cabin_state(Path(config.cabin_availability_state_file))) == 1
 
 
 def test_first_available_alert_is_not_a_price_threshold_check(cabin, monkeypatch):
@@ -91,8 +91,8 @@ def test_console_only_does_not_acknowledge_alert_before_notifier_is_added(cabin,
     deliver(cabin, True)
     deliver(cabin, True)
     notifier.notify.assert_not_called()
-    with sqlite3.connect(config.cabin_availability_state_file) as db:
-        assert db.execute('SELECT available, notified FROM cabin_availability_v1').fetchone() == (1, 0)
+    assert c.read_cabin_state(Path(config.cabin_availability_state_file)) == {
+        'test-scope': {'url': URL, 'available': True, 'notified': False}}
     config.apobj = notifier
     notifier.__len__.return_value = 1
     deliver(cabin, True)
@@ -329,8 +329,8 @@ def test_delivery_failure_continues_remaining_watches_and_retries(cabin, monkeyp
     session.close.assert_called_once()
     tracker.print_table.assert_called_once()
     assert c.history.finish_run.call_args.args[0] == 'partial_failure'
-    with sqlite3.connect(config.cabin_availability_state_file) as db:
-        assert db.execute('SELECT available, notified FROM cabin_availability_v1 ORDER BY notified').fetchall() == [(1, 0), (1, 1)]
+    rows = c.read_cabin_state(Path(config.cabin_availability_state_file)).values()
+    assert sorted((row['available'], row['notified']) for row in rows) == [(True, False), (True, True)]
     c.main()
     assert config.apobj.notify.call_count == 3
     assert session.close.call_count == 2
@@ -368,3 +368,103 @@ def test_unexpected_error_still_closes_anonymous_session(cabin, monkeypatch):
     with pytest.raises(RuntimeError, match='unexpected'):
         c.main()
     session.close.assert_called_once()
+
+
+def test_editing_notified_or_removing_entry_rearms_only_that_watch(cabin):
+    _, config, _ = cabin
+    path = Path(config.cabin_availability_state_file)
+    deliver(cabin, True)
+    state = c.read_cabin_state(path)
+    state['other-watch'] = dict(state['test-scope'], url=URL + '&r0b=2')
+    state['test-scope']['notified'] = False
+    path.write_text(json.dumps(state))
+    deliver(cabin, True)
+    assert config.apobj.notify.call_count == 2
+    state = c.read_cabin_state(path)
+    assert state['other-watch']['notified'] is True
+    del state['test-scope']
+    path.write_text(json.dumps(state))
+    deliver(cabin, True)
+    assert config.apobj.notify.call_count == 3
+    assert c.read_cabin_state(path)['other-watch'] == state['other-watch']
+
+
+@pytest.mark.parametrize('contents', [
+    '', 'not json', 'null', '[]', '{', '{"watch":null}',
+    '{"watch":{"url":"example","available":true,"notified":"false"}}',
+    '{"watch":{"url":"example","available":0,"notified":false}}',
+    '{"watch":{"url":"example","available":false,"notified":true}}',
+    '{"watch":{"available":true,"notified":false}}',
+    'SQLite format 3\u0000',
+])
+def test_invalid_state_is_not_overwritten_and_cannot_send(cabin, contents):
+    _, config, _ = cabin
+    path = Path(config.cabin_availability_state_file)
+    path.write_text(contents)
+    with pytest.raises(c.CabinAvailabilityError, match='JSON'):
+        deliver(cabin, True)
+    assert path.read_text() == contents
+    config.apobj.notify.assert_not_called()
+
+
+def test_unknown_and_unchanged_checks_do_not_rewrite_state(cabin, monkeypatch):
+    _, config, _ = cabin
+    deliver(cabin, True)
+    write = Mock(side_effect=AssertionError('Unexpected state write'))
+    monkeypatch.setattr(c, 'write_cabin_state', write)
+    deliver(cabin, None)
+    deliver(cabin, True)
+    write.assert_not_called()
+    config.apobj.notify.assert_called_once()
+
+
+@pytest.mark.parametrize('operation', ['replace', 'fsync'])
+def test_atomic_write_failure_preserves_existing_state_and_cleans_temp(cabin, monkeypatch, operation):
+    _, config, _ = cabin
+    deliver(cabin, True)
+    path = Path(config.cabin_availability_state_file)
+    before = path.read_bytes()
+    with monkeypatch.context() as patch:
+        patch.setattr(c.os, operation, Mock(side_effect=OSError('disk failure')))
+        with pytest.raises(c.CabinAvailabilityError):
+            deliver(cabin, False)
+    assert path.read_bytes() == before
+    assert not list(path.parent.glob('*.tmp'))
+    # The failed write did not leave a lock held or rearm the watch.
+    deliver(cabin, True)
+    config.apobj.notify.assert_called_once()
+
+
+def test_lock_excludes_other_process_and_releases_after_exception(cabin):
+    _, config, _ = cabin
+    path = Path(config.cabin_availability_state_file)
+    script = '''
+import sys
+from pathlib import Path
+from CheckRoyalCaribbeanPrice import cabin_state_lock
+try:
+    with cabin_state_lock(Path(sys.argv[1])):
+        pass
+except OSError:
+    sys.exit(23)
+'''
+    command = [sys.executable, '-c', script, str(path)]
+    with pytest.raises(RuntimeError):
+        with c.cabin_state_lock(path):
+            assert subprocess.run(command, timeout=30).returncode == 23
+            with pytest.raises(c.CabinAvailabilityError):
+                deliver(cabin, True)
+            config.apobj.notify.assert_not_called()
+            assert not path.exists()
+            raise RuntimeError('abort')
+    assert subprocess.run(command, timeout=30).returncode == 0
+    deliver(cabin, True)
+    config.apobj.notify.assert_called_once()
+
+
+def test_default_state_path_is_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(c, 'setup_hybrid_logging', Mock())
+    path = tmp_path/'config.yaml'
+    path.write_text('{}')
+    assert c.CruiseAppConfig().cabin_availability_state_file == 'data/cabin-availability.json'
+    assert c.load_config_objects(str(path)).cabin_availability_state_file == 'data/cabin-availability.json'

@@ -31,7 +31,7 @@ cruises:
   - cruiseURL: "YOUR_COMPLETE_CHECKOUT_URL"
     notificationMode: availability
 
-cabinAvailabilityStateFile: /app/data/cabin-availability.sqlite3
+cabinAvailabilityStateFile: /app/data/cabin-availability.json
 ```
 
 This mode does not require `paidPrice` and does not apply `minimumSavingAlert`.
@@ -49,9 +49,46 @@ identify them individually.
 
 State persists across scheduled runs and container restarts. Mount `/app/data` as a
 writable persistent volume in Docker. Outside Docker the default state path is
-`data/cabin-availability.sqlite3`, relative to the working directory. The database
-holds the latest state per search, not a report history. Changing search criteria
-creates a new watch state; deleting the file resets all cabin availability watches.
+`data/cabin-availability.json`, relative to the working directory. This separate
+JSON file holds only the latest state per search, not a report history. The YAML
+configuration is never rewritten. Changing search criteria creates a new watch
+state. Each entry has this shape (the actual key is a hash of the normalized search
+criteria, including overrides, so different searches using one URL stay separate):
+
+```json
+{
+  "SEARCH_KEY": {
+    "url": "YOUR_COMPLETE_CHECKOUT_URL",
+    "available": true,
+    "notified": true
+  }
+}
+```
+
+To test or reset a watch, stop checks first and locate its `url` in the state file.
+Set `notified` to `false` to allow another alert on the next confirmed available
+result, or delete that entry to reset it. Delete the file (or replace its contents
+with `{}`) to reset all watches. Keep Boolean values as `true`/`false`, not strings.
+`available` records the last confirmed result; `notified` records successful
+delivery for the current opening. An unavailable watch must have `notified: false`.
+Protect this file like your configuration: checkout URLs may contain loyalty
+numbers. Do not commit or publish it.
+
+Writes replace the file atomically, and a sibling `.lock` file prevents overlapping
+processes from reading/notifying/updating the same state concurrently. Leave that
+lock file in place; its existence does not mean a check is running. The operating
+system releases its lock if the process exits. A busy lock skips the affected watch
+with a partial-failure status so it can retry on the next run. Use a local filesystem
+with working file locks and mount the whole data directory, not just the JSON file.
+Malformed or unreadable existing state is reported, never silently reset. A crash
+after notification delivery but before saving can still cause a repeated alert.
+
+If testing an earlier revision of this PR that used SQLite, change any explicit
+`cabinAvailabilityStateFile` to a new `.json` path. The old database is left untouched
+and is not automatically imported; the fresh state can send one initial alert for
+each available watch. Do not simply rename the SQLite database to `.json`. This
+change does not affect the existing optional SQLite price-history feature.
+
 Configure Apprise to deliver alerts. Failed deliveries remain pending for retry;
 failed or unrecognized API responses retain the previous state.
 Without Apprise, availability is reported in the console without treating it as
