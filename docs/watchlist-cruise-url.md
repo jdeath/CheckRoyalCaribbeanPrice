@@ -19,4 +19,37 @@
 1. If there are no more rooms of the same class available to book, you will not be able to reprice. You will need to wait until a room opens up. The code will print the cheapest interior, outside view, balcony or suite available. These are probably GTY for each class and not the exact type of room you wanted. This is all the public cruise price API returns.
 1. If you only want to check the cruise prices with URL you provide, you do not need to have your `accountInfo` and/or `apprise` in your [config file](config.md), as they are not necessary.
 1. Should always give price in your current currency (except for OBC which is only in USD). If your currency is not supported, create an issue
-   
+
+## Notify when a cabin becomes available
+
+Set `notificationMode: availability` on an individual entry in `cruises` to receive
+an alert when its cabin subtype becomes available. Keep using the complete checkout
+URL for the desired sailing, cabin and passenger counts:
+
+```yaml
+cruises:
+  - cruiseURL: "YOUR_COMPLETE_CHECKOUT_URL"
+    notificationMode: availability
+
+cabinAvailabilityStateFile: /app/data/cabin-availability.sqlite3
+```
+
+This mode does not require `paidPrice` and does not apply `minimumSavingAlert`.
+It sends one **Cruise Room Available** alert, with the current price when returned
+and a booking link. It also alerts if the first successful check finds availability.
+An unavailable result appears in the console/report without sending a notification.
+A subsequent confirmed closure rearms the alert for the next reopening. It tracks
+subtype inventory, not a particular cabin number; confirm the booking on Royal's site.
+Guarantee categories require a returned fare because the inventory endpoint does not
+identify them individually.
+
+State persists across scheduled runs and container restarts. Mount `/app/data` as a
+writable persistent volume in Docker. Outside Docker the default state path is
+`data/cabin-availability.sqlite3`, relative to the working directory. The database
+holds the latest state per search, not a report history. Changing search criteria
+creates a new watch state; deleting the file resets all cabin availability watches.
+Configure Apprise to deliver alerts. Failed deliveries remain pending for retry;
+failed or unrecognized API responses retain the previous state.
+
+Omit `notificationMode`, or set it to `price`, to keep existing price-watch behavior,
+including its required `paidPrice`. Availability mode uses the regular check schedule.
