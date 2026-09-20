@@ -616,6 +616,10 @@ class CruiseAppConfig:
     request_timeout: int = REQUEST_TIMEOUT
     log_file: Optional[str] = None
     history_db: Optional[str] = None
+    check_for_upgrades: bool = False
+    upgrade_alert_below: Optional[float] = None
+    upgrade_reservations: List[str] = field(default_factory=list)
+    upgrade_sister_categories: bool = True
     cabin_availability_state_file: str = "data/cabin-availability.json"
     output_watch_as_json: bool = False
     output_json_watch_file: Optional[str] = "output-json-watch.txt"
@@ -1474,6 +1478,141 @@ def _booking_country_code(booking: Dict[str, Any]) -> Optional[str]:
 _UNKNOWN_MARKETS_WARNED: set = set()
 
 
+# ---- checkForUpgrades support (Phase 1 port of the fork's upgrade checker) ----
+# Class ladder for upgrade ranking. RSC stateroomType codes.
+TYPE_RANK = {"INTERIOR": 0, "OUTSIDE": 1, "BALCONY": 2, "CONCIERGE": 3, "AQUA": 3, "DELUXE": 4}
+
+# Within a class, price is the upgrade proxy - but these niche products price
+# above regular cabins without being better ones (a Studio is a smaller solo
+# cabin; obstructed/partial views are lesser variants). They are only screened
+# for SAME-class comparisons: as a class jump they are still genuine upgrades.
+LESSER_PRODUCT = re.compile(r"studio|obstruct|partial view", re.I)
+
+# Ledger discount/option descriptions that mark a Club Royale casino-rate booking
+CASINO_MARKER = re.compile(r"casino|clubr|club royale", re.I)
+
+# upgradeReservations ids that matched a booking this run (to warn about typos)
+_UPGRADE_SCOPE_SEEN: Set[str] = set()
+
+
+def is_upgrade_candidate(booked_rank: Optional[int], booked_now: Optional[float],
+                         row_rank: Optional[int], row_total: float,
+                         row_name: str = "") -> bool:
+    """
+    Whether an inventory row counts as an UPGRADE over the booked category:
+    a higher class, or - within the same class - a non-niche category pricing
+    above the booked category's current rate.
+
+    booked_rank None means the booked class could not be established (nothing
+    from the booked subtype is on sale). Never guess in that case: treating
+    "unknown" as "lowest" once alerted a balcony 1B booking to "upgrade" to an
+    interior 4U, because every class outranked the -1 fallback.
+    """
+    if booked_rank is None or row_rank is None:
+        return False
+    if row_rank > booked_rank:
+        return True
+    return (row_rank == booked_rank and isinstance(booked_now, (int, float))
+            and row_total > booked_now
+            and not LESSER_PRODUCT.search(row_name or ""))
+
+
+def _is_price(value: Any) -> bool:
+    """A usable quote: a real, positive, finite number. Booleans, NaN, infinity,
+    zero and negatives are not prices - a row carrying one is not offered, never
+    alerted on and never anchors a delta (a -1 total once read as a huge saving)."""
+    return type(value) in (int, float) and 0 < value < float("inf")
+
+
+def should_apply_dp340(eligible: bool, booked_with_code: bool, guest_count: int) -> bool:
+    """Quote a solo booking with the DP340 single-supplement code when the
+    account qualifies (Royal, 340+ Crown & Anchor points), or when the booking
+    already carries the code - repricing keeps the terms it was booked on.
+    Never on multi-guest bookings."""
+    return (eligible or booked_with_code) and guest_count == 1
+
+
+def _get_upgrade_category_prices(url_params: CruiseURLParams, stype: Optional[str],
+                                 dp340: bool = False) -> tuple[Dict[str, float], bool]:
+    """
+    Per-CATEGORY all-in totals inside ONE subtype family (e.g. 2D alongside 4D
+    under subtype D), via the room-selection JSON API - one POST per booking,
+    fetched only for the booked family. Sept 2026: this endpoint is
+    POST-with-JSON-body; the old GET form gets a blanket Akamai 403.
+
+    Returns ({categoryCode: total}, dp340_actually_applied).
+    """
+    room: Dict[str, Any] = {
+        "adultCount": int(url_params.number_of_adults or 1),
+        "childCount": int(url_params.number_of_children or 0),
+        "stateroomTypeCode": stype,
+        "stateroomSubtypeCode": url_params.stateroom_subtype,
+        "accessible": False, "selectionFallbackStrategy": "RECOMMENDATION",
+        "editMode": True, "reset": False, "taxesAndFeesBundled": True,
+    }
+    # same qualifier block the checkout POST sends, so the booked family is
+    # priced on the same basis as every other row of the table
+    room["qualifiers"] = {
+        "fireFighter": url_params.fire, "military": url_params.military,
+        "police": url_params.police, "senior": url_params.senior,
+    }
+    if url_params.loyalty_number:
+        room["qualifiers"]["loyaltyNumber"] = str(url_params.loyalty_number)
+    if url_params.state:
+        room["qualifiers"]["stateCode"] = url_params.state
+    if dp340:
+        room["couponCode"] = "DP340"
+    flt = {"countryCode": url_params.booking_office_country_code or "USA",
+           "packageId": url_params.package_code,
+           "sailDate": url_params.sail_date,
+           "currencyCode": url_params.currency_code or "USD",
+           "language": "en", "options": True, "roomNumbers": True,
+           "rooms": [room], "platform": "web"}
+    headers = {"user-agent": USER_AGENT_WEB, "accept": "*/*",
+               "content-type": "application/json",
+               "brand": "R" if url_params.is_royal else "C",
+               "country": url_params.booking_office_country_code or "USA"}
+
+    response = _execute_api_request(
+        account_info=None, method="POST",
+        url=f"https://www.{url_params.url_brand}.com/room-selection/api/v1/rooms",
+        data=json.dumps(flt), headers=headers, on_failure="skip")
+
+    prices: Dict[str, float] = {}
+    if response is not None:
+        try:
+            for rm in (response.json().get("rooms") or []):
+                for cat in ((rm.get("roomNumbers") or {}).get("categories") or []):
+                    code = cat.get("categoryCode") or cat.get("code")
+                    total = (((cat.get("pricing") or {}).get("invoice")) or {}).get("total")
+                    if code and _is_price(total):
+                        prices[code] = float(total)
+        except Exception:
+            prices = {}
+    if not prices and dp340:
+        # A coupon-priced request can fail as a 4xx or an empty body when the
+        # coupon is rejected - retry once without the code instead of silently
+        # losing the per-category view
+        log(f"\t{YELLOW}DP340-priced category request returned nothing; retrying without the code{RESET}")
+        return _get_upgrade_category_prices(url_params, stype, dp340=False)
+    return prices, dp340
+
+
+def _upgrade_money(v: Optional[float], sym: str = "$") -> str:
+    return f"{sym}{v:,.2f}" if isinstance(v, (int, float)) else "-"
+
+
+def _upgrade_delta(v: Optional[float], width: int = 12, sym: str = "$") -> str:
+    """Signed money, right-padded to a fixed VISIBLE width, green when <= 0 (a
+    saving). Colour codes are applied after padding so columns stay aligned."""
+    if not isinstance(v, (int, float)):
+        return "-".rjust(width)
+    if abs(v) < 0.005:
+        return f"{GREEN}{(sym + '0.00').rjust(width)}{RESET}"
+    text = f"{'+' if v > 0 else '-'}{sym}{abs(v):,.2f}".rjust(width)
+    return f"{GREEN}{text}{RESET}" if v <= 0 else text
+
+
 def _booking_payment_market(booking: Dict[str, Any]) -> Optional[str]:
     """
     The market code the FINAL-PAYMENT rules should use: the first of
@@ -1853,6 +1992,12 @@ def get_voyages(
         prepaid_grats_flag = False
         insurance_flag = False
         all_included_flag = False
+        discounted_fare = None
+        taxes_and_fees = None
+        casino_rate_flag = False
+        refundabilities = set()
+        booked_with_dp340 = False
+        prepaid_addons = 0.0
         cruise_paid_price_from_API = result.get("prices", [])
 
         # Extract direct YAML overrides for this reservation ID (if configured)
@@ -1897,6 +2042,36 @@ def get_voyages(
         for cur_price in cruise_paid_price_from_API:
             price_type_code = cur_price.get("priceTypeCode", "")
             amount = cur_price.get("amount")
+
+            # Club Royale casino-rate detection must run BEFORE the amount
+            # guard: the OPTIONS record often carries amount 0.0 while its
+            # priceItems still name the comp ("CASINO DISC - GOBO", "ClubR...")
+            if price_type_code in ("DISCOUNT", "OPTIONS"):
+                # This walk runs for every user (flag on or off) and the data
+                # comes out of a Next.js RSC stream: priceItems can be a
+                # reference string, or a list holding nulls/strings. Never let
+                # an optional feature's bookkeeping end the run.
+                price_items = cur_price.get("priceItems")
+                for item in (price_items if isinstance(price_items, list) else []):
+                    if not isinstance(item, dict):
+                        continue
+                    if CASINO_MARKER.search(str(item.get("description") or "")):
+                        casino_rate_flag = True
+                    # the DISCOUNT items carry the fare's refundability
+                    # (DEPOSIT_NOT_REFUNDABLE = an NRD fare)
+                    if isinstance(item.get("refundability"), str):
+                        refundabilities.add(item["refundability"])
+                    if item.get("promoCd") == "DP340":
+                        booked_with_dp340 = True
+
+            # captured BEFORE the amount guard: a fully comped fare is a
+            # legitimate 0.0 and must still yield a fare + taxes basis
+            if isinstance(amount, (int, float)) and not isinstance(amount, bool):
+                if price_type_code == "DISCOUNTED_CRUISE_FARE":
+                    discounted_fare = amount
+                elif price_type_code == "TAXES_AND_FEES":
+                    taxes_and_fees = amount
+
             if not amount:
                 continue
 
@@ -1905,12 +2080,15 @@ def get_voyages(
                 gross_totals = amount
             elif price_type_code == "GRATUITIES":
                 prepaid_grats_flag = True
+                prepaid_addons += amount if isinstance(amount, (int, float)) else 0.0
                 payment_string += f" Including: {amount:.2f} Gratuities"
             elif price_type_code == "TRIP_INSURANCE":
                 insurance_flag = True
+                prepaid_addons += amount if isinstance(amount, (int, float)) else 0.0
                 payment_string += f" Including: {amount:.2f} Insurance"
             elif "ALL_INC" in price_type_code or "INCLUDED" in price_type_code:
                 all_included_flag = True
+                prepaid_addons += amount if isinstance(amount, (int, float)) else 0.0
                 payment_string += f" Including: {amount:.2f} All Included Drinks/WiFi"
             elif price_type_code == "BALANCE_DUE":
                 payment_string += f" {YELLOW}You Still Owe: {amount:.2f} due {final_payment_date_display}{RESET}"
@@ -1927,6 +2105,21 @@ def get_voyages(
             # base fare and fired false "Rebook!" alerts
             paid_price_struct['tripInsurance'] = insurance_flag
             paid_price_struct['allInUpgrade'] = all_included_flag
+            # checkForUpgrades basis: a reprice keeps prepaid add-ons, so the
+            # honest "vs what you paid" comparison is fare + taxes, not the
+            # gross total (which bundles prepaid gratuities/packages)
+            if isinstance(discounted_fare, (int, float)) and isinstance(taxes_and_fees, (int, float)):
+                paid_price_struct['fareAndTaxes'] = round(discounted_fare + taxes_and_fees, 2)
+            paid_price_struct['isCasino'] = casino_rate_flag
+            paid_price_struct['isAgency'] = is_agency_booking(booking)
+            if "DEPOSIT_NOT_REFUNDABLE" in refundabilities:
+                paid_price_struct['depositType'] = "NRD"
+            elif "REFUNDABLE" in refundabilities:
+                paid_price_struct['depositType'] = "REFUNDABLE"
+            paid_price_struct['bookedWithDP340'] = booked_with_dp340
+            # a configured reservationPricePaid is entered INCLUDING these (per
+            # the docs); the upgrade rows are bare cabin totals
+            paid_price_struct['prepaidAddOns'] = round(prepaid_addons, 2)
             log(f"Cruise Fare - Total {gross_totals:.2f}{payment_string}")
 
         # Record this booking for the end-of-run check-in / final-payment summary table.
@@ -2016,6 +2209,10 @@ def get_voyages(
                                                     paid_price.get("paid_price"))
                     if paid_price is not None:
                         paid_price_struct['paid_price'] = float(paid_price)
+                        # a manually configured price is a deliberate statement
+                        # (e.g. the documented change-fee cushion) - the upgrade
+                        # table's dl-paid basis must honor it over the ledger
+                        paid_price_struct['paidPriceOverridden'] = True
             elif isinstance(reservation_price_paid, list):
                 for reservation in reservation_price_paid:
                     # str-compare: a missing/non-numeric 'reservation' key must
@@ -2024,6 +2221,8 @@ def get_voyages(
                         for key, val in reservation.items():
                             if key == "paidPrice":
                                 paid_price_struct["paid_price"] = float(val) if val is not None else None
+                                if val is not None:
+                                    paid_price_struct['paidPriceOverridden'] = True
                             else:
                                 paid_price_struct[key] = val
 
@@ -2114,6 +2313,366 @@ def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) ->
     result["pricing_add_ons"] = _extract_json_array(text, "pricingAddOns") or []
 
     return result
+
+
+def _maybe_report_upgrades(*args: Any, **kwargs: Any) -> None:
+    """An optional, informational feature must never end a run: any unexpected
+    data shape inside the upgrade report is logged and that booking's table is
+    skipped - remaining bookings, accounts and the summary are unaffected."""
+    try:
+        _report_upgrades(*args, **kwargs)
+    except Exception as exc:
+        log(f"\t{YELLOW}Upgrade check skipped for this booking (unexpected data: "
+            f"{type(exc).__name__}: {exc}){RESET}")
+
+
+def _report_upgrades(url_params: CruiseURLParams, results: Dict[str, Any],
+                     paid_price_struct: Optional[Dict[str, Any]],
+                     pre_string: str, reservation_id: Optional[str],
+                     apobj: Optional[Apprise],
+                     past_final_payment: bool = False) -> None:
+    """
+    checkForUpgrades: for a booked cruise, list what the other staterooms on the
+    sailing cost right now, as ONE delta column - the one that governs this
+    booking: dl-paid (vs what was paid) for a normal booking, dl-rate (vs the
+    booked category's rate today) for a casino/comped one.
+
+    Rows come from the room-selection sweep the availability gate already
+    performs (collect_all), so the table itself adds no API requests; the
+    booked family's per-category prices cost one extra POST per booking unless
+    upgradeSisterCategories is false.
+    """
+    rows = [r for r in (results.get('upgrade_rows') or []) if isinstance(r, dict)]
+    if not rows:
+        return
+    struct = paid_price_struct or {}
+    currency = url_params.currency_code or "USD"
+    sym = "$" if currency == "USD" else ""          # never print "$" on a GBP booking
+    is_casino = bool(struct.get('isCasino'))
+
+    def money(v: Optional[float]) -> str:
+        return _upgrade_money(v, sym)
+
+    # ---- the booked row: dl-rate anchor + class rank -------------------------
+    booked_sub = url_params.stateroom_subtype
+    booked_cat = url_params.stateroom_category_code
+    booked_row = next((r for r in rows if r.get('subtype') == booked_sub), None)
+    booked_now = (booked_row.get('price')
+                  if booked_row and _is_price(booked_row.get('price')) else None)
+    booked_rank = (TYPE_RANK.get(booked_row.get('type')) if booked_row
+                   else TYPE_RANK.get(url_params.cabin_class_string))
+
+    # ---- per-category prices inside the booked family (one extra POST) -------
+    # DP340 eligibility is mainline's own decision (shared C&A points), already
+    # expressed as url_params.coupon_code - never re-derive it here, and never
+    # retry a coupon the main flow just proved rejected.
+    guest_count = int(url_params.number_of_adults or 0) + int(url_params.number_of_children or 0)
+    apply_dp340 = (not results.get('coupon_rejected')
+                   and should_apply_dp340(url_params.coupon_code == "DP340",
+                                          bool(struct.get('bookedWithDP340')), guest_count))
+    family_prices: Dict[str, float] = {}
+    dp340_used = False
+    if booked_row is not None and config.upgrade_sister_categories is not False:
+        family_prices, dp340_used = _get_upgrade_category_prices(
+            url_params, booked_row.get('type'), dp340=apply_dp340)
+        family_prices = {code: total for code, total in (family_prices or {}).items()
+                         if _is_price(total)}
+
+    # ---- label the dl-rate anchor honestly -----------------------------------
+    rate_anchor_label = None
+    if booked_row is not None:
+        if booked_cat and booked_cat in family_prices:
+            booked_now = family_prices[booked_cat]      # exact category beats the lead-in
+            rate_anchor_label = f"your booked category {booked_cat} today"
+        elif family_prices and booked_cat:
+            rate_anchor_label = f"family lead-in; {booked_cat} returned no price today"
+        elif booked_cat and booked_row.get('category') == booked_cat:
+            rate_anchor_label = f"your booked category {booked_cat} today"
+        else:
+            rate_anchor_label = "your booked family's lead-in category today"
+    else:
+        # No row of its own (a GTY booking - casino comps very often are): anchor
+        # on the cheapest guarantee of the booked class rather than an all-dash table.
+        # Royal flags ordinary subtypes as guarantees too (seen live for solos: a
+        # studio balcony) - a lesser product would understate the booked rate
+        same_class_gty = [r for r in rows
+                          if r.get('guarantee') and r.get('type') == url_params.cabin_class_string
+                          and _is_price(r.get('price'))
+                          and not LESSER_PRODUCT.search(r.get('display_name') or "")]
+        if same_class_gty:
+            booked_now = min(r['price'] for r in same_class_gty)
+            rate_anchor_label = (f"cheapest {url_params.cabin_class_string} guarantee today "
+                                 f"(your booking has no category row of its own)")
+
+    # Same-class "pricier than what you hold" alerts need the EXACT booked
+    # category's rate; with a stand-in anchor only class jumps may alert
+    anchor_exact = bool(booked_row and booked_cat and
+                        (booked_cat in family_prices
+                         or booked_row.get('category') == booked_cat))
+
+    # The main check's checkout POST has ALREADY priced the exact booked
+    # category - it is the "now X" printed on the line above this table - and
+    # that is the authoritative anchor. Seen live: the rooms API omitted a
+    # booked category that checkout priced fine, so the table anchored on a
+    # lead-in and claimed "returned no price" directly under the "now" figure.
+    fare_key = "all_included_fare" if url_params.all_included else "base_fare"
+    checkout_fare = (results.get(fare_key) or {}).get("fare")
+    family_display: Dict[str, float] = dict(family_prices)
+    if _is_price(checkout_fare):
+        booked_now = float(checkout_fare)
+        anchor_exact = True
+        rate_anchor_label = (f"your booked category {booked_cat} today" if booked_cat
+                             else "your booked cabin today")
+        if url_params.refundable:
+            # the main line above prints the REFUNDABLE fare for this booking;
+            # the anchor is the non-refundable one so it compares like-for-like
+            # with the rows - say so, since the two numbers differ
+            rate_anchor_label += " at the non-refundable rate, to match the rows"
+        # make sure the exact booked category has a (starred) row of its own
+        if booked_row is not None and booked_cat:
+            lead_cat = booked_row.get('category')
+            if (not family_display and lead_cat and lead_cat != booked_cat
+                    and _is_price(booked_row.get('price'))):
+                family_display[lead_cat] = booked_row['price']     # keep the lead-in visible
+            if family_display or lead_cat != booked_cat:
+                family_display[booked_cat] = float(checkout_fare)
+    alert_booked_now = booked_now if anchor_exact else None
+
+    # ---- which quotes carry the DP340 discount -------------------------------
+    # The main check's checkout price does when it priced with the coupon;
+    # booked-family rows do only when the family request KEPT the code (it
+    # retries without it when refused); sweep rows of other families never do.
+    # A discounted anchor against an undiscounted row (or the reverse) makes a
+    # cheaper tier look pricier, and 'pricier' is what marks a same-class upgrade.
+    if _is_price(checkout_fare):
+        anchor_discounted = url_params.coupon_code == "DP340" and not results.get('coupon_rejected')
+    else:
+        anchor_discounted = bool(dp340_used and booked_cat and booked_cat in family_prices)
+
+    # ---- dl-paid basis: configured price > ledger fare+taxes > gross ---------
+    fare_and_taxes = struct.get('fareAndTaxes')
+    user_paid = struct.get('paid_price') if struct.get('paidPriceOverridden') else None
+    addons = struct.get('prepaidAddOns')
+    if isinstance(user_paid, (int, float)):
+        # docs tell users to enter the price INCLUDING prepaid gratuities etc.,
+        # but the rows below are bare cabin totals - put both on one basis
+        if isinstance(addons, (int, float)) and addons > 0:
+            paid_basis = round(user_paid - addons, 2)
+            basis_label = (f"your configured reservationPricePaid less "
+                           f"{money(addons)} prepaid add-ons")
+        else:
+            paid_basis = user_paid
+            basis_label = "your configured reservationPricePaid (may include prepaid add-ons)"
+    elif isinstance(fare_and_taxes, (int, float)):
+        paid_basis = fare_and_taxes
+        basis_label = "fare + taxes paid; prepaid add-ons excluded"
+    else:
+        paid_basis = struct.get('paid_price')
+        basis_label = "gross paid (fare+taxes unavailable)"
+    has_paid = isinstance(paid_basis, (int, float))
+
+    # ---- which single delta governs this booking -----------------------------
+    # A normal booking reprices for the dl-paid difference; a casino/comped one
+    # can't reprice without forfeiting the comp, so the desk's category
+    # difference (dl-rate) governs. One column only - two read as equals.
+    prefer_rate = is_casino or not has_paid
+    casino_without_anchor = False
+    if prefer_rate and not isinstance(booked_now, (int, float)) and has_paid:
+        prefer_rate = False                 # nothing to anchor dl-rate on
+        casino_without_anchor = is_casino
+    delta_label = 'dl-rate' if prefer_rate else 'dl-paid'
+
+    # ---- table rows ----------------------------------------------------------
+    # Guarantee and connecting rows ARE listed (tagged): a guarantee is often the
+    # cheapest way up a class, and a connecting cabin is a real bookable cabin.
+    def listable(r: Dict[str, Any]) -> bool:
+        if r is booked_row:
+            return True                     # always show the booked family
+        if r.get('rooms_left') == 0:        # explicit 0 only; None = count unknown
+            return False
+        return _is_price(r.get('price'))
+
+    def product_tags(r: Dict[str, Any]) -> List[str]:
+        return (["[GTY]"] if r.get('guarantee') else []) + \
+               (["[connecting]"] if r.get('connecting') else [])
+
+    table_rows: List[Dict[str, Any]] = []
+    for r in rows:
+        if not listable(r):
+            continue
+        if r is booked_row and family_display:
+            table_rows.extend({**booked_row, 'category': code, 'price': total,
+                               '_dp340': bool(dp340_used and code in family_prices)}
+                              for code, total in sorted(family_display.items(),
+                                                        key=lambda kv: kv[1]))
+        elif _is_price(r.get('price')):
+            table_rows.append(r)
+    if not table_rows:
+        log("\tUpgrade check: no priceable stateroom inventory returned for this sailing")
+        return
+
+    BOLD = "\033[1m"
+    cur_note = "" if sym else f" - amounts in {currency}"
+    log(f"\t{BLUE}Stateroom options on this sailing (priced for this booking's guests){cur_note}{RESET}")
+    if prefer_rate:
+        log(f"\t  dl-rate basis: {money(booked_now)} ({rate_anchor_label or 'no comparable rate row'})")
+    else:
+        log(f"\t  dl-paid basis: {money(paid_basis)} ({basis_label})")
+    header = f"\t  {'':1} {'cat':5} {'type':9} {'now':>12} {delta_label:>12}  description"
+    log(header)
+    log("\t  " + "-" * (len(header) - 4))
+
+    deposit_type = struct.get('depositType')
+
+    def fare_type_mismatch(r: Dict[str, Any]) -> str:
+        """'' when the row's deposit type matches the booking's (or is unknown)."""
+        row_refund = r.get('refundability')
+        if deposit_type == "NRD" and isinstance(row_refund, str) and row_refund != "DEPOSIT_NOT_REFUNDABLE":
+            return "[refundable rate]"
+        if deposit_type == "REFUNDABLE" and row_refund == "DEPOSIT_NOT_REFUNDABLE":
+            return "[NRD rate]"
+        return ""
+
+    # A per-row tag only informs when the table is MIXED. When every row is on
+    # the other fare type (live: a booking whose ledger reads refundable while
+    # all 13 quotes were NRD rates) the tags are pure noise - one note says it
+    # instead. On a comped casino fare the comparison is moot altogether.
+    mismatches = [fare_type_mismatch(r) for r in table_rows]
+    all_mismatch = bool(mismatches) and all(mismatches)
+    tag_rows = not is_casino and any(mismatches) and not all_mismatch
+    hits: List[str] = []
+    any_cheaper = False
+    threshold = config.upgrade_alert_below if isinstance(config.upgrade_alert_below, (int, float)) else None
+    for r in table_rows:
+        is_booked_cat = (r.get('subtype') == booked_sub
+                         and (not family_display or r.get('category') == booked_cat))
+        anchor_price = booked_now if prefer_rate else paid_basis
+        delta = (r['price'] - anchor_price) if isinstance(anchor_price, (int, float)) else None
+        if delta is not None and delta < 0 and not is_booked_cat:
+            any_cheaper = True
+        # past final payment a cheaper category returns NO refund
+        shown = max(delta, 0.0) if (delta is not None and past_final_payment) else delta
+
+        product = product_tags(r)
+        fare_tag = fare_type_mismatch(r) if tag_rows else ""
+        tags = "".join(f"  {t}" for t in product + ([fare_tag] if fare_tag else []))
+
+        log(f"\t  {'*' if is_booked_cat else ' '} {str(r.get('category') or r.get('subtype')):5} "
+            f"{str(r.get('type')):9} {money(r['price']):>12} {_upgrade_delta(shown, 12, sym)}  "
+            f"{r.get('display_name', '')}{tags}")
+
+        # Within the booked class "pricier" is no proxy for "better" on these
+        # products (no cabin choice / same cabin with a door): they alert only
+        # as a move UP a class, which withholding the same-class anchor enforces
+        # The same goes for a row quoted on a different DP340 basis than the anchor.
+        same_basis = bool(r.get('_dp340')) == bool(anchor_discounted)
+        same_class_anchor = alert_booked_now if (same_basis and not product) else None
+        if (threshold is not None and not is_booked_cat and shown is not None
+                and shown <= threshold
+                and is_upgrade_candidate(booked_rank, same_class_anchor,
+                                         TYPE_RANK.get(r.get('type')), r['price'],
+                                         r.get('display_name') or "")):
+            sign = "+" if shown > 0 else "-" if shown < 0 else ""
+            # unlike the table (where an all-mismatch table gets one note instead),
+            # an alert stands alone: always say when the quote is on the other fare type
+            fare_hit = "" if is_casino else fare_type_mismatch(r)
+            hit_tags = "".join(f" {t}" for t in product + ([fare_hit] if fare_hit else []))
+            hits.append(f"{r.get('category') or r.get('subtype')} {r.get('display_name', '')}"
+                        f"{hit_tags} for {sign}{sym}{abs(shown):,.2f} (now {money(r['price'])})")
+
+    # ---- notes ---------------------------------------------------------------
+    tag_notes = []
+    if any(r.get('guarantee') for r in table_rows):
+        tag_notes.append("[GTY] = guarantee fare: the cruise line assigns the cabin and "
+                         "its location - you can't choose it")
+    if any(r.get('connecting') for r in table_rows):
+        tag_notes.append("[connecting] = has a door to the adjoining cabin")
+    if tag_notes:
+        log("\t  " + "; ".join(tag_notes) + ".")
+    if booked_row is not None and not anchor_exact:
+        if family_display and booked_cat:
+            log(f"\t  Your category {booked_cat} returned no price today (it may be sold out "
+                f"within its family) - no row is starred.")
+        elif booked_cat:
+            log(f"\t  * marks your booked family's lead-in row; your exact category "
+                f"{booked_cat} was not priced individually.")
+    if struct.get('bookedWithDP340'):
+        log("\t  DP340 single-supplement discount is applied on this booking")
+    if dp340_used:
+        log("\t  Booked-family rows are quoted with the DP340 single-supplement code; "
+            "other families show standard solo rates.")
+    elif apply_dp340 and family_prices:
+        log("\t  The DP340 single-supplement code was not accepted for the booked-family quote: "
+            "every row shows standard solo rates.")
+
+    if is_casino:
+        log(f"\t  {YELLOW}Note: casino-rate booking - a straight reprice (dl-paid) would forfeit "
+            f"the comp; {BOLD}dl-rate{RESET}{YELLOW} approximates the category difference a casino "
+            f"desk charges to move UP. A cheaper category returns nothing on a comped fare. "
+            f"Confirm with the casino desk - or your travel agent, if one booked this comp - "
+            f"before changing anything.{RESET}")
+        if casino_without_anchor:
+            log(f"\t  {YELLOW}No comparable rate row was returned for this booking, so dl-paid "
+                f"is shown instead - treat it as a rough guide only.{RESET}")
+    elif has_paid:
+        log(f"\t  Upgrading or downgrading would use {BOLD}dl-paid{RESET} - "
+            f"the difference between a category's price today and what you paid.")
+        log("\t  An upgrade reprices the booking at today's promotion: your original "
+            "promotions/onboard credit are replaced, not kept.")
+        if any_cheaper and not past_final_payment:
+            log("\t  Cheaper rows are effectively reprices: when today's sale is marked "
+                "'new bookings only' Royal may refuse an in-place reprice, leaving "
+                "cancel-and-rebook (which puts a non-refundable deposit at risk).")
+    if past_final_payment:
+        log(f"\t  {YELLOW}Past final payment: upgrades are still possible at today's rates, "
+            f"but a cheaper category returns no refund (shown as {sym}0.00).{RESET}")
+
+    # Two live data points: is_agency_booking() fired for a comp a TA really
+    # booked AND for one booked directly with the casino - on a casino-rate
+    # booking the flag cannot tell them apart. So no separate TA note there;
+    # the casino note is worded to be true either way.
+    if struct.get('isAgency') and not is_casino:
+        log(f"\t  {YELLOW}TA/group booking: figures are Royal's ledger - your agent's own fees "
+            f"or discounts aren't visible here, and any reprice or upgrade goes through your "
+            f"TA (who may charge their own change fee).{RESET}")
+
+    quotes_nrd = any(r.get('refundability') == "DEPOSIT_NOT_REFUNDABLE" for r in table_rows)
+    if deposit_type == "NRD" and not is_casino:
+        if url_params.is_royal and currency == "USD":
+            log(f"\t  {YELLOW}NRD fare notes:{RESET} category changes on this same ship/sail date "
+                f"(including downgrades) have no change fee and keep your deposit. Reprices must "
+                f"stay on a non-refundable fare{' (the prices above are NRD rates)' if quotes_nrd else ''}. "
+                f"Changing ship or sail date costs $100/person; cancelling forfeits the deposit.")
+        else:
+            log(f"\t  {YELLOW}NRD fare notes:{RESET} category changes on the same ship/sail date "
+                f"generally keep your deposit, and reprices must stay on a non-refundable fare; "
+                f"ship/date changes and cancellations carry the penalties in your booking terms.")
+    elif deposit_type == "REFUNDABLE" and quotes_nrd and not is_casino:
+        which = "rows tagged [NRD rate] are" if tag_rows else "the prices above are"
+        log(f"\t  Note: {which} non-refundable-deposit prices - matching one "
+            f"may require switching this refundable booking to NRD (allowed before final "
+            f"payment; the switch is one-way).")
+    if deposit_type == "NRD" and all_mismatch and not is_casino:
+        log("\t  Note: the prices above are refundable-deposit rates - an NRD booking can only "
+            "reprice onto a non-refundable fare, so these may not be available as priced.")
+    if threshold is not None and booked_rank is None:
+        log(f"\t  {YELLOW}Booked class unknown - upgrade alerts skipped for this booking.{RESET}")
+
+    if hits:
+        basis_tag = (f"category difference vs {rate_anchor_label}" if prefer_rate
+                     else f"vs {basis_label}")
+        body = (f"{len(hits)} upgrade option(s) at or below {sym}{threshold:,.2f} for "
+                f"{pre_string} #{reservation_id or '?'} ({basis_tag}):\n"
+                + "\n".join(f"- {h}" for h in hits))
+        if any("[refundable rate]" in h for h in hits):
+            body += ("\n[refundable rate] = quoted on a refundable-deposit fare; your NRD booking can "
+                     "only move onto a non-refundable fare, so it may not be available as priced.")
+        if any("[NRD rate]" in h for h in hits):
+            body += ("\n[NRD rate] = quoted on a non-refundable-deposit fare; taking it means "
+                     "switching this refundable booking to NRD (allowed before final payment, one-way).")
+        log(f"\t{RED}{body}{RESET}")
+        if apobj is not None:
+            apobj.notify(body=body, title='Cruise Upgrade Opportunity', body_format=NotifyFormat.TEXT)
 
 
 class CabinAvailabilityError(Exception):
@@ -2367,10 +2926,23 @@ def get_cruise_price(account_info: AccountInfo,
 
     # Identity is based on normalized search criteria, before any coupon fallback.
     cabin_scope = json.dumps(asdict(url_params), sort_keys=True) if notification_mode == "availability" else None
-
-    # Primary API pricing check pass
+    # Primary API pricing check pass. checkForUpgrades additionally collects
+    # every subtype row from the same availability sweep (no extra requests);
+    # booked cruises only - upgrade tables mean nothing for a watchlist URL.
+    collect_upgrades = bool(automatic_URL and config.check_for_upgrades is True)
+    if collect_upgrades:
+        # optional scoping: upgradeReservations limits the upgrade check (and
+        # its extra family request) to the listed bookings only
+        _upgrade_scope = (config.upgrade_reservations
+                          if isinstance(config.upgrade_reservations, (list, set, tuple)) else [])
+        if _upgrade_scope:
+            if str(reservation_id) in [str(r) for r in _upgrade_scope]:
+                _UPGRADE_SCOPE_SEEN.add(str(reservation_id))
+            else:
+                collect_upgrades = False
     api_options = {"inventory_mode": True} if not automatic_URL and notification_mode == "availability" else {}
-    results = get_room_price_via_API(url_params, room_number, **api_options)
+    results = get_room_price_via_API(url_params, room_number, collect_all=collect_upgrades,
+                                     **api_options)
     room_available = results.get("room_available")
 
     # Defensive Fallback: If a coupon code explicitly bricks availability, retry without it
@@ -2378,7 +2950,10 @@ def get_cruise_price(account_info: AccountInfo,
     if not fallback_available and url_params.coupon_code is not None:
         log(f"Coupon Code {url_params.coupon_code} may have failed, trying without using it")
         url_params.coupon_code = None
-        results = get_room_price_via_API(url_params, room_number, **api_options)
+        results = get_room_price_via_API(url_params, room_number, collect_all=collect_upgrades,
+                                         **api_options)
+        # the upgrade report must not re-try a coupon the main flow just proved fails
+        results['coupon_rejected'] = True
         room_available = results.get("room_available")
 
     if not automatic_URL and notification_mode == "availability":
@@ -2499,6 +3074,10 @@ def get_cruise_price(account_info: AccountInfo,
             log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
             history.record_cabin_fare(**history_common, current_price=None,
                                               status="no_price_data", rebook_decision=None, notified=False)
+            # the sweep still succeeded - the collected rows are worth showing
+            _maybe_report_upgrades(url_params, results, paid_price_struct, pre_string,
+                                   reservation_id, apobj,
+                                   past_final_payment=(date.today() > final_payment_date))
             return
 
         # The keys always exist (so .get defaults never apply) but their values
@@ -2508,6 +3087,10 @@ def get_cruise_price(account_info: AccountInfo,
             log(f"{YELLOW}{pre_string}: No fare pricing returned; cannot compare price{RESET}")
             history.record_cabin_fare(**history_common, current_price=None,
                                               status="no_price_data", rebook_decision=None, notified=False)
+            # the sweep still succeeded - the collected rows are worth showing
+            _maybe_report_upgrades(url_params, results, paid_price_struct, pre_string,
+                                   reservation_id, apobj,
+                                   past_final_payment=(date.today() > final_payment_date))
             return
         price = fare_struct.get("fare") or 0.0
         grats = fare_struct.get("gratuities") or 0.0
@@ -2594,6 +3177,10 @@ def get_cruise_price(account_info: AccountInfo,
 
         history.record_cabin_fare(**history_common, current_price=None, status="not_for_sale",
                                           rebook_decision=None, notified=(not automatic_URL and apobj is not None))
+        # the booked category is gone, but checkForUpgrades can still show
+        # what IS on sale for this sailing
+        _maybe_report_upgrades(url_params, results, paid_price_struct, pre_string, reservation_id, apobj,
+                               past_final_payment=past_final_payment_date)
         return
 
     obc_value = float(obc or 0.0)
@@ -2604,6 +3191,8 @@ def get_cruise_price(account_info: AccountInfo,
         log(GREEN + f"{pre_string}:" + RESET + f" Current Price {price:.2f} {url_params.currency_code}")
         history.record_cabin_fare(**history_common, current_price=price, status="priced",
                                           rebook_decision=None, notified=False)
+        _maybe_report_upgrades(url_params, results, paid_price_struct, pre_string, reservation_id, apobj,
+                               past_final_payment=past_final_payment_date)
         return
 
     # rebook_decision / notified are computed inline below, then recorded once
@@ -2687,17 +3276,25 @@ def get_cruise_price(account_info: AccountInfo,
     history.record_cabin_fare(**history_common, current_price=price, status="priced",
                                       rebook_decision=rebook_decision, notified=notified)
 
+    _maybe_report_upgrades(url_params, results, paid_price_struct, pre_string, reservation_id, apobj,
+                               past_final_payment=past_final_payment_date)
+
 
 def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[str] = None,
+                           collect_all: bool = False,
                            *, inventory_mode: bool = False) -> Dict[str, Any]:
     # Check room availability against the downstream checker
-    room_available, available_rooms = check_if_room_is_available(url_params, inventory_mode=inventory_mode)
+    room_available, available_rooms = check_if_room_is_available(
+        url_params, collect_all=collect_all, inventory_mode=inventory_mode)
     results = {
         'sailing_nights': 0,
         'room_available': room_available,
         # Keep room-selection evidence separate from checkout price results.
         'inventory_available': room_available
     }
+    if collect_all:
+        # every subtype row with its lead-in total, for the checkForUpgrades table
+        results['upgrade_rows'] = available_rooms
 
     # A matching family with uncertain category inventory can still be priced by
     # checkout. Preserve the legacy early return for ordinary price checks.
@@ -2826,7 +3423,11 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
     return results
 
 
-def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool = False) -> tuple[Optional[bool], List[Dict[str, Any]]]:
+def check_if_room_is_available(params: CruiseURLParams,
+                               collect_all: bool = False,
+                               _send_residency: bool = True,
+                               *, inventory_mode: bool = False
+                               ) -> tuple[Optional[bool], List[Dict[str, Any]]]:
     """
     RSC Scraper Engine wrapper that verifies physical cabin availability on active voyages.
 
@@ -2867,6 +3468,16 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
         'rgVisited': 'true',
         'r0C': 'y',
     }
+    sent_residency = bool(collect_all and params.state and _send_residency)
+    if sent_residency:
+        # checkForUpgrades only: the checkout POST and the booked-family request
+        # both send the residency state, but this sweep never did - so every
+        # OTHER family's row was priced without the residency discount while the
+        # booked category was priced with it, overstating each cross-family
+        # delta by that discount. r0k is the funnel's own residency parameter
+        # (the same one _build_checkout_url emits). Sent only under collect_all
+        # so the core price check's request stays byte-identical.
+        request_params['r0k'] = params.state
 
     api_URL = f'https://www.{params.url_brand}.com/room-selection/type-and-subtype'
 
@@ -2880,7 +3491,18 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
         use_impersonation=False
     )
 
+    # Under collect_all this sweep also gates the MAIN price check, and r0k on
+    # this endpoint is an addition of ours: if the request fails or comes back
+    # without inventory, retry once without it (same defensive shape as the
+    # coupon retry) rather than let an optional feature break core pricing.
+    def _retry_without_residency() -> tuple[Optional[bool], List[Dict[str, Any]]]:
+        log("\tResidency-priced availability request returned nothing; retrying without it")
+        return check_if_room_is_available(params, collect_all=collect_all,
+                                          _send_residency=False, inventory_mode=inventory_mode)
+
     if response is None:
+        if sent_residency:
+            return _retry_without_residency()
         log("Unable to check room availability with server")
         # None = unknown, not confirmed unavailable.
         return None, []
@@ -2892,6 +3514,8 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
     rooms = _extract_json_array(response.text, "rooms")
 
     if not rooms:
+        if sent_residency:
+            return _retry_without_residency()
         # Missing/malformed is unknown; an explicit empty array confirms closure.
         return (None if inventory_mode and rooms is None else False), available_rooms
     if inventory_mode:
@@ -2920,7 +3544,8 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
             or (params.stateroom_category_code and params.stateroom_category_code.endswith("GTY"))
     )
 
-    if is_gty and stateroom_types:
+    gty_bypass = bool(is_gty and stateroom_types)
+    if gty_bypass and not collect_all:
         return True, []
 
     # Royal has begun renaming funnel subtype codes so they no longer equal the
@@ -2930,6 +3555,8 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
     # below even though its family is on sale - collect each row's lead-in
     # category so a letters-based fallback can resolve the renamed code.
     letter_matched_subtype = None
+    exact_match_found = False
+    exact_match_available: Optional[bool] = True
     incomplete_inventory = False
 
     def subtype_available(subtype):
@@ -2945,6 +3572,14 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
     def _code_letters(code: Optional[str]) -> str:
         return re.sub(r"[^A-Za-z]", "", code or "").upper()
 
+    def sweep_already_answered() -> bool:
+        # collect_all keeps sweeping past the point where the plain gate has
+        # already returned True (booked subtype matched, or the GTY bypass).
+        # From there every row is optional: a malformed one is skipped, so
+        # turning the upgrade table on can never fail a check that passes with
+        # it off. Before that point rows behave exactly as they always have.
+        return collect_all and (exact_match_found or gty_bypass)
+
     wanted_letters = _code_letters(params.stateroom_subtype) or _code_letters(params.stateroom_category_code)
 
     for stateroom_type in stateroom_types:
@@ -2952,64 +3587,98 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
                 or not isinstance(stateroom_type.get("stateroomSubtypes"), list)):
             incomplete_inventory = True
             continue
-        stateroom_subtypes = stateroom_type.get("stateroomSubtypes", [])
+        try:
+            stateroom_subtypes = stateroom_type.get("stateroomSubtypes", [])
+            if collect_all and not isinstance(stateroom_subtypes, list):
+                raise TypeError("stateroomSubtypes is not a list")
+        except (AttributeError, TypeError):
+            if not sweep_already_answered():
+                raise
+            continue
         for stateroom_subtype in stateroom_subtypes:
             if inventory_mode and (not isinstance(stateroom_subtype, dict)
                     or not isinstance(stateroom_subtype.get("code"), str)
                     or not stateroom_subtype["code"].strip()):
                 incomplete_inventory = True
                 continue
-            cur_subtype_code = stateroom_subtype.get("code")
-            cur_category_code = stateroom_subtype.get("categoryCode")
+            try:
+                cur_subtype_code = stateroom_subtype.get("code")
+                cur_category_code = stateroom_subtype.get("categoryCode")
 
-            # --- INVENTORY GATE SHORT-CIRCUIT ---
-            # If our target cabin style is found, return True immediately. An alternative
-            # room array [] isn't needed because the caller function will proceed to execute
-            # a heavy POST request for this specific room's pricing.
-            #
-            # Gate on the subtype `code` alone (not categoryCode). Royal's room-selection
-            # page now returns a single lead-in row per subtype; that row's `code` still
-            # equals the booking's stateroomSubtype, but its `categoryCode` is only the
-            # subtype's lead-in category - no longer the exhaustive per-category list. So it
-            # stops equalling the booked stateroomCategoryCode for any cabin booked above the
-            # lead-in, which made every such booking read as "Not For Sale". The precise
-            # price is unaffected: the checkout POST below still uses the booked category.
-            if cur_subtype_code == params.stateroom_subtype:
-                return subtype_available(stateroom_subtype), []
+                # --- INVENTORY GATE SHORT-CIRCUIT ---
+                # If our target cabin style is found, return True immediately. An alternative
+                # room array [] isn't needed because the caller function will proceed to execute
+                # a heavy POST request for this specific room's pricing.
+                #
+                # Gate on the subtype `code` alone (not categoryCode). Royal's room-selection
+                # page now returns a single lead-in row per subtype; that row's `code` still
+                # equals the booking's stateroomSubtype, but its `categoryCode` is only the
+                # subtype's lead-in category - no longer the exhaustive per-category list. So it
+                # stops equalling the booked stateroomCategoryCode for any cabin booked above the
+                # lead-in, which made every such booking read as "Not For Sale". The precise
+                # price is unaffected: the checkout POST below still uses the booked category.
+                if cur_subtype_code == params.stateroom_subtype:
+                    if not collect_all:
+                        return subtype_available(stateroom_subtype), []
+                    # collect_all: keep sweeping so the upgrade table sees every
+                    # subtype (including this booked one - its row anchors dl-rate)
+                    exact_match_found = True
+                    exact_match_available = subtype_available(stateroom_subtype)
 
-            # Remember the first non-guarantee subtype whose lead-in category shares
-            # the booking's letters (booked U/2U -> lead-in 4U -> funnel subtype V),
-            # in case the exact-match pass above never fires
-            if (letter_matched_subtype is None and wanted_letters
-                    and not stateroom_subtype.get("guarantee")
-                    and (not inventory_mode or isinstance(cur_category_code, str))
-                    and _code_letters(cur_category_code) == wanted_letters):
-                letter_matched_subtype = stateroom_subtype
+                # Remember the first non-guarantee subtype whose lead-in category shares
+                # the booking's letters (booked U/2U -> lead-in 4U -> funnel subtype V),
+                # in case the exact-match pass above never fires
+                if (letter_matched_subtype is None and wanted_letters
+                        and not stateroom_subtype.get("guarantee")
+                        and (not inventory_mode or isinstance(cur_category_code, str))
+                        and _code_letters(cur_category_code) == wanted_letters):
+                    letter_matched_subtype = stateroom_subtype
 
-            # Defensively extract pricing trees to protect against missing API sub-keys
-            pricing_struct = stateroom_subtype.get("pricing", {})
-            if inventory_mode and not isinstance(pricing_struct, dict):
-                pricing_struct = {}
-            invoice_struct = pricing_struct.get("invoice", {}) if pricing_struct else {}
-            if inventory_mode and not isinstance(invoice_struct, dict):
-                invoice_struct = {}
-            price = invoice_struct.get("total") if invoice_struct else None
+                # Defensively extract pricing trees to protect against missing API sub-keys
+                pricing_struct = stateroom_subtype.get("pricing", {})
+                if inventory_mode and not isinstance(pricing_struct, dict):
+                    pricing_struct = {}
+                invoice_struct = pricing_struct.get("invoice", {}) if pricing_struct else {}
+                if inventory_mode and not isinstance(invoice_struct, dict):
+                    invoice_struct = {}
+                price = invoice_struct.get("total") if invoice_struct else None
 
-            rooms_left = stateroom_subtype.get("roomsLeft")
+                rooms_left = stateroom_subtype.get("roomsLeft")
 
-            # Formulate the alternative room tracking records
-            room_display_name = f"{stateroom_subtype.get('name', '')} {cur_category_code} {cur_subtype_code}".strip()
-            available_rooms.append({
-                "name": room_display_name,
-                "price": price,
-                "rooms_left": rooms_left
-            })
+                # Formulate the alternative room tracking records. The structured
+                # fields beyond name/price/rooms_left feed the checkForUpgrades
+                # table; the legacy alternatives display only reads those three.
+                room_display_name = f"{stateroom_subtype.get('name', '')} {cur_category_code} {cur_subtype_code}".strip()
+                subtype_name = stateroom_subtype.get("name")
+                subtype_name = subtype_name if isinstance(subtype_name, str) else ""
+                available_rooms.append({
+                    "name": room_display_name,
+                    "price": price,
+                    "rooms_left": rooms_left,
+                    "type": stateroom_type.get("code"),
+                    "subtype": cur_subtype_code,
+                    "category": cur_category_code,
+                    "display_name": subtype_name,
+                    "guarantee": bool(stateroom_subtype.get("guarantee")),
+                    "connecting": "connect" in subtype_name.lower(),
+                    "refundability": (pricing_struct.get("refundability")
+                                      if isinstance(pricing_struct, dict) else None),
+                })
+            except (AttributeError, TypeError, ValueError):
+                if not sweep_already_answered():
+                    raise
+                continue                    # optional row: skip it, keep the answer
 
     # Letters fallback: the booked subtype code is not offered under that name,
     # but a subtype whose lead-in category shares its letters is - Royal renamed
     # the code. Adopt the current funnel code so the pricing POST downstream
     # (which sends stateroomSubtypeCode alongside the booked categoryCode)
     # speaks the vocabulary the API expects.
+    if exact_match_found:
+        return exact_match_available, available_rooms
+    if gty_bypass:
+        return True, available_rooms
+
     if letter_matched_subtype is not None:
         available = subtype_available(letter_matched_subtype)
         if available is False:
@@ -3018,7 +3687,7 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
         log(f"\tSubtype code {params.stateroom_subtype} is no longer offered under that name; "
             f"using current code {current_code} for the same category family")
         params.stateroom_subtype = current_code
-        return available, []
+        return available, available_rooms if collect_all else []
 
     # Fall-through state: The loops completed without finding our exact cabin style.
     # The room is sold out, so we return False along with the collected alternative options.
@@ -4140,6 +4809,39 @@ def parse_price_alert_exclusions(raw: Any) -> List[PriceAlertExclusion]:
     return rules
 
 
+def _config_bool(value: Any, default: bool) -> bool:
+    """YAML-tolerant boolean. None (a present-but-null key) -> default, and the
+    STRINGS "false"/"no"/"off" are false - bool("false") is True in Python."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "on", "y", "1")
+    return bool(value)
+
+
+def _config_id_list(value: Any, key: str) -> List[str]:
+    """A reservation id or a list of them, normalized to strings. A bare scalar
+    is one id - iterating the string "1234567" would scope to its characters
+    and silently disable the feature for every booking."""
+    if value is None:
+        return []
+    if isinstance(value, (str, int)) and not isinstance(value, bool):
+        return [str(value).strip()] if str(value).strip() else []
+    if isinstance(value, (list, tuple, set)):
+        return [str(v).strip() for v in value if v is not None and str(v).strip()]
+    raise ValueError(f"{key} must be a reservation id or a list of reservation ids")
+
+
+def _config_amount(value: Any, key: str) -> Optional[float]:
+    """A money threshold; tolerates "$100" / "1,000" as users naturally write them."""
+    if value is None:
+        return None
+    try:
+        return float(str(value).replace("$", "").replace(",", "").strip())
+    except ValueError:
+        raise ValueError(f"{key} must be a number (got {value!r})") from None
+
+
 def load_config_objects(config_path: str) -> CruiseAppConfig:
     """
     Loads, sanitizes, and maps YAML configuration elements into structural dataclass attributes.
@@ -4240,6 +4942,10 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         date_display_format=data.get("dateDisplayFormat", "%x"),
         log_file=data.get("logFile"),
         history_db=data.get("historyDb"),
+        check_for_upgrades=_config_bool(data.get("checkForUpgrades"), False),
+        upgrade_alert_below=_config_amount(data.get("upgradeAlertBelow"), "upgradeAlertBelow"),
+        upgrade_reservations=_config_id_list(data.get("upgradeReservations"), "upgradeReservations"),
+        upgrade_sister_categories=_config_bool(data.get("upgradeSisterCategories"), True),
         cabin_availability_state_file=cabin_state_file,
         output_watch_as_json=data.get("outputWatchAsJson",False),
         output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
@@ -4557,6 +5263,15 @@ def main() -> None:
 
             finally:
                 anon_session.close()
+
+        # A scoped id that matched no booking is almost always a typo - say so,
+        # since the symptom is otherwise just "no upgrade table appeared"
+        _scope = config.upgrade_reservations if isinstance(config.upgrade_reservations, (list, set, tuple)) else []
+        if config.check_for_upgrades is True and _scope:
+            _unmatched = [str(r) for r in _scope if str(r) not in _UPGRADE_SCOPE_SEEN]
+            if _unmatched:
+                log(YELLOW + f"upgradeReservations: no booking matched {', '.join(_unmatched)} "
+                             f"- check the reservation id(s)" + RESET)
 
         # Summary table of upcoming check-in and final-payment dates for booked sailings
         payment_tracker.print_table()

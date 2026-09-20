@@ -45,5 +45,9 @@ showPromos: true # Optional, show active sitewide promotions for each sailing
 dateDisplayFormat: "%m/%d/%Y" # Optional, only needed if you want to override the system's default date display formatting
 logFile: "output.txt"
 # historyDb: "price_history.db" # Optional (off by default). Uncomment to append every price check to a local SQLite file for history/trends
+# checkForUpgrades: true # Optional (off by default). For each booked cruise, also list what the other staterooms cost right now vs what you paid (casino bookings: vs your category's current rate)
+# upgradeAlertBelow: 100 # Optional, needs checkForUpgrades. Send an Apprise alert when an upgrade costs this much or less (on the same basis the upgrade table shows)
+# upgradeReservations: ["1234567"] # Optional, needs checkForUpgrades. Only run the upgrade check for these reservation IDs (absent/empty = every booking)
+# upgradeSisterCategories: false # Optional, needs checkForUpgrades. Set false to skip the per-category prices inside your booked family (one fewer API request per booking; the table then shows each family's cheapest tier only)
 # outputWatchAsJson: true # Optional (off by default). Uncomment to write the watchlist price results to a JSON file for external consumption
 # outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file
