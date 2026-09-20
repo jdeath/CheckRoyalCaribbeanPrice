@@ -1,8 +1,6 @@
 from __future__ import annotations
 import argparse
 import base64
-import hashlib
-import math
 import json
 import locale
 import logging
@@ -2368,7 +2366,7 @@ def get_cruise_price(account_info: AccountInfo,
     room_number = None
 
     # Identity is based on normalized search criteria, before any coupon fallback.
-    cabin_scope = hashlib.sha256(json.dumps(asdict(url_params), sort_keys=True).encode()).hexdigest() if notification_mode == "availability" else None
+    cabin_scope = json.dumps(asdict(url_params), sort_keys=True) if notification_mode == "availability" else None
 
     # Primary API pricing check pass
     api_options = {"inventory_mode": True} if not automatic_URL and notification_mode == "availability" else {}
@@ -2822,7 +2820,7 @@ def get_room_price_via_API(url_params: CruiseURLParams, room_number: Optional[st
 
     if inventory_mode:
         fare = (results.get('base_fare') or {}).get('fare')
-        if type(fare) in (int, float) and math.isfinite(fare) and fare > 0:
+        if type(fare) in (int, float) and 0 < fare < float("inf"):
             results['inventory_available'] = True
     results['available_rooms'] = available_rooms
     return results
@@ -2940,7 +2938,7 @@ def check_if_room_is_available(params: CruiseURLParams, *, inventory_mode: bool 
         if params.stateroom_category_code and subtype.get("categoryCode") != params.stateroom_category_code:
             return None  # Lead-in stock does not establish a sister category's stock.
         stock = subtype.get("roomsLeft")
-        if type(stock) not in (int, float) or not math.isfinite(stock) or stock < 0:
+        if type(stock) not in (int, float) or not 0 <= stock < float("inf"):
             return None
         return stock > 0
 

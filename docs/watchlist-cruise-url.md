@@ -52,8 +52,9 @@ writable persistent volume in Docker. Outside Docker the default state path is
 `data/cabin-availability.json`, relative to the working directory. This separate
 JSON file holds only the latest state per search, not a report history. The YAML
 configuration is never rewritten. Changing search criteria creates a new watch
-state. Each entry has this shape (the actual key is a hash of the normalized search
-criteria, including overrides, so different searches using one URL stay separate):
+state. Each entry has this shape (the actual key is the normalized search criteria
+serialized as a JSON string, including overrides, so different searches using one
+URL stay separate):
 
 ```json
 {
@@ -71,8 +72,13 @@ result, or delete that entry to reset it. Delete the file (or replace its conten
 with `{}`) to reset all watches. Keep Boolean values as `true`/`false`, not strings.
 `available` records the last confirmed result; `notified` records successful
 delivery for the current opening. An unavailable watch must have `notified: false`.
-Protect this file like your configuration: checkout URLs may contain loyalty
-numbers. Do not commit or publish it.
+Protect this file like your configuration: checkout URLs and search keys may
+contain loyalty numbers. Do not commit or publish it.
+
+Earlier JSON revisions of this PR used hashed search keys. Those entries are not
+automatically migrated to the readable keys, so each available watch may send one
+new initial alert after upgrading. While checks are stopped, old hashed entries
+can be removed; subsequent runs use the readable keys.
 
 Writes replace the file atomically, and a sibling `.lock` file prevents overlapping
 processes from reading/notifying/updating the same state concurrently. Leave that

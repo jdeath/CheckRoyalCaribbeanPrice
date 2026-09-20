@@ -115,7 +115,8 @@ def test_unreadable_inventory_is_unknown(cabin, monkeypatch, text):
 
 
 @pytest.mark.parametrize('count, expected', [(0,False),(2,True),('bad',None),(-1,None),
-                                          (True,None),(float('nan'),None),(float('inf'),None)])
+                                          (True,None),(float('nan'),None),(float('inf'),None),
+                                          (float('-inf'),None),(0.5,True)])
 def test_explicit_inventory_counts_are_respected(cabin, monkeypatch, count, expected):
     text = '0:' + json.dumps({'rooms':[{'options':{'stateroomTypes':[{'stateroomSubtypes':[
         {'code':'IL','categoryCode':'IL','roomsLeft':count}]}]}}]})
@@ -163,6 +164,28 @@ def test_distinct_searches_keep_separate_state(cabin, monkeypatch):
     monkeypatch.setattr(c, 'get_room_price_via_API', Mock(return_value={'room_available': True}))
     for url in (URL, URL.replace('2099-03-28', '2099-04-04'), URL):
         c.get_cruise_price(account, {'url': url}, ships, automatic_URL=False, notification_mode='availability')
+    assert config.apobj.notify.call_count == 2
+
+
+def test_readable_keys_preserve_overrides_before_api_mutations(cabin, monkeypatch):
+    _, config, ships = cabin
+    account = c.AccountInfo('example@example.invalid', 'fake', access=c.APIAccess(token=None, id=None, session=Mock()))
+
+    def price(params, *args, **kwargs):
+        params.stateroom_subtype = 'NEW'
+        return {'room_available': params.coupon_code is None}
+
+    monkeypatch.setattr(c, 'get_room_price_via_API', price)
+    for category in ('1IL', '2IL', '1IL'):
+        c.get_cruise_price(account, {'url': URL}, ships, automatic_URL=False,
+                          paid_price_struct={'categoryOverride': category, 'couponCode': 'EXAMPLE'},
+                          notification_mode='availability')
+    state = c.read_cabin_state(Path(config.cabin_availability_state_file))
+    keys = [json.loads(key) for key in state]
+    assert {key['stateroom_category_code'] for key in keys} == {'1IL', '2IL'}
+    assert all(key['stateroom_subtype'] == key['stateroom_category_code'] for key in keys)
+    assert all(key['coupon_code'] == 'EXAMPLE' for key in keys)
+    assert all(row['url'] == URL for row in state.values())
     assert config.apobj.notify.call_count == 2
 
 
@@ -241,6 +264,19 @@ def test_sister_category_stock_requires_checkout_confirmation(cabin, monkeypatch
     result = c.get_room_price_via_API(params, inventory_mode=True)
     assert result['inventory_available'] is (True if priced else None)
     assert [call.kwargs['method'] for call in request.call_args_list] == ['GET', 'POST']
+
+
+@pytest.mark.parametrize('fare, expected', [(0, None), (-1, None), (True, None),
+    ('900', None), (None, None), (float('nan'), None), (float('inf'), None),
+    (float('-inf'), None), (0.01, True), (900, True)])
+def test_only_positive_finite_checkout_fares_confirm_unknown_inventory(cabin, monkeypatch, fare, expected):
+    params, _, _ = cabin
+    monkeypatch.setattr(c, 'check_if_room_is_available', Mock(return_value=(None, [])))
+    checkout = Mock()
+    checkout.json.return_value = {'rooms': [{'baseFare': {'pricing': {'amount': fare}}}]}
+    monkeypatch.setattr(c, '_execute_api_request', Mock(return_value=checkout))
+    result = c.get_room_price_via_API(params, inventory_mode=True)
+    assert result['inventory_available'] is expected
 
 
 @pytest.mark.parametrize('bad_row', [{}, None, {'code': 123}, {'code': ''}])
