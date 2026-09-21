@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse
 import base64
+import hashlib
 import json
 import locale
 import logging
@@ -621,6 +622,7 @@ class CruiseAppConfig:
     upgrade_reservations: List[str] = field(default_factory=list)
     upgrade_sister_categories: bool = True
     cabin_availability_state_file: str = "data/cabin-availability.json"
+    availability: Optional["AvailabilitySettings"] = None
     output_watch_as_json: bool = False
     output_json_watch_file: Optional[str] = "output-json-watch.txt"
     apprise_urls: List[str] = field(default_factory=list)
@@ -1891,7 +1893,7 @@ def get_voyages(
     ship_dictionary: ShipRegistry,
     payment_tracker: Optional[CheckinPaymentTracker] = None,
     collected_watch_rows: Optional[List[Dict[str, Any]]] = None,
-) -> None:
+) -> Optional[List[Dict[str, Any]]]:
     """
     Extracts all current, valid upcoming cruise bookings linked to an active account profile.
 
@@ -2265,6 +2267,8 @@ def get_voyages(
                 )
 
             log(" ")
+
+    return bookings
 
 
 def get_dining_and_prices(account_info: AccountInfo, booking: Dict[str, Any]) -> Dict[str, List[Any]]:
@@ -4825,6 +4829,593 @@ def parse_price_alert_exclusions(raw: Any) -> List[PriceAlertExclusion]:
     return rules
 
 
+
+# Reservation availability (opt-in)
+##################################
+@dataclass(frozen=True)
+class AvailabilityCategory:
+    category: str
+    products: Optional[Tuple[str, ...]] = None
+
+
+@dataclass(frozen=True)
+class AvailabilityReservation:
+    reservation: str
+    categories: Tuple[AvailabilityCategory, ...]
+    notify_on_reopen: bool = False
+
+
+@dataclass(frozen=True)
+class AvailabilitySettings:
+    reservations: Tuple[AvailabilityReservation, ...]
+    dry_run: bool = True
+    state_file: str = "data/reservation-availability.json"
+
+
+class AvailabilityUnknown(ValueError):
+    """Incomplete/failed evidence must never be converted into unavailable."""
+
+
+@dataclass(frozen=True)
+class AvailabilityResult:
+    product: str
+    title: str
+    state: str  # available, unavailable, unknown
+    reason: str
+    times: Tuple[str, ...] = ()
+
+
+def availability_category_label(category: str) -> str:
+    return {"dining": "Dining reservations", "show": "Shows"}.get(category, category)
+
+
+def availability_sailing_label(booking: dict) -> str:
+    """Presentation label for a monitored sailing without requiring another API call."""
+    sailing = availability_date(booking["sailDate"])
+    ship_name = booking.get("shipName")
+    if not isinstance(ship_name, str) or not ship_name.strip():
+        ship_name = str(booking.get("shipCode") or "Unknown ship")
+    return f"{config.format_date(sailing.strftime('%Y%m%d'))} {ship_name.strip()}"
+
+
+@contextmanager
+def suppress_availability_notification_info():
+    """Hide Apprise transport-success chatter while preserving warnings/errors."""
+    previous = logging.root.manager.disable
+    logging.disable(max(previous, logging.INFO))
+    try:
+        yield
+    finally:
+        logging.disable(previous)
+
+
+def parse_availability_config(raw: Any) -> Optional[AvailabilitySettings]:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("availability must be a mapping")
+
+    def fail(location: str, message: str):
+        raise ValueError(f"{location}: {message}")
+
+    def identifier(value: Any, location: str, field_name: str) -> str:
+        if isinstance(value, bool) or not isinstance(value, (str, int)) or not str(value).strip():
+            fail(location, f"{field_name} must be a nonempty identifier")
+        return str(value).strip()
+
+    def keys(obj: dict, allowed: tuple, location: str):
+        unknown = set(obj) - set(allowed)
+        if unknown:
+            fail(location, "unrecognized configuration key(s): " + ", ".join(sorted(map(str, unknown))))
+
+    keys(raw, ("reservations", "dryRun", "stateFile"), "availability")
+    reservations = raw.get("reservations")
+    if not isinstance(reservations, list) or not reservations:
+        raise ValueError("availability.reservations must be a nonempty list")
+
+    parsed_reservations = []
+    seen_reservations = set()
+    for index, item in enumerate(reservations):
+        location = f"availability.reservations[{index}]"
+        if not isinstance(item, dict):
+            fail(location, "reservation entry must be a mapping")
+        keys(item, ("reservation", "dining", "shows", "notifyOnReopen"), location)
+        reservation = identifier(item.get("reservation"), location, "reservation")
+        if reservation in seen_reservations:
+            fail(location, "duplicate reservation; reservation IDs must be unique")
+        seen_reservations.add(reservation)
+
+        categories = []
+        for config_key, category in (("dining", "dining"), ("shows", "show")):
+            value = item.get(config_key, False)
+            if value is False:
+                continue
+            if value is True:
+                categories.append(AvailabilityCategory(category))
+                continue
+            nested = f"{location}.{config_key}"
+            if not isinstance(value, dict):
+                fail(location, f"{config_key} must be true, false, or a mapping")
+            keys(value, ("products",), nested)
+            products = value.get("products")
+            if not isinstance(products, list) or not products:
+                fail(nested, "products must be a nonempty list")
+            normalized = tuple(identifier(product, nested, "product") for product in products)
+            if len(set(normalized)) != len(normalized):
+                fail(nested, "products must not contain duplicates")
+            categories.append(AvailabilityCategory(category, normalized))
+
+        if not categories:
+            fail(location, "at least one of dining or shows must be enabled")
+
+        notify_on_reopen = item.get("notifyOnReopen", False)
+        if not isinstance(notify_on_reopen, bool):
+            fail(location, "notifyOnReopen must be true or false")
+        parsed_reservations.append(
+            AvailabilityReservation(reservation, tuple(categories), notify_on_reopen))
+
+    dry_run = raw.get("dryRun", True)
+    if not isinstance(dry_run, bool):
+        raise ValueError("availability: dryRun must be true or false")
+    state = raw.get("stateFile", "data/reservation-availability.json")
+    if not isinstance(state, str) or not state.strip() or state == ":memory:":
+        raise ValueError("availability.stateFile must name a persistent file")
+    return AvailabilitySettings(tuple(parsed_reservations), dry_run, state)
+
+
+_AVAILABILITY_PRODUCTS_QUERY = """
+query WebProductsByCategory($category: String!, $passengerId: String,
+  $shipCode: ShipCodeScalar!, $sailDate: LocalDateScalar!, $reservationId: String,
+  $pageSize: Long, $currentPage: Long, $currencyCode: String!) {
+  products(category: $category, guestTypes: [ADULT], passengerId: $passengerId,
+    shipCode: $shipCode, sailDate: $sailDate, reservationId: $reservationId,
+    pageSize: $pageSize, currentPage: $currentPage,
+    filter: {includeVariantProducts: false}, currencyIso: $currencyCode) {
+    __typename
+    ... on CommerceProductResultSuccess {
+      commerceProducts { id title type { id } productStatus }
+      pageInfo { totalResults totalPages }
+    }
+    ... on CommerceProductExceptions { exceptions { __typename } }
+  }
+}
+"""
+
+
+def availability_json(account: AccountInfo, method: str, url: str, **kwargs) -> dict:
+    """Reuse existing authentication/retries; never log raw payloads or tokens."""
+    response = _execute_api_request(account, method, url, **kwargs)
+    if response is None:
+        raise AvailabilityUnknown("request failed; previous state preserved")
+    if not 200 <= response.status_code < 300:
+        raise AvailabilityUnknown(f"Royal API returned HTTP {response.status_code}")
+    try:
+        data = response.json()
+    except (ValueError, TypeError):
+        raise AvailabilityUnknown("response is not JSON") from None
+    if (not isinstance(data, dict) or data.get("errors") or data.get("error") or
+            ("status" in data and data["status"] != 200)):
+        raise AvailabilityUnknown("API returned an error")
+    return data
+
+
+def availability_date(value: Any) -> date:
+    try:
+        return datetime.strptime(str(value).replace("-", ""), "%Y%m%d").date()
+    except ValueError:
+        raise AvailabilityUnknown("invalid sailing date") from None
+
+
+def availability_products(account: AccountInfo, booking: dict, category: str) -> list:
+    products = []
+    seen = set()
+    total_pages = None
+    total_results = None
+    for page in range(100):
+        variables = {"category": category, "passengerId": str(booking["passengerId"]),
+                     "shipCode": booking["shipCode"],
+                     "sailDate": availability_date(booking["sailDate"]).isoformat(),
+                     "reservationId": str(booking["bookingId"]), "pageSize": 12,
+                     "currentPage": page, "currencyCode": booking.get("bookingCurrency") or "USD"}
+        data = availability_json(account, "POST", "https://aws-prd.api.rccl.com/en/royal/web/graphql",
+                                 json_data={"operationName": "WebProductsByCategory",
+                                            "variables": variables, "query": _AVAILABILITY_PRODUCTS_QUERY})
+        result = (data.get("data") or {}).get("products")
+        if not isinstance(result, dict):
+            raise AvailabilityUnknown("missing catalog result")
+        if result.get("__typename") == "CommerceProductExceptions":
+            exceptions = result.get("exceptions")
+            if page == 0 and exceptions and all(isinstance(e, dict) and
+                    e.get("__typename") == "CommerceProductNotFound" for e in exceptions):
+                return []
+            raise AvailabilityUnknown("catalog exception or incomplete pagination")
+        if result.get("__typename") != "CommerceProductResultSuccess":
+            raise AvailabilityUnknown("unrecognized catalog result")
+        info = result.get("pageInfo") or {}
+        pages, count = info.get("totalPages"), info.get("totalResults")
+        if type(pages) is not int or type(count) is not int or not 0 <= pages <= 100 or count < 0:
+            raise AvailabilityUnknown("invalid catalog pagination")
+        if total_pages is not None and (pages != total_pages or count != total_results):
+            raise AvailabilityUnknown("catalog changed during pagination")
+        total_pages, total_results = pages, count
+        entries = result.get("commerceProducts")
+        if not isinstance(entries, list):
+            raise AvailabilityUnknown("missing catalog products")
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not entry["id"]:
+                raise AvailabilityUnknown("invalid catalog product")
+            if entry["id"] in seen:
+                raise AvailabilityUnknown("duplicate catalog page or product")
+            seen.add(entry["id"])
+            products.append(entry)
+        if page + 1 >= pages:
+            if len(products) != count:
+                raise AvailabilityUnknown("incomplete catalog")
+            return products
+        if not entries:
+            raise AvailabilityUnknown("empty intermediate catalog page")
+    raise AvailabilityUnknown("catalog page limit reached")
+
+
+def availability_party(booking: dict) -> Tuple[Tuple[str, str], ...]:
+    guests = booking.get("passengersInStateroom")
+    if not isinstance(guests, list) or not guests:
+        raise AvailabilityUnknown("booking has no guests")
+    party = []
+    for guest in guests:
+        if not isinstance(guest, dict) or not guest.get("passengerId"):
+            raise AvailabilityUnknown("booking guest ID missing")
+        party.append((str(guest["passengerId"]), str(booking["bookingId"])))
+    if len({g[0] for g in party}) != len(party):
+        raise AvailabilityUnknown("duplicate booking guest IDs")
+    return tuple(sorted(party))
+
+
+def availability_eligibility(account: AccountInfo, booking: dict, category: str,
+                            product: str, party: tuple) -> dict:
+    start = availability_date(booking["sailDate"])
+    try:
+        nights = int(booking["numberOfNights"])
+        if not 0 < nights <= 365:
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        raise AvailabilityUnknown("booking duration missing or invalid") from None
+    body = {"brandCode": "R", "categoryId": "pt_" + category,
+            "guests": [{"id": g, "reservationId": r} for g, r in party],
+            "productCode": product, "reservationId": str(booking["bookingId"]),
+            "shipCode": booking["shipCode"], "channel": "WEB",
+            "startDate": start.strftime("%Y%m%d"), "passengerId": str(booking["passengerId"]),
+            "endDate": (start + timedelta(days=nights)).strftime("%Y%m%d"),
+            "email": account.username, "cartId": ""}
+    data = availability_json(account, "POST",
+        "https://aws-prd.api.rccl.com/en/royal/web/commerce-api/eligibility/v1/eligibility",
+        json_data=body)
+    payload = data.get("payload")
+    if isinstance(payload, dict) and isinstance(payload.get("offerings"), list):
+        for offering in payload["offerings"]:
+            if not isinstance(offering, dict):
+                raise AvailabilityUnknown("malformed offering")
+            try:
+                offering_date = datetime.fromisoformat(offering["dateTime"]).date()
+            except (KeyError, TypeError, ValueError):
+                raise AvailabilityUnknown("invalid offering date") from None
+            if not start <= offering_date < start + timedelta(days=nights):
+                raise AvailabilityUnknown("offering outside requested sailing")
+    return data
+
+
+def evaluate_availability(data: dict, category: str, product: str,
+                          title: str) -> AvailabilityResult:
+    try:
+        return _evaluate_availability(data, category, product, title)
+    except (KeyError, TypeError, AttributeError, ValueError):
+        return AvailabilityResult(product, title, "unknown", "malformed eligibility fields")
+
+
+def _evaluate_availability(data: dict, category: str, product: str,
+                           title: str) -> AvailabilityResult:
+    """Interpret captured fields, preserving unknown instead of inventing semantics.
+
+    Measures offering inventory independently of existing bookings, conflicts, and
+    the offering's active flag. This does not guarantee checkout or a table for
+    the full party.
+    """
+    def result(state, reason, times=()):
+        return AvailabilityResult(product, title, state, reason, tuple(times))
+
+    p = data.get("payload") if isinstance(data, dict) else None
+    if (not isinstance(p, dict) or data.get("status") != 200 or data.get("error") or
+            data.get("warnings") or p.get("productCode") != product or
+            p.get("categoryId") != "pt_" + category):
+        return result("unknown", "invalid or mismatched eligibility response")
+    offerings = p.get("offerings")
+    if not isinstance(offerings, list):
+        return result("unknown", "missing offerings")
+    if not offerings:
+        return result("unavailable", "no offerings returned")
+    available = []
+    uncertain = False
+    seen = set()
+    for offering in offerings:
+        if (not isinstance(offering, dict) or not isinstance(offering.get("id"), str)
+                or not offering["id"] or offering["id"] in seen):
+            return result("unknown", "invalid or duplicate offering")
+        seen.add(offering["id"])
+        stamp = offering.get("dateTime")
+        try:
+            datetime.fromisoformat(stamp)
+        except (TypeError, ValueError):
+            uncertain = True
+            continue
+        stock_status = offering.get("stockLevelStatus")
+        stock = offering.get("stockLevel")
+        if stock_status in ("outOfStock", "OUT_OF_STOCK") and type(stock) in (int, float) and stock == 0:
+            continue
+        if stock_status not in ("inStock", "IN_STOCK") or type(stock) not in (int, float) or not 0 <= stock <= 9999:
+            uncertain = True
+            continue
+        if stock == 0:
+            continue
+        available.append(stamp)
+    if available:
+        return result("available", "offering inventory reported", sorted(set(available)))
+    if uncertain:
+        return result("unknown", "unrecognized inventory or eligibility fields")
+    return result("unavailable", "no qualifying offerings")
+
+
+def availability_scope(account: AccountInfo, booking: dict, category: str) -> str:
+    # Keep account and reservation identifiers out of the persisted context key.
+    values = [account.username.lower(), booking["shipCode"], availability_date(booking["sailDate"]).isoformat(),
+              str(booking["bookingId"]), category]
+    return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+
+
+def availability_time_lines(times: tuple) -> list[str]:
+    """Group Royal's wall-clock times by date, using the existing date preference."""
+    by_date = {}
+    for stamp in times:
+        when = datetime.fromisoformat(stamp)
+        by_date.setdefault(when.date(), []).append(when.strftime("%H:%M"))
+    return [f"{config.format_date(day.strftime('%Y%m%d'))}: {', '.join(values)}"
+            for day, values in by_date.items()]
+
+
+def read_reservation_state(path: Path) -> dict:
+    """Only a missing file starts fresh; invalid state never resets alerts."""
+    invalid = ("Invalid reservation availability JSON state; check availability.stateFile. "
+               "Legacy watch-scoped state is not compatible with reservation/category scopes; "
+               "delete the old reservation state file before the first run of this build.")
+    try:
+        with path.open(encoding="utf-8") as stream:
+            state = json.load(stream)
+    except FileNotFoundError:
+        return {"version": 1, "scopes": {}}
+    except ValueError:
+        raise AvailabilityUnknown(invalid) from None
+    if (not isinstance(state, dict) or set(state) != {"version", "scopes"}
+            or type(state["version"]) is not int or state["version"] != 1
+            or not isinstance(state["scopes"], dict)):
+        raise AvailabilityUnknown(invalid)
+    for scope, products in state["scopes"].items():
+        if not scope or not isinstance(products, dict):
+            raise AvailabilityUnknown(invalid)
+        for product, row in products.items():
+            if (not product or not isinstance(row, dict)
+                    or set(row) != {"last_state", "notified"}
+                    or row["last_state"] not in ("available", "unavailable")
+                    or type(row["notified"]) is not bool):
+                raise AvailabilityUnknown(invalid)
+    return state
+
+
+def deliver_availability(settings: AvailabilitySettings, account: AccountInfo, booking: dict,
+                         category: AvailabilityCategory, notify_on_reopen: bool, results: list,
+                         *, catalog_products: Optional[Set[str]] = None) -> bool:
+    """One aggregated alert per reservation/category/run.
+
+    A file lock serializes read/notify/replace. Dry runs never create or advance
+    state, so enabling alerts cannot swallow the first notification.
+    """
+    for result in results:
+        color = {"available": GREEN, "unavailable": YELLOW, "unknown": RED}[result.state]
+        log(f"        {color}{result.title}: {result.state.capitalize()}{RESET} ({result.reason})")
+        for line in availability_time_lines(result.times):
+            log(f"          {line}")
+    if settings.dry_run:
+        log(f"        {YELLOW}Availability dry run: no availability notifications or state changes{RESET}")
+        return not any(result.state == "unknown" for result in results)
+
+    path = Path(settings.state_file).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    scope = availability_scope(account, booking, category.category)
+    with cabin_state_lock(path):
+        state = read_reservation_state(path)
+        rows = dict(state["scopes"].get(scope, {}))
+        changed = False
+
+        # Narrowing an existing category to selected products should stop tracking
+        # unrelated products rather than falsely marking them unavailable.
+        if category.products is not None:
+            selected = set(category.products)
+            pruned = {pid: row for pid, row in rows.items() if pid in selected}
+            if pruned != rows:
+                rows = pruned
+                changed = True
+
+        result_products = {result.product for result in results}
+        if catalog_products is not None:
+            missing = [AvailabilityResult(pid, pid, "unavailable", "product no longer listed")
+                       for pid in rows
+                       if pid not in catalog_products and pid not in result_products]
+            for result in missing:
+                log(f"        {YELLOW}{result.title}: Unavailable{RESET} ({result.reason})")
+            results = [*results, *missing]
+
+        candidates = []
+        for result in results:
+            if result.state == "unknown":
+                continue
+            row = rows.get(result.product, {})
+            notified = row.get("notified", False)
+            if result.state == "unavailable" and notify_on_reopen:
+                notified = False
+            if result.state == "available" and not notified:
+                candidates.append(result)
+            updated = {"last_state": result.state, "notified": notified}
+            if row != updated:
+                rows[result.product] = updated
+                changed = True
+
+        sent = True
+        if candidates:
+            label = availability_category_label(category.category)
+            lines = [f"{label}: {booking['shipCode']} sailing {availability_date(booking['sailDate']).isoformat()}"]
+            lines.append("Inventory released; personal conflicts not checked.")
+            for result in candidates:
+                lines.extend(["", f"{result.title}:"])
+                lines.extend(availability_time_lines(result.times[:6]))
+                if len(result.times) > 6:
+                    lines.append(f"(+{len(result.times) - 6} more times in Cruise Planner)")
+            params = urlencode({"bookingId": str(booking["bookingId"]), "shipCode": booking["shipCode"],
+                                "sailDate": availability_date(booking["sailDate"]).strftime("%Y%m%d")})
+            lines.extend(["", "Cruise Planner:",
+                f"https://www.royalcaribbean.com/account/cruise-planner/category/pt_{category.category}?{params}",
+                "Times as returned by Royal. Confirm availability in Cruise Planner."])
+            if category.category == "dining":
+                lines.append("Reported stock does not guarantee a table for the full party.")
+            notifier = notifier_for(account)
+            try:
+                if notifier is None:
+                    sent = False
+                else:
+                    with suppress_availability_notification_info():
+                        sent = notifier.notify(body="\n".join(lines),
+                            title="Cruise Reservation Availability", body_format=NotifyFormat.TEXT) is True
+            except Exception:
+                sent = False
+            if sent:
+                for result in candidates:
+                    rows[result.product]["notified"] = True
+                    changed = True
+            else:
+                reason = ("No notification service configured; configure apprise for availability alerts"
+                          if notifier is None else "Notification not confirmed; will retry on a later check")
+                log_warn(f"        {RED}{reason}{RESET}")
+
+        if changed:
+            state["scopes"][scope] = rows
+            write_cabin_state(path, state)
+    return sent and not any(result.state == "unknown" for result in results)
+
+
+def process_availability_bookings(account: AccountInfo, bookings: list, settings: AvailabilitySettings) -> bool:
+    if not account.is_royal:
+        log_warn("[Availability] Only Royal Caribbean is supported")
+        return False
+    if not isinstance(bookings, list) or any(not isinstance(booking, dict) for booking in bookings):
+        raise AvailabilityUnknown("invalid booking list")
+    if not settings.reservations:
+        return True
+
+    log(f"  {account.friendly_name} for user {account.username}")
+    healthy = True
+    for reservation in settings.reservations:
+        matches = [booking for booking in bookings
+                   if str(booking.get("bookingId")) == reservation.reservation]
+        if not matches:
+            continue
+        try:
+            if len(matches) != 1:
+                raise AvailabilityUnknown("ambiguous booking context")
+            booking = matches[0]
+            if any(not booking.get(key) for key in ("bookingId", "passengerId", "shipCode", "sailDate")):
+                raise AvailabilityUnknown("incomplete booking context")
+            if availability_date(booking["sailDate"]) < date.today():
+                log(f"    {YELLOW}Departed sailing skipped{RESET}")
+                continue
+            party = availability_party(booking)
+            log(" ")
+            log(f"    {BLUE}{availability_sailing_label(booking)}{RESET}")
+        except (AvailabilityUnknown, KeyError, TypeError, AttributeError, ValueError) as exc:
+            reason = str(exc) if isinstance(exc, AvailabilityUnknown) else type(exc).__name__
+            log_warn(f"    {RED}Unknown ({reason}); state not advanced{RESET}")
+            healthy = False
+            continue
+
+        for category in reservation.categories:
+            log(f"      {BLUE}{availability_category_label(category.category)}{RESET}")
+            try:
+                products = availability_products(account, booking, category.category)
+                selected = set(category.products) if category.products is not None else None
+                scoped_products = [product for product in products
+                                   if selected is None or product["id"] in selected]
+                catalog_products = {product["id"] for product in scoped_products}
+                catalog_ids = {product["id"] for product in products}
+                results = []
+                for product in scoped_products:
+                    pid = product["id"]
+                    title = product.get("title") or pid
+                    product_type = product.get("type")
+                    type_id = product_type.get("id") if isinstance(product_type, dict) else None
+                    if not isinstance(type_id, str) or not type_id.startswith("pt_") or len(type_id) <= 3:
+                        results.append(AvailabilityResult(pid, title, "unknown", "missing or malformed product type"))
+                        continue
+                    if type_id != "pt_" + category.category:
+                        if selected is not None:
+                            results.append(AvailabilityResult(
+                                pid, title, "unknown", "unexpected product type: " + type_id))
+                        # Category catalogs can contain packages/activities that
+                        # are intentionally out of scope. Ignore them silently.
+                        continue
+                    try:
+                        payload = availability_eligibility(
+                            account, booking, category.category, pid, party)
+                        results.append(evaluate_availability(
+                            payload, category.category, pid, title))
+                    except (AvailabilityUnknown, KeyError, TypeError, AttributeError, ValueError) as exc:
+                        reason = str(exc) if isinstance(exc, AvailabilityUnknown) else "malformed eligibility response"
+                        results.append(AvailabilityResult(pid, title, "unknown", reason))
+
+                if selected is not None:
+                    for pid in sorted(selected - catalog_ids):
+                        results.append(AvailabilityResult(
+                            pid, pid, "unavailable", "product not listed"))
+
+                if not scoped_products and selected is None:
+                    log(f"        {YELLOW}No {category.category} products listed{RESET}")
+
+                healthy = deliver_availability(
+                    settings, account, booking, category, reservation.notify_on_reopen,
+                    results, catalog_products=catalog_products) and healthy
+            except (AvailabilityUnknown, KeyError, TypeError, AttributeError, ValueError, OSError, ImportError) as exc:
+                if isinstance(exc, AvailabilityUnknown):
+                    reason = str(exc)
+                elif isinstance(exc, (OSError, ImportError)):
+                    reason = ("state storage error (" + type(exc).__name__ +
+                              "); check availability.stateFile and directory permissions or overlapping checks")
+                else:
+                    reason = type(exc).__name__
+                log_warn(f"        {RED}Unknown ({reason}); state not advanced{RESET}")
+                healthy = False
+    return healthy
+
+
+def finish_availability_run(settings: AvailabilitySettings, found_reservations: set, healthy: bool) -> None:
+    """Report missing bookings and incomplete checks after normal price outputs."""
+    missing = sorted({reservation.reservation for reservation in settings.reservations
+                      if reservation.reservation not in found_reservations})
+    if missing:
+        log_warn(f"  {RED}Configured reservations were not found: {', '.join(missing)}{RESET}")
+        healthy = False
+    if not healthy:
+        raise AvailabilityUnknown("One or more availability checks or notifications failed; see status lines")
+    if settings.reservations:
+        log(" ")
+        log(f"  {GREEN}Availability checks completed successfully{RESET}")
+        log(" ")
+
+
 def _config_bool(value: Any, default: bool) -> bool:
     """YAML-tolerant boolean. None (a present-but-null key) -> default, and the
     STRINGS "false"/"no"/"off" are false - bool("false") is True in Python."""
@@ -4969,6 +5560,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         upgrade_reservations=_config_id_list(data.get("upgradeReservations"), "upgradeReservations"),
         upgrade_sister_categories=_config_bool(data.get("upgradeSisterCategories"), True),
         cabin_availability_state_file=cabin_state_file,
+        availability=parse_availability_config(data.get("availability")),
         output_watch_as_json=data.get("outputWatchAsJson",False),
         output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
         apobj=apobj,
@@ -5060,6 +5652,10 @@ def main() -> None:
     authenticates active user accounts, inspects individual bookings, and processes
     unbooked prospective vacation watchlists.
     """
+    availability_enabled = (isinstance(config.availability, AvailabilitySettings)
+                            and bool(config.availability.reservations))
+    availability_healthy = True
+    availability_found = set()
     try:
         # Instantiate clean per-run tracker
         payment_tracker = CheckinPaymentTracker()
@@ -5225,13 +5821,26 @@ def main() -> None:
 
             # Gather the information on all voyages under the current account
             try:
-                get_voyages(
+                bookings = get_voyages(
                    account_info,
                    discounts,
                    ship_dictionary,
                    payment_tracker=payment_tracker,
                    collected_watch_rows=collected_watch_rows,
                  )
+                if availability_enabled and account_info.is_royal:
+                    if isinstance(bookings, list) and all(isinstance(b, dict) for b in bookings):
+                        for booking in bookings:
+                            ship_code = booking.get("shipCode")
+                            if ship_code and not booking.get("shipName"):
+                                booking["shipName"] = ship_dictionary.get_ship(ship_code)
+                        availability_found.update(str(b.get("bookingId")) for b in bookings)
+                        log(f"\n{BLUE}Reservation Availability Watches{RESET}")
+                        availability_healthy = process_availability_bookings(
+                            account_info, bookings, config.availability) and availability_healthy
+                    else:
+                        log_warn("[Availability] Booking lookup failed; previous state retained")
+                        availability_healthy = False
             finally:
                 # Close the account session even when a booking raises, so
                 # sessions don't leak across the remaining accounts
@@ -5303,6 +5912,12 @@ def main() -> None:
             write_watch_price_json(collected_watch_rows, config.output_json_watch_file)
 
         failure_summaries = []
+        if availability_enabled:
+            try:
+                finish_availability_run(config.availability, availability_found, availability_healthy)
+            except AvailabilityUnknown as exc:
+                log_warn(str(exc))
+                failure_summaries.append(str(exc))
         if failed_accounts:
             # At least one account never got checked this run. A quiet exit
             # 0 here would look identical to a fully-successful run to any

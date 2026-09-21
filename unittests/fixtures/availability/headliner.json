@@ -1,0 +1,50 @@
+{
+  "status": 200,
+  "error": null,
+  "warnings": null,
+  "payload": {
+    "productCode": "Y7QG",
+    "categoryId": "pt_show",
+    "guests": [
+      {
+        "id": "guest-1",
+        "reservationId": "booking-2",
+        "remainingBookableQty": 1,
+        "issues": [
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-013"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "offerings": [
+      {
+        "id": "example-offering-013",
+        "active": false,
+        "dateTime": "2098-04-06T19:15:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 74,
+        "issues": [
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1"
+          }
+        ]
+      },
+      {
+        "id": "example-offering-014",
+        "active": false,
+        "dateTime": "2098-04-06T21:30:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 87,
+        "issues": []
+      }
+    ]
+  }
+}

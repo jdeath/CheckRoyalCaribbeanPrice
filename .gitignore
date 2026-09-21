@@ -17,3 +17,5 @@ dist/
 # Local cabin-watch state can contain loyalty numbers in checkout URLs.
 data/cabin-availability.json*
 data/cabin-availability.sqlite3*
+# Reservation availability notification state and sidecar files.
+data/reservation-availability.json*

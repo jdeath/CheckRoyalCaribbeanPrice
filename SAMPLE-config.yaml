@@ -51,3 +51,25 @@ logFile: "output.txt"
 # upgradeSisterCategories: false # Optional, needs checkForUpgrades. Set false to skip the per-category prices inside your booked family (one fewer API request per booking; the table then shows each family's cheapest tier only)
 # outputWatchAsJson: true # Optional (off by default). Uncomment to write the watchlist price results to a JSON file for external consumption
 # outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file
+
+# Optional dining/show reservation-release alerts; disabled unless configured.
+# Start with dryRun: true, verify the console results, then set false to notify.
+# This dry run affects ONLY reservation availability alerts; normal price alerts are unchanged.
+# Dining and show products are discovered automatically for each reservation.
+# See docs/reservation-alerts.md for behavior, limitations, and persistent storage.
+# availability:
+#   dryRun: true
+#   stateFile: "data/reservation-availability.json"
+#   reservations:
+#     - reservation: "1234567"
+#       dining: true
+#       shows: true
+#       notifyOnReopen: false
+#
+# Advanced: monitor only selected product IDs within a category:
+#     - reservation: "7654321"
+#       dining:
+#         products:
+#           - "UT_RAILDINNER"
+#       shows: true
+#       notifyOnReopen: false
