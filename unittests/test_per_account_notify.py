@@ -25,7 +25,8 @@ from CheckRoyalCaribbeanPrice import (
 # ITEM 4 TESTS: apprise_test PATH: both global and per-account notifiers get a test message
     AccountInfo,
     CruiseAppConfig,
-    _build_apprise,
+    build_apprise,
+#    _build_apprise,
     get_cruise_price,
     history,
     load_config_objects,
@@ -185,13 +186,16 @@ class TestLoadConfigObjectsPerAccountApprise:
 
 class TestBuildApprise:
     def test_empty_list_returns_none(self):
-        assert _build_apprise([]) is None
+        assert build_apprise([]) is None
+#        assert _build_apprise([]) is None
 
     def test_missing_url_key_is_skipped(self):
-        assert _build_apprise([{"not_url": "x"}]) is None
+        assert build_apprise([{"not_url": "x"}]) is None
+#        assert _build_apprise([{"not_url": "x"}]) is None
 
     def test_urls_build_a_real_apprise_object(self):
-        apobj = _build_apprise([{"url": "json://topic-a"}, {"url": "json://topic-b"}])
+        apobj = build_apprise([{"url": "json://topic-a"}, {"url": "json://topic-b"}])
+#        apobj = _build_apprise([{"url": "json://topic-a"}, {"url": "json://topic-b"}])
         assert isinstance(apobj, Apprise)
         assert len(apobj) == 2
 
@@ -199,7 +203,8 @@ class TestBuildApprise:
         """Mirrors the pre-existing #85 'apprise optional' sentinel handling."""
         with patch("CheckRoyalCaribbeanPrice.Apprise", None), \
              patch("CheckRoyalCaribbeanPrice.logging.warning") as mock_warn:
-            result = _build_apprise([{"url": "json://topic-a"}])
+            result = build_apprise([{"url": "json://topic-a"}])
+#            result = _build_apprise([{"url": "json://topic-a"}])
         assert result is None
         mock_warn.assert_called_once()
 
