@@ -37,7 +37,7 @@ Run your usual check and compare the reported times with Cruise Planner. With
 not send availability notifications or read/write notification state. This is
 **not a global dry run**: existing price alerts and `appriseTest` still work as
 configured. Set `dryRun: false` to enable release notifications once the output
-looks correct, and configure Apprise to receive them.
+looks correct, and configure Apprise with `overflow=split` as described below.
 
 | Setting | Behavior |
 | --- | --- |
@@ -73,8 +73,34 @@ Newly available products are grouped into one alert per reservation category. Ea
 previews up to six times, grouped by date using `dateDisplayFormat`, with a link
 to the sailing's Cruise Planner category. The console shows all returned times.
 Times preserve Royal's wall-clock values; no timezone conversion is performed.
-For large notifications, Apprise's `overflow=split` URL option can avoid message
-truncation by services with small limits.
+Every Apprise destination used for live availability alerts must explicitly use
+`overflow=split`. Apprise then splits long plain-text alerts according to each
+service's message limit. For example:
+
+```yaml
+apprise:
+  - url: "pover://APP_TOKEN@USER_KEY/?overflow=split"
+```
+
+If a URL already has query options, append `&overflow=split`; replace an existing
+`overflow` value rather than adding it twice. Set this on each per-account URL if
+that account overrides the global notifier, otherwise on each global URL.
+The checker validates the parsed destinations, without rewriting your URLs or
+logging credentials. The default `upstream` mode and `truncate` are not accepted
+for availability delivery, even when the current message is short: later releases
+can produce larger alerts. A missing or empty notifier is also a configuration
+failure for live alerts.
+
+Dry runs warn about incompatible notification settings while still checking
+inventory, without reading or writing state. Live checks continue reporting
+inventory, but do not send or acknowledge pending alerts until the configuration
+is corrected. They finish normal price outputs and report a partial failure.
+Splitting a shared Apprise URL also affects oversized price notifications; short
+notifications remain single messages. The checker does not alter price-notification
+settings automatically.
+
+All parts must succeed before the aggregate is acknowledged. If a part fails, the
+aggregate retries on a later run, so parts that already arrived may repeat.
 
 Keep the state file on persistent storage. In Docker, mount a writable directory
 at `/app/data`, or configure an absolute `stateFile` path in an existing persistent
@@ -97,9 +123,18 @@ is acknowledged. Failed delivery retries on a later run. A crash or disk failure
 after delivery but before saving can produce a duplicate alert; delivery and
 local persistence cannot be one atomic operation.
 
-`unknown` means failed, incomplete or unrecognized evidence, not sold out. A
-product is marked absent only after a complete catalog read. Previously saved
-state is retained for unknown products. Missing reservations, failed checks,
+`unknown` means failed, incomplete or unrecognized evidence, not sold out.
+Returned products are still checked if a later catalog page fails or the declared
+count does not match the returned products. This also applies to explicitly
+selected restaurants or shows that were returned. Successfully checked products
+can generate alerts, but the run still reports a partial failure so the missing
+coverage remains visible.
+
+Only a complete catalog can establish that a product disappeared. Products absent
+from an incomplete catalog retain their previous state and are never re-armed
+based on that absence. An independent, valid eligibility response for a returned
+product can still confirm availability or closure. Previously saved state is
+retained for unknown products. Missing reservations, failed checks,
 state errors or unconfirmed notifications are reported after normal price
 outputs, using the existing partial-failure exit status so scheduled failures
 remain visible.
@@ -107,9 +142,9 @@ remain visible.
 ## Validation
 
 Tests use synthetic response fixtures and mocked transports, including inventory
-interpretation, catalog pagination, per-account isolation, failed notification
-retries, JSON validation, concurrent processes, atomic-save failures and normal
-price-report completion. They do not contact Royal or send real notifications.
+interpretation, recovery from incomplete catalogs without false disappearances,
+per-account notification validation, failed split-message retries, JSON validation,
+concurrent processes, atomic-save failures and normal price-report completion. They do not contact Royal or send real notifications.
 Entertainment release behavior has been exercised in a running fork. Dining
 discovery and eligibility behavior were also validated against sanitized live
 captures from Icon of the Seas and Utopia of the Seas. Those captures included

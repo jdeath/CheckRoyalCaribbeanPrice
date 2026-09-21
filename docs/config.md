@@ -172,6 +172,12 @@ availability:
 
 See [configuration, notification behavior, and limitations](reservation-alerts.md).
 
+Live reservation alerts require `overflow=split` on every effective Apprise URL
+(per-account overrides or the global fallback). Dry runs warn about incompatible
+settings; live checks preserve pending alerts and report a partial failure until
+corrected. Existing price checks continue normally. See
+[notification configuration](reservation-alerts.md#notifications-and-state).
+
 ## Example Config with more options (not all of them)
 ```yaml
 accountInfo:

@@ -56,6 +56,11 @@ logFile: "output.txt"
 # Start with dryRun: true, verify the console results, then set false to notify.
 # This dry run affects ONLY reservation availability alerts; normal price alerts are unchanged.
 # Dining and show products are discovered automatically for each reservation.
+# Live availability delivery requires overflow=split on EVERY effective Apprise URL.
+# Example: "pover://APP_TOKEN@USER_KEY/?overflow=split"
+# If a URL already has query options, add &overflow=split (replace an existing value).
+# Set this on per-account URLs when present, otherwise on the global URLs above.
+# A shared URL also splits oversized price alerts; short alerts remain one message.
 # See docs/reservation-alerts.md for behavior, limitations, and persistent storage.
 # availability:
 #   dryRun: true

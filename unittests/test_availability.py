@@ -10,7 +10,7 @@ import subprocess
 import sys
 from dataclasses import asdict, replace
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 import CheckRoyalCaribbeanPrice as c
@@ -40,10 +40,18 @@ def evaluate(name='headliner', data=None):
         category.category, original['payload']['productCode'], name)
 
 
+def split_notifier():
+    notifier = MagicMock()
+    notifier.__len__.return_value = 1
+    notifier.__iter__.side_effect = lambda: iter([Mock(service_name='Pushover', overflow_mode='split')])
+    notifier.notify.return_value = True
+    return notifier
+
+
 @pytest.fixture(autouse=True)
 def globals_without_network(monkeypatch):
     conf = c.CruiseAppConfig()
-    conf.apobj = Mock()
+    conf.apobj = split_notifier()
     conf.apobj.notify.return_value = True
     monkeypatch.setattr(c, 'config', conf)
     monkeypatch.setattr(c, 'history', Mock())
@@ -508,7 +516,7 @@ def test_concurrent_process_cannot_send_during_read_notify_or_replace(context, m
     script = '''
 import json, sys
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 import CheckRoyalCaribbeanPrice as c
 data = json.loads(sys.argv[2])
 a = c.AccountInfo(data['username'], 'fictional')
@@ -519,7 +527,9 @@ category = c.AvailabilityCategory(
 reservation = c.AvailabilityReservation(str(data['booking']['bookingId']), (category,))
 s = c.AvailabilitySettings((reservation,), dry_run=False, state_file=sys.argv[1])
 c.config = c.CruiseAppConfig()
-c.config.apobj = Mock()
+c.config.apobj = MagicMock()
+c.config.apobj.__len__.return_value = 1
+c.config.apobj.__iter__.side_effect = lambda: iter([Mock(service_name='Pushover', overflow_mode='split')])
 c.log = Mock()
 c.log_warn = Mock()
 def send(**kwargs):
@@ -687,7 +697,7 @@ def test_availability_output_groups_results_under_sailing(context, monkeypatch):
 
     lines = [call.args[0] for call in c.log.call_args_list]
     account_line = next(i for i, line in enumerate(lines) if 'Royal Caribbean for user' in line)
-    sailing_line = next(i for i, line in enumerate(lines) if 'ICON OF THE SEAS (2099-10-10)' in line)
+    sailing_line = next(i for i, line in enumerate(lines) if 'ICON OF THE SEAS (10/10/2099)' in line)
     category_line = next(i for i, line in enumerate(lines) if 'Shows' in line)
     product_line = next(i for i, line in enumerate(lines) if 'Headliner: Available' in line)
     assert account_line < sailing_line < category_line < product_line
@@ -698,12 +708,12 @@ def test_availability_output_groups_results_under_sailing(context, monkeypatch):
 def test_availability_sailing_label_falls_back_to_ship_code(context):
     _, booking, *_ = context
     c.config.date_display_format = "%m/%d/%Y"
-    assert c.availability_sailing_label(booking) == "IC (2099-10-10)"
+    assert c.availability_sailing_label(booking) == "IC (10/10/2099)"
 
 def test_availability_notification_hides_apprise_info_chatter_but_keeps_warnings(context, caplog):
     chatter = "Sent Pushover notification to ALL_DEVICES."
     warning = "Pushover delivery warning"
-    notifier = Mock()
+    notifier = split_notifier()
 
     def notify(**kwargs):
         logging.getLogger("apprise").info(chatter)
@@ -808,7 +818,7 @@ def test_missing_notifier_diagnostic_remains_retryable(context):
     c.config.apobj = None
     assert not deliver(context)
     assert any('No notification service configured' in call.args[0] for call in c.log_warn.call_args_list)
-    c.config.apobj = Mock()
+    c.config.apobj = split_notifier()
     c.config.apobj.notify.return_value = True
     assert deliver(context)
     c.config.apobj.notify.assert_called_once()
@@ -1108,3 +1118,178 @@ def test_main_release_flow_reuses_session_and_bookings_then_suppresses_duplicate
     c.config.apobj.notify.assert_called_once()
     body = c.config.apobj.notify.call_args.kwargs['body']
     assert '19:15' in body and '21:30' in body
+
+
+@pytest.mark.parametrize('selected', [False, True])
+def test_incomplete_catalog_checks_returned_restaurants_without_rearming_absent_products(context, monkeypatch, selected):
+    a, b, _, s, p = context
+    category = c.AvailabilityCategory('dining', ('DINE00', 'missing') if selected else None)
+    s = replace(s, reservations=(c.AvailabilityReservation(b['bookingId'], (category,), True),))
+    ctx = (a, b, category, s, p)
+    assert deliver(ctx, [state_result(product='missing')])
+    c.config.apobj.notify.reset_mock()
+    products = [{'id': f'DINE{i:02d}', 'title': f'Restaurant {i:02d}',
+                 'type': {'id': 'pt_dining'}} for i in range(27)]
+    pages = [{'data': {'products': {'__typename': 'CommerceProductResultSuccess',
+              'commerceProducts': products[i:i+12],
+              'pageInfo': {'totalPages': 3, 'totalResults': 28}}}} for i in range(0, 27, 12)]
+    catalog = Mock(side_effect=pages * 2)
+    monkeypatch.setattr(c, 'availability_json', catalog)
+    def eligibility(account, booking, category_name, product, party):
+        return {'status': 200, 'payload': {'productCode': product, 'categoryId': 'pt_dining',
+                'offerings': [{'id': product + '-offering', 'dateTime': '2099-10-10T18:00:00',
+                               'stockLevelStatus': 'inStock', 'stockLevel': 10}]}}
+    eligibility_mock = Mock(side_effect=eligibility)
+    monkeypatch.setattr(c, 'availability_eligibility', eligibility_mock)
+    for _ in range(2):
+        assert not c.process_availability_bookings(a, [b], s)  # partial failure remains visible
+        assert saved_rows(ctx)['missing'] == {'last_state': 'available', 'notified': True}
+        assert saved_rows(ctx)['DINE00']['notified'] is True
+    assert catalog.call_count == 6
+    assert eligibility_mock.call_count == (2 if selected else 54)
+    c.config.apobj.notify.assert_called_once()  # second incomplete read does not repeat
+    assert 'Restaurant 00' in c.config.apobj.notify.call_args.kwargs['body']
+    assert 'incomplete catalog' in '\n'.join(call.args[0].lower() for call in c.log_warn.call_args_list)
+
+
+@pytest.mark.parametrize('later_page', [
+    c.AvailabilityUnknown('request failed'),
+    {'data': {'products': []}},
+    {'data': {'products': {'__typename': 'CommerceProductResultSuccess',
+        'commerceProducts': [{'id': 'first', 'type': {'id': 'pt_show'}}],
+        'pageInfo': {'totalPages': 2, 'totalResults': 2}}}},
+])
+def test_later_catalog_failure_retains_verified_products(context, monkeypatch, later_page):
+    a, b, *_ = context
+    first = {'id': 'first', 'type': {'id': 'pt_show'}}
+    page = {'data': {'products': {'__typename': 'CommerceProductResultSuccess',
+            'commerceProducts': [first], 'pageInfo': {'totalPages': 2, 'totalResults': 2}}}}
+    monkeypatch.setattr(c, 'availability_json', Mock(side_effect=[page, later_page]))
+    with pytest.raises(c.AvailabilityCatalogIncomplete) as failure:
+        c.availability_products(a, b, 'show')
+    assert failure.value.products == [first]
+
+
+@pytest.mark.parametrize('selected', [False, True])
+def test_failed_first_catalog_page_preserves_acknowledgements(context, monkeypatch, selected):
+    a, b, category, s, p = context
+    category = replace(category, products=category.products if selected else None)
+    s = replace(s, reservations=(c.AvailabilityReservation(b['bookingId'], (category,), True),))
+    ctx = (a, b, category, s, p)
+    assert deliver(ctx)
+    before = Path(s.state_file).read_bytes()
+    monkeypatch.setattr(c, 'availability_json', Mock(side_effect=c.AvailabilityUnknown('request failed')))
+    eligibility = Mock(side_effect=AssertionError('No products returned'))
+    monkeypatch.setattr(c, 'availability_eligibility', eligibility)
+    assert not c.process_availability_bookings(a, [b], s)
+    eligibility.assert_not_called()
+    assert Path(s.state_file).read_bytes() == before
+    c.config.apobj.notify.assert_called_once()
+
+
+def real_pushover_notifier(overflow=None):
+    apprise = pytest.importorskip('apprise')
+    notifier = apprise.Apprise()
+    url = 'pover://' + 'a'*30 + '@' + 'b'*30 + '/'
+    assert notifier.add(url + ('?overflow=' + overflow if overflow else ''))
+    service = next(iter(notifier))
+    service.send = Mock(side_effect=AssertionError('Unmocked notification delivery'))
+    return notifier, service
+
+
+@pytest.mark.parametrize('overflow', [None, 'upstream', 'truncate'])
+def test_unsafe_overflow_never_sends_or_acknowledges_and_recovers_after_config_fix(context, overflow):
+    notifier, service = real_pushover_notifier(overflow)
+    c.config.apobj = notifier
+    results = [replace(state_result(product=str(i)), title=f'Restaurant {i:02d}',
+                       times=('2099-10-10T18:00:00', '2099-10-10T18:30:00',
+                              '2099-10-11T18:00:00')) for i in range(20)]
+    assert not deliver(context, results)
+    service.send.assert_not_called()
+    assert all(not row['notified'] for row in saved_rows(context).values())
+    warnings = '\n'.join(call.args[0] for call in c.log_warn.call_args_list)
+    assert 'overflow=split' in warnings and 'Pushover' in warnings and context[0].username in warnings
+    assert 'a'*30 not in warnings and 'b'*30 not in warnings
+    corrected, split_service = real_pushover_notifier('split')
+    split_service.send = Mock(return_value=True)
+    c.config.apobj = corrected
+    assert deliver(context, results)
+    assert split_service.send.call_count > 1
+    chunks = [call.kwargs['body'] for call in split_service.send.call_args_list]
+    assert all(len(chunk) <= split_service.body_maxlen for chunk in chunks)
+    assert all(f'Restaurant {i:02d}' in '\n'.join(chunks) for i in range(20))
+    assert 'https://www.royalcaribbean.com/' in '\n'.join(chunks)
+    assert all(row['notified'] for row in saved_rows(context).values())
+    split_service.send.reset_mock()
+    assert deliver(context, results)
+    split_service.send.assert_not_called()
+
+
+def test_overflow_validation_uses_account_override_and_leaves_price_notifier_unchanged(context):
+    a, b, category, s, p = context
+    unsafe, unsafe_service = real_pushover_notifier()
+    safe, safe_service = real_pushover_notifier('split')
+    safe_service.send = Mock(return_value=True)
+    c.config.apobj = unsafe
+    a.apobj = safe
+    assert deliver((a, b, category, s, p))
+    unsafe_service.send.assert_not_called()
+    assert unsafe_service.overflow_mode == 'upstream'
+    # An unsafe account override must not silently fall back to a safe global notifier.
+    a.apobj = unsafe
+    c.config.apobj = safe
+    assert not deliver((a, b, category, s, p), [state_result(product='second')])
+    unsafe_service.send.assert_not_called()
+    assert saved_rows((a, b, category, s, p))['second']['notified'] is False
+
+
+def test_every_destination_must_allow_complete_message_delivery(context):
+    notifier, good = real_pushover_notifier('split')
+    assert notifier.add('pover://' + 'c'*30 + '@' + 'd'*30 + '/?overflow=truncate')
+    bad = list(notifier)[1]
+    bad.send = Mock(side_effect=AssertionError('Unexpected notification'))
+    c.config.apobj = notifier
+    assert not deliver(context)
+    good.send.assert_not_called()
+    bad.send.assert_not_called()
+    assert saved_rows(context)['Y7QG']['notified'] is False
+
+
+def test_dry_run_warns_about_overflow_without_state_or_notifications(context, monkeypatch):
+    a, b, category, s, p = context
+    notifier, service = real_pushover_notifier()
+    c.config.apobj = notifier
+    monkeypatch.setattr(c, 'availability_products', Mock(return_value=[
+        {'id': 'Y7QG', 'type': {'id': 'pt_show'}, 'title': 'Headliner'}]))
+    eligibility = Mock(return_value=capture('headliner'))
+    monkeypatch.setattr(c, 'availability_eligibility', eligibility)
+    read = Mock(side_effect=AssertionError('Dry run read state'))
+    monkeypatch.setattr(c, 'read_reservation_state', read)
+    assert c.process_availability_bookings(a, [b], replace(s, dry_run=True))
+    eligibility.assert_called_once()
+    read.assert_not_called()
+    service.send.assert_not_called()
+    assert not Path(s.state_file).exists()
+    assert 'overflow=split' in '\n'.join(call.args[0] for call in c.log_warn.call_args_list)
+
+
+def test_invalid_overflow_still_finishes_normal_price_outputs(context, monkeypatch):
+    a, b = setup_combined_console(context, monkeypatch)
+    notifier, service = real_pushover_notifier()
+    c.config.apobj = notifier
+    monkeypatch.setattr(c, 'get_voyages', Mock(return_value=[b]))
+    monkeypatch.setattr(c, 'availability_products', Mock(return_value=[
+        {'id': 'Y7QG', 'type': {'id': 'pt_show'}}]))
+    monkeypatch.setattr(c, 'availability_eligibility', Mock(return_value=capture('headliner')))
+    prices = Mock()
+    monkeypatch.setattr(c, 'get_cruise_price', prices)
+    tracker = Mock()
+    monkeypatch.setattr(c, 'CheckinPaymentTracker', Mock(return_value=tracker))
+    with pytest.raises(SystemExit) as error:
+        c.main()
+    assert error.value.code == c.EXIT_PARTIAL_FAILURE
+    prices.assert_called_once()
+    tracker.print_table.assert_called_once()
+    a.access.session.close.assert_called_once()
+    service.send.assert_not_called()
+    assert c.history.finish_run.call_args.args[0] == 'partial_failure'
