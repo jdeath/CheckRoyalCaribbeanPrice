@@ -687,7 +687,7 @@ def test_availability_output_groups_results_under_sailing(context, monkeypatch):
 
     lines = [call.args[0] for call in c.log.call_args_list]
     account_line = next(i for i, line in enumerate(lines) if 'Royal Caribbean for user' in line)
-    sailing_line = next(i for i, line in enumerate(lines) if '10/10/2099 Icon of the Seas' in line)
+    sailing_line = next(i for i, line in enumerate(lines) if 'ICON OF THE SEAS (2099-10-10)' in line)
     category_line = next(i for i, line in enumerate(lines) if 'Shows' in line)
     product_line = next(i for i, line in enumerate(lines) if 'Headliner: Available' in line)
     assert account_line < sailing_line < category_line < product_line
@@ -698,7 +698,7 @@ def test_availability_output_groups_results_under_sailing(context, monkeypatch):
 def test_availability_sailing_label_falls_back_to_ship_code(context):
     _, booking, *_ = context
     c.config.date_display_format = "%m/%d/%Y"
-    assert c.availability_sailing_label(booking) == "10/10/2099 IC"
+    assert c.availability_sailing_label(booking) == "IC (2099-10-10)"
 
 def test_availability_notification_hides_apprise_info_chatter_but_keeps_warnings(context, caplog):
     chatter = "Sent Pushover notification to ALL_DEVICES."
