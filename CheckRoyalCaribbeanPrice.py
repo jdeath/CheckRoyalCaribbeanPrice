@@ -4875,7 +4875,7 @@ def availability_sailing_label(booking: dict) -> str:
     ship_name = booking.get("shipName")
     if not isinstance(ship_name, str) or not ship_name.strip():
         ship_name = str(booking.get("shipCode") or "Unknown ship")
-    return f"{config.format_date(sailing.strftime('%Y%m%d'))} {ship_name.strip()}"
+    return f"{ship_name.strip().upper()} ({sailing.isoformat()})"
 
 
 @contextmanager
