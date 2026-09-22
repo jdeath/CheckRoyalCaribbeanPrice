@@ -1,4 +1,5 @@
 config.yaml
+config.yaml.*
 __pycache__
 config-c.yaml
 config-r.yaml
