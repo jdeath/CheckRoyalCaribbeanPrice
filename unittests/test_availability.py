@@ -41,9 +41,12 @@ def evaluate(name='headliner', data=None):
 
 
 def split_notifier():
-    notifier = MagicMock()
+    apprise = pytest.importorskip('apprise')
+    real = apprise.Apprise()
+    assert real.add('pover://' + 'a'*30 + '@' + 'b'*30 + '/?overflow=split')
+    notifier = MagicMock(wraps=real)
     notifier.__len__.return_value = 1
-    notifier.__iter__.side_effect = lambda: iter([Mock(service_name='Pushover', overflow_mode='split')])
+    notifier.__iter__.side_effect = lambda: iter(real)
     notifier.notify.return_value = True
     return notifier
 
@@ -58,6 +61,7 @@ def globals_without_network(monkeypatch):
     monkeypatch.setattr(c, 'log', Mock())
     monkeypatch.setattr(c, 'log_warn', Mock())
     monkeypatch.setattr(c, '_execute_api_request', Mock(side_effect=AssertionError('Unmocked network call')))
+    monkeypatch.setattr(c.time, 'sleep', Mock())
     return conf
 
 
@@ -107,7 +111,8 @@ def test_wonder_typed_absence_and_complete_icon_catalog(context, monkeypatch):
     a,b,*_ = context
     fetch = Mock(side_effect=[capture('wonder_catalog'),capture('icon_catalog')])
     monkeypatch.setattr(c, 'availability_json', fetch)
-    assert c.availability_products(a,b,'show') == []
+    with pytest.raises(c.AvailabilityCatalogIncomplete):
+        c.availability_products(a,b,'show')
     assert len(c.availability_products(a,b,'show')) == 6
     assert fetch.call_args.kwargs['json_data']['variables']['category'] == 'show'
 
@@ -182,7 +187,7 @@ def deliver(context, results=None, *, notify_on_reopen=False):
 def saved_rows(context):
     a, b, category, s, p = context
     state = json.loads(Path(s.state_file).read_text())
-    assert state['version'] == 1
+    assert state['version'] == 2
     return state['scopes'][c.availability_scope(a, b, category.category)]
 
 
@@ -270,7 +275,7 @@ def test_individual_product_failure_does_not_block_other_shows(context,monkeypat
         {'id':'Y7QG','title':'Headliner','type':{'id':'pt_show'}}]))
     monkeypatch.setattr(c,'availability_eligibility',Mock(
         side_effect=[c.AvailabilityUnknown('failed'),capture('headliner')]))
-    assert not c.process_availability_bookings(a,[b],settings)
+    assert c.process_availability_bookings(a,[b],settings)
     c.config.apobj.notify.assert_called_once()
     assert 'Headliner:' in c.config.apobj.notify.call_args.kwargs['body']
 
@@ -310,7 +315,7 @@ def test_reservation_config_models_categories_and_selective_products():
 
 
 @pytest.mark.parametrize('raw, expected', [
-    ({'reservations': []}, 'availability.reservations must be a nonempty list'),
+    ({'reservations': []}, 'reservationAlerts.reservations must be a nonempty list'),
     ({'reservations': [{'reservation': '1'}]}, 'at least one of dining or shows must be enabled'),
     ({'reservations': [{'reservation': '1', 'dining': 'true'}]},
      'dining must be true, false, or a mapping'),
@@ -527,9 +532,11 @@ category = c.AvailabilityCategory(
 reservation = c.AvailabilityReservation(str(data['booking']['bookingId']), (category,))
 s = c.AvailabilitySettings((reservation,), dry_run=False, state_file=sys.argv[1])
 c.config = c.CruiseAppConfig()
-c.config.apobj = MagicMock()
+import apprise
+real = apprise.Apprise()
+real.add('pover://' + 'a'*30 + '@' + 'b'*30 + '/?overflow=split')
+c.config.apobj = MagicMock(wraps=real)
 c.config.apobj.__len__.return_value = 1
-c.config.apobj.__iter__.side_effect = lambda: iter([Mock(service_name='Pushover', overflow_mode='split')])
 c.log = Mock()
 c.log_warn = Mock()
 def send(**kwargs):
@@ -649,7 +656,7 @@ def test_malformed_type_does_not_block_valid_show_or_hide_error(context, monkeyp
     discovery = replace(category, products=None)
     settings = replace(s, reservations=(
         c.AvailabilityReservation(str(b['bookingId']), (discovery,)),))
-    assert not c.process_availability_bookings(a, [b], settings)
+    assert c.process_availability_bookings(a, [b], settings)
     c.config.apobj.notify.assert_called_once()
     assert 'Headliner:' in c.config.apobj.notify.call_args.kwargs['body']
 
@@ -734,7 +741,7 @@ def test_availability_console_uses_status_colors_and_groups_times(context):
                ('2099-10-10T19:15:00', '2099-10-10T21:30:00')),
                c.AvailabilityResult('closed', 'Closed', 'unavailable', 'no offerings'),
                c.AvailabilityResult('error', 'Error', 'unknown', 'request failed')]
-    assert not c.deliver_availability(replace(s, dry_run=True), a, b, w, False, results)
+    assert c.deliver_availability(replace(s, dry_run=True), a, b, w, False, results)
     lines = [call.args[0] for call in c.log.call_args_list]
     assert any(c.GREEN + 'Show: Available' in line for line in lines)
     assert any(c.YELLOW + 'Closed: Unavailable' in line for line in lines)
@@ -786,15 +793,15 @@ def test_reservations_and_categories_fetch_independently(context, monkeypatch):
     assert catalog.call_count == 6
 
 @pytest.mark.parametrize('change, expected', [
-    (lambda d:d.update(dryrun=True), 'availability: unrecognized configuration key(s): dryrun'),
+    (lambda d:d.update(dryrun=True), 'reservationAlerts: unrecognized configuration key(s): dryrun'),
     (lambda d:d['reservations'][0].update(mod='release'),
-     'availability.reservations[0]: unrecognized configuration key(s): mod'),
+     'reservationAlerts.reservations[0]: unrecognized configuration key(s): mod'),
     (lambda d:d['reservations'][0].update(shows='false'),
-     'availability.reservations[0]: shows must be true, false, or a mapping'),
+     'reservationAlerts.reservations[0]: shows must be true, false, or a mapping'),
     (lambda d:d['reservations'][0].update(shows={'guests':[{'id':'SECRET_VALUE'}]}),
-     'availability.reservations[0].shows: unrecognized configuration key(s): guests'),
+     'reservationAlerts.reservations[0].shows: unrecognized configuration key(s): guests'),
     (lambda d:d['reservations'][0].update(reservation=None),
-     'availability.reservations[0]: reservation must be a nonempty identifier'),
+     'reservationAlerts.reservations[0]: reservation must be a nonempty identifier'),
 ])
 def test_config_diagnostics_identify_location_without_echoing_values(change, expected):
     raw = valid_config()
@@ -830,7 +837,7 @@ def test_state_storage_diagnostic_is_actionable_and_does_not_expose_exception(co
     monkeypatch.setattr(c, 'deliver_availability', Mock(side_effect=PermissionError('PRIVATE_PATH')))
     assert not c.process_availability_bookings(a, [b], s)
     messages = '\n'.join(call.args[0] for call in c.log_warn.call_args_list)
-    assert 'check availability.stateFile and directory permissions' in messages
+    assert 'check reservationAlerts.stateFile and directory permissions' in messages
     assert 'PRIVATE_PATH' not in messages
 
 
@@ -903,17 +910,17 @@ def test_native_apprise_split_preserves_all_shows_and_retries_failed_delivery(co
 
 @pytest.mark.parametrize('contents', [
     b'', b'not json', b'null', b'[]', b'{}', b'{', b'\xff', b'SQLite format 3\x00',
-    b'{"version":1,"watches":{}}',
-    b'{"version":2,"scopes":{}}', b'{"version":true,"scopes":{}}',
-    b'{"version":1,"scopes":[]}', b'{"version":1,"scopes":{},"unexpected":0}',
-    b'{"version":1,"scopes":{"scope":null}}',
-    b'{"version":1,"scopes":{"":{"product":{"last_state":"available","notified":true}}}}',
-    b'{"version":1,"scopes":{"scope":{"":{}}}}',
-    b'{"version":1,"scopes":{"scope":{"product":null}}}',
-    b'{"version":1,"scopes":{"scope":{"product":{"last_state":"unknown","notified":true}}}}',
-    b'{"version":1,"scopes":{"scope":{"product":{"last_state":"available","notified":1}}}}',
-    b'{"version":1,"scopes":{"scope":{"product":{"last_state":"available","notified":"false"}}}}',
-    b'{"version":1,"scopes":{"scope":{"product":{"last_state":"available"}}}}',
+    b'{"version":2,"watches":{}}',
+    b'{"version":1,"scopes":{}}', b'{"version":true,"scopes":{}}',
+    b'{"version":2,"scopes":[]}', b'{"version":2,"scopes":{},"unexpected":0}',
+    b'{"version":2,"scopes":{"scope":null}}',
+    b'{"version":2,"scopes":{"":{"product":{"last_state":"available","notified":true}}}}',
+    b'{"version":2,"scopes":{"scope":{"":{}}}}',
+    b'{"version":2,"scopes":{"scope":{"product":null}}}',
+    b'{"version":2,"scopes":{"scope":{"product":{"last_state":"unknown","notified":true}}}}',
+    b'{"version":2,"scopes":{"scope":{"product":{"last_state":"available","notified":1}}}}',
+    b'{"version":2,"scopes":{"scope":{"product":{"last_state":"available","notified":"false"}}}}',
+    b'{"version":2,"scopes":{"scope":{"product":{"last_state":"available"}}}}',
 ])
 def test_invalid_json_state_is_preserved_without_sending(context, contents):
     path = Path(context[3].state_file)
@@ -972,8 +979,10 @@ def test_json_keeps_independent_category_scopes(context):
     assert c.config.apobj.notify.call_count == len(contexts)
     state = json.loads(Path(s.state_file).read_text())
     assert len(state['scopes']) == len(contexts)
-    assert a.username not in Path(s.state_file).read_text()
-    assert b['bookingId'] not in Path(s.state_file).read_text()
+    assert a.username in Path(s.state_file).read_text()
+    assert a.password not in Path(s.state_file).read_text()
+    assert a.access.token not in Path(s.state_file).read_text()
+    assert b['bookingId'] in Path(s.state_file).read_text()
 
 
 def test_explicit_reset_rearms_only_selected_product(context):
@@ -1142,7 +1151,7 @@ def test_incomplete_catalog_checks_returned_restaurants_without_rearming_absent_
     eligibility_mock = Mock(side_effect=eligibility)
     monkeypatch.setattr(c, 'availability_eligibility', eligibility_mock)
     for _ in range(2):
-        assert not c.process_availability_bookings(a, [b], s)  # partial failure remains visible
+        assert c.process_availability_bookings(a, [b], s)  # coverage warning, returned products succeed
         assert saved_rows(ctx)['missing'] == {'last_state': 'available', 'notified': True}
         assert saved_rows(ctx)['DINE00']['notified'] is True
     assert catalog.call_count == 6
@@ -1228,6 +1237,7 @@ def test_unsafe_overflow_never_sends_or_acknowledges_and_recovers_after_config_f
 def test_overflow_validation_uses_account_override_and_leaves_price_notifier_unchanged(context):
     a, b, category, s, p = context
     unsafe, unsafe_service = real_pushover_notifier()
+    unsafe_service.body_maxlen = 200
     safe, safe_service = real_pushover_notifier('split')
     safe_service.send = Mock(return_value=True)
     c.config.apobj = unsafe
@@ -1247,6 +1257,7 @@ def test_every_destination_must_allow_complete_message_delivery(context):
     notifier, good = real_pushover_notifier('split')
     assert notifier.add('pover://' + 'c'*30 + '@' + 'd'*30 + '/?overflow=truncate')
     bad = list(notifier)[1]
+    bad.body_maxlen = 200
     bad.send = Mock(side_effect=AssertionError('Unexpected notification'))
     c.config.apobj = notifier
     assert not deliver(context)
@@ -1258,6 +1269,7 @@ def test_every_destination_must_allow_complete_message_delivery(context):
 def test_dry_run_warns_about_overflow_without_state_or_notifications(context, monkeypatch):
     a, b, category, s, p = context
     notifier, service = real_pushover_notifier()
+    service.body_maxlen = 200
     c.config.apobj = notifier
     monkeypatch.setattr(c, 'availability_products', Mock(return_value=[
         {'id': 'Y7QG', 'type': {'id': 'pt_show'}, 'title': 'Headliner'}]))
@@ -1276,6 +1288,7 @@ def test_dry_run_warns_about_overflow_without_state_or_notifications(context, mo
 def test_invalid_overflow_still_finishes_normal_price_outputs(context, monkeypatch):
     a, b = setup_combined_console(context, monkeypatch)
     notifier, service = real_pushover_notifier()
+    service.body_maxlen = 200
     c.config.apobj = notifier
     monkeypatch.setattr(c, 'get_voyages', Mock(return_value=[b]))
     monkeypatch.setattr(c, 'availability_products', Mock(return_value=[
@@ -1293,3 +1306,241 @@ def test_invalid_overflow_still_finishes_normal_price_outputs(context, monkeypat
     a.access.session.close.assert_called_once()
     service.send.assert_not_called()
     assert c.history.finish_run.call_args.args[0] == 'partial_failure'
+
+
+@pytest.mark.parametrize('selected', [False, True])
+def test_notfound_catalog_cannot_rearm_after_an_alert(context, monkeypatch, selected):
+    a, b, category, s, party = context
+    category = replace(category, products=category.products if selected else None)
+    s = replace(s, reservations=(c.AvailabilityReservation(b['bookingId'], (category,), True),))
+    ctx = a, b, category, s, party
+    assert deliver(ctx, notify_on_reopen=True)
+    before = Path(s.state_file).read_bytes()
+    monkeypatch.setattr(c, 'availability_json', Mock(return_value=capture('wonder_catalog')))
+    assert not c.process_availability_bookings(a, [b], s)
+    assert Path(s.state_file).read_bytes() == before
+    assert deliver(ctx, notify_on_reopen=True)
+    assert c.config.apobj.notify.call_count == 1
+
+
+@pytest.mark.parametrize('dates, stock, expected', [
+    (['2099-10-10T18:00:00', '2099-10-17T00:30:00'], 10, 'available'),
+    (['2099-10-09T23:59:00', '2099-10-16T23:59:00'], 10, 'available'),
+    (['2099-10-17T00:00:00'], 10, 'unknown'),
+    (['2099-10-09T23:59:00'], 10, 'unknown'),
+    (['invalid', '2099-10-17T00:00:00'], 10, 'unknown'),
+    (['invalid', '2099-10-10T18:00:00'], 0, 'unknown'),
+    (['2099-10-10T18:00:00', '2099-10-17T00:00:00'], 0, 'unavailable'),
+    ([], 0, 'unavailable'),
+])
+def test_sailing_date_filter_preserves_valid_evidence(context, monkeypatch, dates, stock, expected):
+    a, b, cat, s, party = context
+    response = capture('headliner')
+    response['payload']['offerings'] = [
+        {'id': str(i), 'dateTime': day, 'stockLevelStatus': 'inStock', 'stockLevel': stock}
+        for i, day in enumerate(dates)]
+    monkeypatch.setattr(c, 'availability_json', Mock(return_value=response))
+    try:
+        data = c.availability_eligibility(a, b, cat.category, cat.products[0], party)
+        result = c.evaluate_availability(data, cat.category, cat.products[0], 'Show')
+        assert result.state == expected
+        assert all('2099-10-17' not in stamp and '2099-10-09' not in stamp for stamp in result.times)
+    except c.AvailabilityUnknown:
+        assert expected == 'unknown'
+    assert len(response['payload']['offerings']) == len(dates)  # Caller data is not mutated.
+
+
+def test_readable_scope_identifies_booking_and_avoids_delimiter_collisions(context):
+    a, b, category, s, party = context
+    key = c.availability_scope(a, b, 'dining')
+    assert json.loads(key) == [a.username.lower(), 'IC', '2099-10-10', 'booking-1', 'dining']
+    other = replace(a, username='someone | IC@example.invalid')
+    assert c.availability_scope(other, b, 'dining') != key
+    assert deliver(context)
+    assert key.replace('dining', 'show') in c.read_reservation_state(Path(s.state_file))['scopes']
+
+
+@pytest.mark.parametrize('old_value', [None, {}, {'reservations': []}])
+def test_config_rejects_old_top_level_name(tmp_path, old_value):
+    path = tmp_path / 'config.yaml'
+    path.write_text(json.dumps({'availability': old_value}))
+    with pytest.raises(ValueError, match='Rename availability to reservationAlerts'):
+        c.load_config_objects(str(path))
+
+
+def test_new_config_name_loads_and_keeps_other_features(tmp_path):
+    path = tmp_path / 'config.yaml'
+    path.write_text(json.dumps({'reservationAlerts': valid_config(),
+                               'cabinAvailabilityStateFile': 'other.json'}))
+    config = c.load_config_objects(str(path))
+    assert config.availability == c.parse_availability_config(valid_config())
+    assert config.cabin_availability_state_file == 'other.json'
+
+
+def test_coverage_warning_finishes_successfully_and_is_recorded(context, monkeypatch):
+    a, b = setup_combined_console(context, monkeypatch)
+    monkeypatch.setattr(c, 'get_voyages', Mock(return_value=[b]))
+    monkeypatch.setattr(c, 'get_cruise_price', Mock())
+    monkeypatch.setattr(c, 'availability_products', Mock(side_effect=c.AvailabilityCatalogIncomplete(
+        'count mismatch', [{'id': 'Y7QG', 'type': {'id': 'pt_show'}}])))
+    monkeypatch.setattr(c, 'availability_eligibility', Mock(return_value=capture('headliner')))
+    c.main()
+    assert c.history.finish_run.call_args.args[0] == 'ok'
+    assert 'incomplete coverage' in c.history.finish_run.call_args.args[1]
+    assert any('completed with coverage warnings' in x.args[0] for x in c.log_warn.call_args_list)
+    assert not any('Availability checks completed successfully' in x.args[0] for x in c.log.call_args_list)
+    c.get_cruise_price.assert_called_once()
+
+
+@pytest.mark.parametrize('failure', ['catalog', 'eligibility'])
+def test_transport_failure_stays_failure_even_with_other_valid_products(context, monkeypatch, failure):
+    a, b, category, s, p = context
+    category = replace(category, products=None)
+    s = replace(s, reservations=(c.AvailabilityReservation(b['bookingId'], (category,)),))
+    products = [{'id': x, 'type': {'id': 'pt_show'}} for x in ['Y7QG', 'failed']]
+    catalog = Mock(return_value=products)
+    if failure == 'catalog':
+        catalog.side_effect = c.AvailabilityCatalogIncomplete('request failed', products[:1], True)
+    monkeypatch.setattr(c, 'availability_products', catalog)
+    monkeypatch.setattr(c, 'availability_eligibility', Mock(side_effect=[
+        capture('headliner'), c.AvailabilityRequestFailed('HTTP 401')]))
+    assert not c.process_availability_bookings(a, [b], s)
+    c.config.apobj.notify.assert_called_once()
+
+
+def test_no_reservation_header_for_unmatched_account(context, monkeypatch):
+    a, b = setup_combined_console(context, monkeypatch)
+    monkeypatch.setattr(c, 'get_voyages', Mock(return_value=[]))
+    monkeypatch.setattr(c, 'get_cruise_price', Mock())
+    with pytest.raises(SystemExit):  # Globally missing configured booking remains actionable.
+        c.main()
+    assert not any('Reservation Alerts' in x.args[0] for x in c.log.call_args_list)
+
+
+@pytest.mark.parametrize('selected, expected_requests', [(False, 33), (True, 3)])
+def test_pacing_and_selected_products_reduce_requests(context, monkeypatch, selected, expected_requests):
+    a, b, _, s, _ = context
+    categories = (c.AvailabilityCategory('dining', ('dining0',)),) if selected else (
+        c.AvailabilityCategory('dining'), c.AvailabilityCategory('show'))
+    s = replace(s, dry_run=True, reservations=(c.AvailabilityReservation(b['bookingId'], categories),))
+    now = [0.0]
+    starts, ends = [], []
+    monkeypatch.setattr(c.time, 'monotonic', lambda: now[0])
+    monkeypatch.setattr(c.time, 'sleep', lambda delay: now.__setitem__(0, now[0] + delay))
+    def request(account, method, url, **kwargs):
+        starts.append(now[0])
+        query = kwargs['json_data']
+        if 'graphql' in url:
+            v = query['variables']; category = v['category']
+            count = 20 if category == 'dining' else 10
+            entries = [{'id': category + str(i), 'type': {'id': 'pt_' + category}}
+                       for i in range(count)]
+            page = v['currentPage']
+            result = {'data': {'products': {'__typename': 'CommerceProductResultSuccess',
+                'commerceProducts': entries[page*12:(page+1)*12],
+                'pageInfo': {'totalPages': (count+11)//12, 'totalResults': count}}}}
+            assert 'productStatus' not in query['query']
+        else:
+            result = {'status': 200, 'payload': {'productCode': query['productCode'],
+                'categoryId': query['categoryId'], 'offerings': []}}
+        now[0] += 0.2
+        ends.append(now[0])
+        return Mock(status_code=200, json=Mock(return_value=result))
+    network = Mock(side_effect=request)
+    monkeypatch.setattr(c, '_execute_api_request', network)
+    assert c.process_availability_bookings(a, [b], s)
+    assert network.call_count == expected_requests
+    assert starts[0] == 0
+    assert all(start - end == pytest.approx(1) for start, end in zip(starts[1:], ends))
+
+
+def test_pacing_counts_failed_requests_and_existing_cooldown(context, monkeypatch):
+    a = context[0]
+    now = [0.0]
+    monkeypatch.setattr(c.time, 'monotonic', lambda: now[0])
+    sleeps = Mock(side_effect=lambda delay: now.__setitem__(0, now[0] + delay))
+    monkeypatch.setattr(c.time, 'sleep', sleeps)
+    monkeypatch.setattr(c, '_execute_api_request', Mock(return_value=None))
+    for _ in range(2):
+        with pytest.raises(c.AvailabilityRequestFailed):
+            c.availability_json(a, 'POST', 'https://example.invalid')
+    sleeps.assert_called_once_with(1)
+    now[0] += 5  # Existing account cooldown already covers the gap.
+    with pytest.raises(c.AvailabilityRequestFailed):
+        c.availability_json(a, 'POST', 'https://example.invalid')
+    assert sleeps.call_count == 1
+
+
+@pytest.mark.parametrize('mode', [None, 'truncate', 'split'])
+def test_small_pushover_message_needs_no_overflow_change(context, mode):
+    notifier, service = real_pushover_notifier(mode)
+    service.send = Mock(return_value=True)
+    original = service.overflow_mode
+    c.config.apobj = notifier
+    assert deliver(context)
+    service.send.assert_called_once()
+    body = service.send.call_args.kwargs['body']
+    assert 'Headliner' in body and 'Cruise Planner:' in body
+    assert service.overflow_mode == original
+    assert saved_rows(context)['Y7QG']['notified']
+
+
+def test_html_email_fits_without_split_and_keeps_all_products(context):
+    apprise = pytest.importorskip('apprise')
+    notifier = apprise.Apprise()
+    assert notifier.add('mailto://user:password@example.invalid?format=html')
+    service = next(iter(notifier))
+    service.send = Mock(return_value=True)
+    c.config.apobj = notifier
+    results = [replace(state_result(product=str(i)), title=f'Restaurant {i:02d} < & >') for i in range(30)]
+    assert deliver(context, results)
+    service.send.assert_called_once()
+    body = service.send.call_args.kwargs['body']
+    assert '&lt;' in body and '&amp;' in body
+    assert all(f'Restaurant&nbsp;{i:02d}' in body for i in range(30))
+    assert service.overflow_mode == 'upstream'
+
+
+@pytest.mark.parametrize('mode', [None, 'split'])
+@pytest.mark.parametrize('restriction', ['lines', 'title'])
+def test_split_does_not_bypass_other_destructive_limits(context, mode, restriction):
+    notifier, service = real_pushover_notifier(mode)
+    if restriction == 'lines':
+        service.body_max_line_count = 2
+    else:
+        service.title_maxlen = 10
+    c.config.apobj = notifier
+    assert not deliver(context)
+    service.send.assert_not_called()
+    assert not saved_rows(context)['Y7QG']['notified']
+    assert any(('line limit' if restriction == 'lines' else 'message/title') in x.args[0]
+               for x in c.log_warn.call_args_list)
+
+
+@pytest.mark.parametrize('restriction', ['combined', 'no_title', 'formatting'])
+def test_overflow_validation_counts_rendered_message_not_raw_body(context, restriction):
+    notifier, service = real_pushover_notifier()
+    c.config.apobj = notifier
+    body = 'x' * 990
+    if restriction == 'combined':
+        service.overflow_amalgamate_title = True
+        body = 'x' * 1000
+    elif restriction == 'no_title':
+        service.title_maxlen = 0
+        body = 'x' * 1000
+    else:
+        service.notify_format = c.NotifyFormat.HTML
+        body = '<&' * 150  # 300 input characters expand beyond 1024 in HTML.
+    error = c.availability_notification_error(context[0], body)
+    assert error and 'overflow=split' in error
+    service.send.assert_not_called()
+    service.overflow_mode = 'split'
+    assert c.availability_notification_error(context[0], body) is None
+
+
+def test_notification_preview_failure_does_not_send_or_expose_details(context):
+    c.config.apobj._create_notify_gen.side_effect = RuntimeError('PRIVATE_TOKEN')
+    assert not deliver(context)
+    c.config.apobj.notify.assert_not_called()
+    assert not saved_rows(context)['Y7QG']['notified']
+    assert 'PRIVATE_TOKEN' not in '\n'.join(x.args[0] for x in c.log_warn.call_args_list)

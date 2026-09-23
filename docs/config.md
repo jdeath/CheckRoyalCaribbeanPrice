@@ -143,7 +143,7 @@ enable automatic discovery for dining, shows, or both. The check uses dated
 offering inventory, including free shows, independently of price thresholds.
 
 ```yaml
-availability:
+reservationAlerts:
   dryRun: true
   stateFile: "data/reservation-availability.json"
   reservations:
@@ -158,7 +158,7 @@ Royal returns for that category. To monitor only selected products in a category
 use a `products` list:
 
 ```yaml
-availability:
+reservationAlerts:
   dryRun: true
   stateFile: "data/reservation-availability.json"
   reservations:
@@ -172,11 +172,19 @@ availability:
 
 See [configuration, notification behavior, and limitations](reservation-alerts.md).
 
-Live reservation alerts require `overflow=split` on every effective Apprise URL
-(per-account overrides or the global fallback). Dry runs warn about incompatible
-settings; live checks preserve pending alerts and report a partial failure until
-corrected. Existing price checks continue normally. See
-[notification configuration](reservation-alerts.md#notifications-and-state).
+Selective monitoring uses markedly fewer resources: with 20 dining products in
+two catalog pages, checking one selected restaurant costs 3 requests instead of
+22. Catalog pages are still fetched, but only selected products receive eligibility
+checks. Once the dining you want has opened and you have booked it, set
+`dining: false`; keep monitoring only the restaurants still outstanding. One-time
+notifications suppress repeat alerts, not polling. Remove entries when neither
+category needs monitoring. Availability requests have a one-second minimum gap.
+
+Live alerts require `overflow=split` only on destinations where the actual formatted
+message needs splitting. All destinations are validated before sending; destructive
+title/line limits are also rejected. Pending alerts remain unacknowledged until
+configuration is corrected. Existing price checks continue normally. See
+[notification configuration and pre-release upgrade instructions](reservation-alerts.md#notifications-and-state).
 
 ## Example Config with more options (not all of them)
 ```yaml

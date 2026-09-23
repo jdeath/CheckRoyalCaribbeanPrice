@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse
 import base64
-import hashlib
+import copy
 import json
 import locale
 import logging
@@ -78,6 +78,7 @@ RETRY_BACKOFF_BASE = 2
 
 # Cool-down between accounts when checking more than one, to avoid hammering the API
 ACCOUNT_COOLDOWN_SECONDS = 5
+RESERVATION_REQUEST_INTERVAL_SECONDS = 1.0
 
 # Module-level constant for room type translations
 STATEROOM_TYPE_MAPPING = {
@@ -4856,12 +4857,17 @@ class AvailabilityUnknown(ValueError):
     """Incomplete/failed evidence must never be converted into unavailable."""
 
 
+class AvailabilityRequestFailed(AvailabilityUnknown):
+    """Transport/authentication failures remain operational failures."""
+
+
 class AvailabilityCatalogIncomplete(AvailabilityUnknown):
     """Retain returned products without treating a partial catalog as absence."""
 
-    def __init__(self, reason: str, products: list):
+    def __init__(self, reason: str, products: list, request_failed: bool = False):
         super().__init__(reason)
         self.products = products
+        self.request_failed = request_failed
 
 
 @dataclass(frozen=True)
@@ -4901,7 +4907,7 @@ def parse_availability_config(raw: Any) -> Optional[AvailabilitySettings]:
     if raw is None:
         return None
     if not isinstance(raw, dict):
-        raise ValueError("availability must be a mapping")
+        raise ValueError("reservationAlerts must be a mapping")
 
     def fail(location: str, message: str):
         raise ValueError(f"{location}: {message}")
@@ -4916,15 +4922,15 @@ def parse_availability_config(raw: Any) -> Optional[AvailabilitySettings]:
         if unknown:
             fail(location, "unrecognized configuration key(s): " + ", ".join(sorted(map(str, unknown))))
 
-    keys(raw, ("reservations", "dryRun", "stateFile"), "availability")
+    keys(raw, ("reservations", "dryRun", "stateFile"), "reservationAlerts")
     reservations = raw.get("reservations")
     if not isinstance(reservations, list) or not reservations:
-        raise ValueError("availability.reservations must be a nonempty list")
+        raise ValueError("reservationAlerts.reservations must be a nonempty list")
 
     parsed_reservations = []
     seen_reservations = set()
     for index, item in enumerate(reservations):
-        location = f"availability.reservations[{index}]"
+        location = f"reservationAlerts.reservations[{index}]"
         if not isinstance(item, dict):
             fail(location, "reservation entry must be a mapping")
         keys(item, ("reservation", "dining", "shows", "notifyOnReopen"), location)
@@ -4964,10 +4970,10 @@ def parse_availability_config(raw: Any) -> Optional[AvailabilitySettings]:
 
     dry_run = raw.get("dryRun", True)
     if not isinstance(dry_run, bool):
-        raise ValueError("availability: dryRun must be true or false")
+        raise ValueError("reservationAlerts: dryRun must be true or false")
     state = raw.get("stateFile", "data/reservation-availability.json")
     if not isinstance(state, str) or not state.strip() or state == ":memory:":
-        raise ValueError("availability.stateFile must name a persistent file")
+        raise ValueError("reservationAlerts.stateFile must name a persistent file")
     return AvailabilitySettings(tuple(parsed_reservations), dry_run, state)
 
 
@@ -4981,7 +4987,7 @@ query WebProductsByCategory($category: String!, $passengerId: String,
     filter: {includeVariantProducts: false}, currencyIso: $currencyCode) {
     __typename
     ... on CommerceProductResultSuccess {
-      commerceProducts { id title type { id } productStatus }
+      commerceProducts { id title type { id } }
       pageInfo { totalResults totalPages }
     }
     ... on CommerceProductExceptions { exceptions { __typename } }
@@ -4992,11 +4998,19 @@ query WebProductsByCategory($category: String!, $passengerId: String,
 
 def availability_json(account: AccountInfo, method: str, url: str, **kwargs) -> dict:
     """Reuse existing authentication/retries; never log raw payloads or tokens."""
-    response = _execute_api_request(account, method, url, **kwargs)
+    previous = getattr(account, "_reservation_request_finished", None)
+    if previous is not None:
+        remaining = RESERVATION_REQUEST_INTERVAL_SECONDS - (time.monotonic() - previous)
+        if remaining > 0:
+            time.sleep(remaining)
+    try:
+        response = _execute_api_request(account, method, url, **kwargs)
+    finally:
+        account._reservation_request_finished = time.monotonic()
     if response is None:
-        raise AvailabilityUnknown("request failed; previous state preserved")
+        raise AvailabilityRequestFailed("request failed; previous state preserved")
     if not 200 <= response.status_code < 300:
-        raise AvailabilityUnknown(f"Royal API returned HTTP {response.status_code}")
+        raise AvailabilityRequestFailed(f"Royal API returned HTTP {response.status_code}")
     try:
         data = response.json()
     except (ValueError, TypeError):
@@ -5033,10 +5047,6 @@ def availability_products(account: AccountInfo, booking: dict, category: str) ->
             if not isinstance(result, dict):
                 raise AvailabilityUnknown("missing catalog result")
             if result.get("__typename") == "CommerceProductExceptions":
-                exceptions = result.get("exceptions")
-                if page == 0 and exceptions and all(isinstance(e, dict) and
-                        e.get("__typename") == "CommerceProductNotFound" for e in exceptions):
-                    return []
                 raise AvailabilityUnknown("catalog exception or incomplete pagination")
             if result.get("__typename") != "CommerceProductResultSuccess":
                 raise AvailabilityUnknown("unrecognized catalog result")
@@ -5066,7 +5076,7 @@ def availability_products(account: AccountInfo, booking: dict, category: str) ->
         raise AvailabilityUnknown("catalog page limit reached")
     except (AvailabilityUnknown, KeyError, TypeError, AttributeError, ValueError) as exc:
         reason = str(exc) if isinstance(exc, AvailabilityUnknown) else "malformed catalog response"
-        raise AvailabilityCatalogIncomplete(reason, products) from None
+        raise AvailabilityCatalogIncomplete(reason, products, isinstance(exc, AvailabilityRequestFailed)) from None
 
 
 def availability_party(booking: dict) -> Tuple[Tuple[str, str], ...]:
@@ -5104,15 +5114,26 @@ def availability_eligibility(account: AccountInfo, booking: dict, category: str,
         json_data=body)
     payload = data.get("payload")
     if isinstance(payload, dict) and isinstance(payload.get("offerings"), list):
+        in_range = []
+        discarded = False
         for offering in payload["offerings"]:
             if not isinstance(offering, dict):
-                raise AvailabilityUnknown("malformed offering")
+                in_range.append(offering)  # The evaluator preserves malformed evidence as unknown.
+                continue
             try:
                 offering_date = datetime.fromisoformat(offering["dateTime"]).date()
             except (KeyError, TypeError, ValueError):
-                raise AvailabilityUnknown("invalid offering date") from None
+                in_range.append(offering)
+                continue
             if not start <= offering_date < start + timedelta(days=nights):
-                raise AvailabilityUnknown("offering outside requested sailing")
+                discarded = True
+                continue
+            in_range.append(offering)
+        if discarded and not in_range:
+            raise AvailabilityUnknown("all offerings outside requested sailing")
+        if discarded:
+            log_warn("        Offerings outside requested sailing ignored")
+            data = {**data, "payload": {**payload, "offerings": in_range}}
     return data
 
 
@@ -5177,10 +5198,10 @@ def _evaluate_availability(data: dict, category: str, product: str,
 
 
 def availability_scope(account: AccountInfo, booking: dict, category: str) -> str:
-    # Keep account and reservation identifiers out of the persisted context key.
+    # JSON encoding keeps editable identifiers unambiguous, even with delimiters.
     values = [account.username.lower(), booking["shipCode"], availability_date(booking["sailDate"]).isoformat(),
               str(booking["bookingId"]), category]
-    return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+    return json.dumps(values, ensure_ascii=False)
 
 
 def availability_time_lines(times: tuple) -> list[str]:
@@ -5195,18 +5216,18 @@ def availability_time_lines(times: tuple) -> list[str]:
 
 def read_reservation_state(path: Path) -> dict:
     """Only a missing file starts fresh; invalid state never resets alerts."""
-    invalid = ("Invalid reservation availability JSON state; check availability.stateFile. "
-               "Legacy watch-scoped state is not compatible with reservation/category scopes; "
-               "delete the old reservation state file before the first run of this build.")
+    invalid = ("Invalid reservation alert JSON state; check reservationAlerts.stateFile. "
+               "Stop the checker and back up the file before repairing it. "
+               "An intentional reset can repeat previously delivered alerts.")
     try:
         with path.open(encoding="utf-8") as stream:
             state = json.load(stream)
     except FileNotFoundError:
-        return {"version": 1, "scopes": {}}
+        return {"version": 2, "scopes": {}}
     except ValueError:
         raise AvailabilityUnknown(invalid) from None
     if (not isinstance(state, dict) or set(state) != {"version", "scopes"}
-            or type(state["version"]) is not int or state["version"] != 1
+            or type(state["version"]) is not int or state["version"] != 2
             or not isinstance(state["scopes"], dict)):
         raise AvailabilityUnknown(invalid)
     for scope, products in state["scopes"].items():
@@ -5221,17 +5242,71 @@ def read_reservation_state(path: Path) -> dict:
     return state
 
 
-def availability_notification_error(account: AccountInfo) -> Optional[str]:
-    """Require lossless overflow handling on the effective account destinations."""
+def availability_message(booking: dict, category: AvailabilityCategory, candidates: list) -> str:
+    label = availability_category_label(category.category)
+    lines = [f"{label}: {booking['shipCode']} sailing {availability_date(booking['sailDate']).isoformat()}"]
+    lines.append("Inventory released; personal conflicts not checked.")
+    for result in candidates:
+        lines.extend(["", f"{result.title}:"])
+        lines.extend(availability_time_lines(result.times[:6]))
+        if len(result.times) > 6:
+            lines.append(f"(+{len(result.times) - 6} more times in Cruise Planner)")
+    params = urlencode({"bookingId": str(booking["bookingId"]), "shipCode": booking["shipCode"],
+                        "sailDate": availability_date(booking["sailDate"]).strftime("%Y%m%d")})
+    lines.extend(["", "Cruise Planner:",
+        f"https://www.royalcaribbean.com/account/cruise-planner/category/pt_{category.category}?{params}",
+        "Times as returned by Royal. Confirm availability in Cruise Planner."])
+    if category.category == "dining":
+        lines.append("Reported stock does not guarantee a table for the full party.")
+    return "\n".join(lines)
+
+
+def availability_notification_error(account: AccountInfo, body: Optional[str] = None) -> Optional[str]:
+    """Preflight all destinations without sending or changing notification settings.
+
+    Isolate Apprise's formatting/overflow preview here instead of maintaining a
+    second formatter. If that API changes, fail closed and leave alerts pending.
+    """
     notifier = notifier_for(account)
     if notifier is None or len(notifier) == 0:
-        return "No notification service configured; configure apprise for availability alerts"
-    services = sorted({service.service_name for service in notifier
-                       if service.overflow_mode != "split"})
-    if services:
-        return (f"Availability alerts for {account.username}: {', '.join(services)} require "
-                "overflow=split; update this account's apprise URLs or the global fallback. "
-                "Pending alerts will retry after configuration is corrected.")
+        return "No notification service configured; configure apprise for reservation alerts"
+    if body is None:
+        return None
+    errors = []
+    try:
+        prepared = list(notifier._create_notify_gen(
+            body=body, title="Cruise Reservation Availability", body_format=NotifyFormat.TEXT))
+        if not prepared:
+            return "No notification destinations matched; check apprise configuration"
+        for service, message in prepared:
+            name = service.service_name
+            if not service.enabled:
+                errors.append(f"{name}: notification service disabled")
+                continue
+            # UPSTREAM preview joins titles to bodies where required. Remove the
+            # line cap on a shallow copy so this baseline cannot hide truncation.
+            probe = copy.copy(service)
+            probe.body_max_line_count = 0
+            args = {key: message[key] for key in ("body", "title", "body_format")}
+            baseline = probe._apply_overflow(**args, overflow="upstream")[0]
+            if service.body_max_line_count > 0 and len(re.split(r"\r*\n", baseline["body"])) > service.body_max_line_count:
+                errors.append(f"{name}: message exceeds the line limit; choose a destination/configuration that preserves all lines (split alone cannot fix this)")
+                continue
+            chunks = service._apply_overflow(**args, overflow="split")
+            # Apprise may truncate titles even in SPLIT mode. Whitespace at split
+            # boundaries is insignificant, but every non-whitespace body character
+            # and the full title must survive. No credentials enter diagnostics.
+            compact = lambda value: re.sub(r"\s+", "", value)
+            if (not chunks or compact("".join(chunk["body"] for chunk in chunks)) != compact(baseline["body"])
+                    or (baseline["title"] and not any(chunk["title"].startswith(baseline["title"]) for chunk in chunks))):
+                errors.append(f"{name}: message/title cannot be preserved by this service's formatting limits; choose a suitable destination")
+            elif len(chunks) > 1 and service.overflow_mode != "split":
+                errors.append(f"{name}: this message exceeds the service limit; configure overflow=split")
+    except Exception:
+        return ("Cannot validate Apprise message formatting; check the installed Apprise version "
+                "and destination settings. Pending alerts have not been acknowledged.")
+    if errors:
+        return f"Reservation alerts for {account.username}: " + "; ".join(errors) + ". Pending alerts will retry after configuration is corrected."
     return None
 
 
@@ -5248,12 +5323,15 @@ def deliver_availability(settings: AvailabilitySettings, account: AccountInfo, b
         log(f"        {color}{result.title}: {result.state.capitalize()}{RESET} ({result.reason})")
         for line in availability_time_lines(result.times):
             log(f"          {line}")
-    notification_error = availability_notification_error(account)
-    if notification_error:
-        log_warn(f"        {YELLOW if settings.dry_run else RED}{notification_error}{RESET}")
+    usable = not results or any(result.state != "unknown" for result in results)
     if settings.dry_run:
+        available = [result for result in results if result.state == "available"]
+        error = availability_notification_error(
+            account, availability_message(booking, category, available) if available else None)
+        if error:
+            log_warn(f"        {YELLOW}{error}{RESET}")
         log(f"        {YELLOW}Availability dry run: no availability notifications or state changes{RESET}")
-        return not any(result.state == "unknown" for result in results)
+        return usable
 
     path = Path(settings.state_file).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -5296,27 +5374,16 @@ def deliver_availability(settings: AvailabilitySettings, account: AccountInfo, b
                 rows[result.product] = updated
                 changed = True
 
+        body = availability_message(booking, category, candidates) if candidates else None
+        notification_error = availability_notification_error(account, body)
+        if notification_error:
+            log_warn(f"        {RED}{notification_error}{RESET}")
         sent = notification_error is None
         if candidates and sent:
-            label = availability_category_label(category.category)
-            lines = [f"{label}: {booking['shipCode']} sailing {availability_date(booking['sailDate']).isoformat()}"]
-            lines.append("Inventory released; personal conflicts not checked.")
-            for result in candidates:
-                lines.extend(["", f"{result.title}:"])
-                lines.extend(availability_time_lines(result.times[:6]))
-                if len(result.times) > 6:
-                    lines.append(f"(+{len(result.times) - 6} more times in Cruise Planner)")
-            params = urlencode({"bookingId": str(booking["bookingId"]), "shipCode": booking["shipCode"],
-                                "sailDate": availability_date(booking["sailDate"]).strftime("%Y%m%d")})
-            lines.extend(["", "Cruise Planner:",
-                f"https://www.royalcaribbean.com/account/cruise-planner/category/pt_{category.category}?{params}",
-                "Times as returned by Royal. Confirm availability in Cruise Planner."])
-            if category.category == "dining":
-                lines.append("Reported stock does not guarantee a table for the full party.")
             notifier = notifier_for(account)
             try:
                 with suppress_availability_notification_info():
-                    sent = notifier.notify(body="\n".join(lines),
+                    sent = notifier.notify(body=body,
                         title="Cruise Reservation Availability", body_format=NotifyFormat.TEXT) is True
             except Exception:
                 sent = False
@@ -5330,10 +5397,11 @@ def deliver_availability(settings: AvailabilitySettings, account: AccountInfo, b
         if changed:
             state["scopes"][scope] = rows
             write_cabin_state(path, state)
-    return sent and not any(result.state == "unknown" for result in results)
+    return sent and usable
 
 
-def process_availability_bookings(account: AccountInfo, bookings: list, settings: AvailabilitySettings) -> bool:
+def process_availability_bookings(account: AccountInfo, bookings: list, settings: AvailabilitySettings,
+                                  warnings: Optional[List[str]] = None) -> bool:
     if not account.is_royal:
         log_warn("[Availability] Only Royal Caribbean is supported")
         return False
@@ -5342,6 +5410,10 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
     if not settings.reservations:
         return True
 
+    if not any(str(booking.get("bookingId")) == reservation.reservation
+               for booking in bookings for reservation in settings.reservations):
+        return True
+    log(f"\n{BLUE}Reservation Alerts{RESET}")
     log(f"  {account.friendly_name} for user {account.username}")
     healthy = True
     for reservation in settings.reservations:
@@ -5376,7 +5448,8 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                 except AvailabilityCatalogIncomplete as exc:
                     products = exc.products
                     complete = False
-                    healthy = False
+                    if exc.request_failed:
+                        healthy = False
                     log_warn(f"        {YELLOW}Incomplete catalog ({exc}); checking returned products. "
                              f"Absent products retain previous state.{RESET}")
                 selected = set(category.products) if category.products is not None else None
@@ -5406,6 +5479,8 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                         results.append(evaluate_availability(
                             payload, category.category, pid, title))
                     except (AvailabilityUnknown, KeyError, TypeError, AttributeError, ValueError) as exc:
+                        if isinstance(exc, AvailabilityRequestFailed):
+                            healthy = False
                         reason = str(exc) if isinstance(exc, AvailabilityUnknown) else "malformed eligibility response"
                         results.append(AvailabilityResult(pid, title, "unknown", reason))
 
@@ -5418,6 +5493,13 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                 if complete and not scoped_products and selected is None:
                     log(f"        {YELLOW}No {category.category} products listed{RESET}")
 
+                if not complete or any(result.state == "unknown" for result in results):
+                    warning = f"{booking['shipCode']} {booking['sailDate']} {category.category}: incomplete coverage; uncertain products retain previous state"
+                    log_warn(f"        {YELLOW}{warning}{RESET}")
+                    if warnings is not None:
+                        warnings.append(warning)
+                    if not any(result.state != "unknown" for result in results):
+                        healthy = False
                 healthy = deliver_availability(
                     settings, account, booking, category, reservation.notify_on_reopen,
                     results, catalog_products=catalog_products if complete else None) and healthy
@@ -5426,7 +5508,7 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                     reason = str(exc)
                 elif isinstance(exc, (OSError, ImportError)):
                     reason = ("state storage error (" + type(exc).__name__ +
-                              "); check availability.stateFile and directory permissions or overlapping checks")
+                              "); check reservationAlerts.stateFile and directory permissions or overlapping checks")
                 else:
                     reason = type(exc).__name__
                 log_warn(f"        {RED}Unknown ({reason}); state not advanced{RESET}")
@@ -5434,7 +5516,8 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
     return healthy
 
 
-def finish_availability_run(settings: AvailabilitySettings, found_reservations: set, healthy: bool) -> None:
+def finish_availability_run(settings: AvailabilitySettings, found_reservations: set, healthy: bool,
+                            warnings: Optional[List[str]] = None) -> None:
     """Report missing bookings and incomplete checks after normal price outputs."""
     missing = sorted({reservation.reservation for reservation in settings.reservations
                       if reservation.reservation not in found_reservations})
@@ -5445,7 +5528,10 @@ def finish_availability_run(settings: AvailabilitySettings, found_reservations: 
         raise AvailabilityUnknown("One or more availability checks or notifications failed; see status lines")
     if settings.reservations:
         log(" ")
-        log(f"  {GREEN}Availability checks completed successfully{RESET}")
+        if warnings:
+            log_warn(f"  {YELLOW}Reservation alerts completed with coverage warnings in {len(warnings)} category check(s); see status lines{RESET}")
+        else:
+            log(f"  {GREEN}Availability checks completed successfully{RESET}")
         log(" ")
 
 
@@ -5503,6 +5589,8 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
 
     # Handle empty files (yaml.safe_load returns None for empty files)
     data = expand_env_vars(raw_data or {})
+    if "availability" in data:
+        raise ValueError("Rename availability to reservationAlerts in config.yaml")
 
     # Parse accounts
     accounts = [
@@ -5593,7 +5681,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         upgrade_reservations=_config_id_list(data.get("upgradeReservations"), "upgradeReservations"),
         upgrade_sister_categories=_config_bool(data.get("upgradeSisterCategories"), True),
         cabin_availability_state_file=cabin_state_file,
-        availability=parse_availability_config(data.get("availability")),
+        availability=parse_availability_config(data.get("reservationAlerts")),
         output_watch_as_json=data.get("outputWatchAsJson",False),
         output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
         apobj=apobj,
@@ -5688,6 +5776,7 @@ def main() -> None:
     availability_enabled = (isinstance(config.availability, AvailabilitySettings)
                             and bool(config.availability.reservations))
     availability_healthy = True
+    availability_warnings = []
     availability_found = set()
     try:
         # Instantiate clean per-run tracker
@@ -5868,9 +5957,8 @@ def main() -> None:
                             if ship_code and not booking.get("shipName"):
                                 booking["shipName"] = ship_dictionary.get_ship(ship_code)
                         availability_found.update(str(b.get("bookingId")) for b in bookings)
-                        log(f"\n{BLUE}Reservation Availability Watches{RESET}")
                         availability_healthy = process_availability_bookings(
-                            account_info, bookings, config.availability) and availability_healthy
+                            account_info, bookings, config.availability, availability_warnings) and availability_healthy
                     else:
                         log_warn("[Availability] Booking lookup failed; previous state retained")
                         availability_healthy = False
@@ -5947,7 +6035,7 @@ def main() -> None:
         failure_summaries = []
         if availability_enabled:
             try:
-                finish_availability_run(config.availability, availability_found, availability_healthy)
+                finish_availability_run(config.availability, availability_found, availability_healthy, availability_warnings)
             except AvailabilityUnknown as exc:
                 log_warn(str(exc))
                 failure_summaries.append(str(exc))
@@ -5980,7 +6068,10 @@ def main() -> None:
             # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.
             sys.exit(EXIT_PARTIAL_FAILURE)
 
-        history.finish_run("ok")
+        if availability_warnings:
+            history.finish_run("ok", "; ".join(availability_warnings))
+        else:
+            history.finish_run("ok")
 
     except Exception as e:
         # Mark the price-history run as failed before the module-level handler reports it
