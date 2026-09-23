@@ -5311,8 +5311,8 @@ def availability_notification_error(account: AccountInfo, body: Optional[str] = 
                 errors.append(f"{name}: this message exceeds the service limit; configure overflow=split")
     except Exception:
         return (f"Cannot validate reservation-alert formatting with Apprise {apprise_version}. "
-                "Reinstall the tested dependency with: python -m pip install 'Apprise==1.13.1'. "
-                "For Docker or standalone builds, use a build with that tested dependency. "
+                "To restore the tested baseline, install: python -m pip install 'Apprise==1.13.1'. "
+                "For Docker or standalone builds, use a compatible release or report this error. "
                 "If the problem persists, report the version and service name, without notification URLs. "
                 "No reservation alerts were sent or acknowledged; live checks report partial failure.")
     if errors:

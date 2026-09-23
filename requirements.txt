@@ -1,5 +1,5 @@
 requests
 PyYAML
-# Formatting preflight uses private APIs; verify compatibility before updating.
-Apprise==1.13.1
+# Minimum tested version for reservation-alert formatting validation.
+Apprise>=1.13.1
 curl_cffi

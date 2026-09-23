@@ -161,13 +161,17 @@ incompatible destinations, and do not read or write state. Because they do not
 read acknowledgements, that preview can be larger than the pending live alert.
 Live delivery/configuration failures preserve pending alerts, finish normal price
 outputs, and report partial failure. The formatting preview uses Apprise internals
-behind one validation helper. Installs and packaged builds use the tested
-**Apprise 1.13.1**; CI also checks the latest release in a nonblocking compatibility
-job. Upgrade the pin only after those checks pass. An incompatible preview API
-fails validation rather than risking silent loss. Its diagnostic includes the
-installed version and recovery command: `python -m pip install 'Apprise==1.13.1'`.
-Docker/standalone users should use a build with the tested dependency. If the
-problem persists on that version, report the version and affected service without
+behind one validation helper. Installs and packaged builds require
+**Apprise >= 1.13.1**, the minimum tested version, with no upper bound. CI tests
+both that minimum and the latest release; both jobs must pass. Newer versions
+are not rejected at runtime: reservation alerts send when formatting validation
+succeeds. The minimum does not guarantee that future private APIs stay compatible.
+An incompatible preview API leaves alerts pending and reports partial failure
+in live mode. The diagnostic includes the installed version and an optional
+recovery command to restore the tested baseline:
+`python -m pip install 'Apprise==1.13.1'`. That recovery command is not an
+installation pin. Docker/standalone users should use a compatible release or
+report the error. If the problem persists on that version, report the version and affected service without
 including notification URLs or credentials. There is no unchecked-send fallback.
 This checks Apprise's declared formatting limits,
 not end-to-end receipt by a person's device.

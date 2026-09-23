@@ -17,13 +17,11 @@ on:
 
 jobs:
   pytest:
-    name: ${{ matrix.apprise == 'pinned' && 'Run Pytest Suite' || 'Apprise Latest Compatibility' }}
+    name: ${{ matrix.apprise == 'latest' && 'Run Pytest Suite' || 'Apprise Minimum Compatibility' }}
     strategy:
       fail-fast: false
       matrix:
-        apprise: [pinned, latest]
-    # Detect preview API changes without blocking the tested dependency build.
-    continue-on-error: ${{ matrix.apprise == 'latest' }}
+        apprise: [minimum, latest]
     runs-on: ubuntu-latest
 
     steps:
@@ -40,6 +38,10 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pytest-cov requests
+
+      - name: Check minimum Apprise compatibility
+        if: matrix.apprise == 'minimum'
+        run: python -m pip install 'Apprise==1.13.1'
 
       - name: Check latest Apprise compatibility
         if: matrix.apprise == 'latest'
