@@ -51,3 +51,32 @@ logFile: "output.txt"
 # upgradeSisterCategories: false # Optional, needs checkForUpgrades. Set false to skip the per-category prices inside your booked family (one fewer API request per booking; the table then shows each family's cheapest tier only)
 # outputWatchAsJson: true # Optional (off by default). Uncomment to write the watchlist price results to a JSON file for external consumption
 # outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file
+
+# Optional dining/show reservation-release alerts; disabled unless configured.
+# Start with dryRun: true, verify the console results, then set false to notify.
+# This dry run affects ONLY reservation availability alerts; normal price alerts are unchanged.
+# Dining and show products are discovered automatically for each reservation.
+# Oversized alerts require overflow=split on affected Apprise URLs; messages that fit do not.
+# Example: "pover://APP_TOKEN@USER_KEY/?overflow=split"
+# If a URL already has query options, add &overflow=split (replace an existing value).
+# Set this only on affected per-account URLs, or affected global URLs used as fallback.
+# A shared URL also splits oversized price alerts; short alerts remain one message.
+# See docs/reservation-alerts.md for behavior, limitations, and persistent storage.
+# Select only needed products for markedly fewer requests (catalog pages are still fetched).
+# Disable dining after the restaurants you want open and are booked; alerts alone do not stop polling.
+# reservationAlerts:
+#   dryRun: true
+#   stateFile: "data/reservation-availability.json"
+#   reservations:
+#     - reservation: "1234567"
+#       dining: true
+#       shows: true
+#       notifyOnReopen: false
+#
+# To reduce requests, monitor only selected product IDs within a category:
+#     - reservation: "7654321"
+#       dining:
+#         products:
+#           - "UT_RAILDINNER"
+#       shows: true
+#       notifyOnReopen: false

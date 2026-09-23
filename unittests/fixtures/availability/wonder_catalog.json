@@ -1,0 +1,12 @@
+{
+  "data": {
+    "products": {
+      "exceptions": [
+        {
+          "__typename": "CommerceProductNotFound"
+        }
+      ],
+      "__typename": "CommerceProductExceptions"
+    }
+  }
+}

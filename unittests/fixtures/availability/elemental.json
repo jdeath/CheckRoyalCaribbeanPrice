@@ -1,0 +1,108 @@
+{
+  "status": 200,
+  "error": null,
+  "warnings": null,
+  "payload": {
+    "productCode": "Y7JH",
+    "categoryId": "pt_show",
+    "guests": [
+      {
+        "id": "guest-1",
+        "reservationId": "booking-2",
+        "remainingBookableQty": 0,
+        "issues": [
+          {
+            "type": "BOOKING_LIMIT_REACHED",
+            "guestId": "guest-1"
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-015"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-016"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "offerings": [
+      {
+        "id": "example-offering-015",
+        "active": false,
+        "dateTime": "2098-04-07T18:30:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 188,
+        "issues": [
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-3"
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1"
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-2"
+          }
+        ]
+      },
+      {
+        "id": "example-offering-017",
+        "active": false,
+        "dateTime": "2098-04-07T20:45:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 66,
+        "issues": []
+      },
+      {
+        "id": "example-offering-016",
+        "active": false,
+        "dateTime": "2098-04-09T20:15:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 1,
+        "issues": [
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1"
+          }
+        ]
+      },
+      {
+        "id": "example-offering-018",
+        "active": false,
+        "dateTime": "2098-04-09T22:30:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 386,
+        "issues": []
+      },
+      {
+        "id": "example-offering-019",
+        "active": false,
+        "dateTime": "2098-04-12T19:15:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 384,
+        "issues": []
+      },
+      {
+        "id": "example-offering-020",
+        "active": false,
+        "dateTime": "2098-04-12T21:30:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 504,
+        "issues": []
+      }
+    ]
+  }
+}
