@@ -1368,7 +1368,8 @@ def test_config_rejects_old_top_level_name(tmp_path, old_value):
         c.load_config_objects(str(path))
 
 
-def test_new_config_name_loads_and_keeps_other_features(tmp_path):
+def test_new_config_name_loads_and_keeps_other_features(tmp_path, monkeypatch):
+    monkeypatch.setattr(c, "setup_hybrid_logging", Mock())
     path = tmp_path / 'config.yaml'
     path.write_text(json.dumps({'reservationAlerts': valid_config(),
                                'cabinAvailabilityStateFile': 'other.json'}))
