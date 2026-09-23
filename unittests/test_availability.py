@@ -111,8 +111,7 @@ def test_wonder_typed_absence_and_complete_icon_catalog(context, monkeypatch):
     a,b,*_ = context
     fetch = Mock(side_effect=[capture('wonder_catalog'),capture('icon_catalog')])
     monkeypatch.setattr(c, 'availability_json', fetch)
-    with pytest.raises(c.AvailabilityCatalogIncomplete):
-        c.availability_products(a,b,'show')
+    assert c.availability_products(a,b,'show') is None
     assert len(c.availability_products(a,b,'show')) == 6
     assert fetch.call_args.kwargs['json_data']['variables']['category'] == 'show'
 
@@ -858,7 +857,7 @@ def test_compact_alert_groups_dates_separates_shows_and_keeps_one_booking_link(c
     assert 'T20:30' not in body and '20:30:00' not in body
 
 
-def test_compact_alert_retains_preview_limit_but_console_has_all_times(context):
+def test_console_and_alert_limit_preview_without_modifying_inventory(context):
     a, b, w, s, p = context
     times = tuple(f'2099-10-10T{hour:02d}:00:00' for hour in range(10, 18))
     assert c.deliver_availability(s, a, b, w, False,
@@ -866,7 +865,10 @@ def test_compact_alert_retains_preview_limit_but_console_has_all_times(context):
     body = c.config.apobj.notify.call_args.kwargs['body']
     assert '(+2 more times in Cruise Planner)' in body
     assert '15:00' in body and '16:00' not in body
-    assert any('16:00, 17:00' in call.args[0] for call in c.log.call_args_list)
+    output = '\n'.join(call.args[0] for call in c.log.call_args_list)
+    assert '16:00' not in output and '17:00' not in output
+    assert '8 available times across 1 day(s); showing the first 6' in output
+    assert len(times) == 8
 
 
 def test_compact_dining_alert_retains_party_and_table_caveats(context):
@@ -1317,7 +1319,10 @@ def test_notfound_catalog_cannot_rearm_after_an_alert(context, monkeypatch, sele
     assert deliver(ctx, notify_on_reopen=True)
     before = Path(s.state_file).read_bytes()
     monkeypatch.setattr(c, 'availability_json', Mock(return_value=capture('wonder_catalog')))
-    assert not c.process_availability_bookings(a, [b], s)
+    warnings = []
+    assert c.process_availability_bookings(a, [b], s, warnings)
+    assert warnings == []
+    c.finish_availability_run(s, {b['bookingId']}, True, warnings)
     assert Path(s.state_file).read_bytes() == before
     assert deliver(ctx, notify_on_reopen=True)
     assert c.config.apobj.notify.call_count == 1
@@ -1545,3 +1550,97 @@ def test_notification_preview_failure_does_not_send_or_expose_details(context):
     c.config.apobj.notify.assert_not_called()
     assert not saved_rows(context)['Y7QG']['notified']
     assert 'PRIVATE_TOKEN' not in '\n'.join(x.args[0] for x in c.log_warn.call_args_list)
+
+
+@pytest.mark.parametrize('category_name', ['show', 'dining'])
+@pytest.mark.parametrize('selected', [False, True])
+@pytest.mark.parametrize('dry_run', [False, True])
+def test_no_catalog_is_healthy_without_creating_state(context, monkeypatch, category_name, selected, dry_run):
+    a, b, category, settings, _ = context
+    category = replace(category, category=category_name, products=('chosen',) if selected else None)
+    settings = replace(settings, dry_run=dry_run,
+        reservations=(c.AvailabilityReservation(b['bookingId'], (category,)),))
+    monkeypatch.setattr(c, 'availability_json', Mock(return_value=capture('wonder_catalog')))
+    eligibility = Mock(side_effect=AssertionError('No eligibility request without catalog'))
+    monkeypatch.setattr(c, 'availability_eligibility', eligibility)
+    warnings = []
+    assert c.process_availability_bookings(a, [b], settings, warnings)
+    assert not warnings
+    assert not Path(settings.state_file).exists()
+    eligibility.assert_not_called()
+    c.config.apobj.notify.assert_not_called()
+    assert any('No ' + category_name + ' catalog currently available' in call.args[0]
+               for call in c.log.call_args_list)
+
+
+@pytest.mark.parametrize('exceptions', [
+    [], None, {}, [None],
+    [{'__typename': 'CommerceProductNotFound'}, {'__typename': 'Unauthorized'}],
+])
+def test_only_explicit_notfound_is_a_missing_catalog(context, monkeypatch, exceptions):
+    data = capture('wonder_catalog')
+    data['data']['products']['exceptions'] = exceptions
+    monkeypatch.setattr(c, 'availability_json', Mock(return_value=data))
+    with pytest.raises(c.AvailabilityCatalogIncomplete):
+        c.availability_products(context[0], context[1], 'show')
+
+
+def test_missing_catalog_does_not_prune_unselected_state(context, monkeypatch):
+    a, b, category, settings, _ = context
+    assert deliver(context, [state_result(), state_result(product='other')], notify_on_reopen=True)
+    before = Path(settings.state_file).read_bytes()
+    monkeypatch.setattr(c, 'availability_json', Mock(return_value=capture('wonder_catalog')))
+    assert c.process_availability_bookings(a, [b], settings)
+    assert Path(settings.state_file).read_bytes() == before
+
+
+def test_missing_show_catalog_does_not_skip_dining(context, monkeypatch):
+    a, b, category, settings, _ = context
+    dining = c.AvailabilityCategory('dining', None)
+    settings = replace(settings, reservations=(c.AvailabilityReservation(b['bookingId'], (category, dining)),))
+    monkeypatch.setattr(c, 'availability_products', Mock(side_effect=[None,
+        [{'id': 'UT_RAILDINNER', 'title': 'Railway', 'type': {'id': 'pt_dining'}}]]))
+    monkeypatch.setattr(c, 'availability_eligibility', Mock(return_value=capture('railway')))
+    assert c.process_availability_bookings(a, [b], settings)
+    c.config.apobj.notify.assert_called_once()
+    assert 'Railway' in c.config.apobj.notify.call_args.kwargs['body']
+
+
+def test_missing_catalog_still_reports_missing_notifier(context, monkeypatch):
+    a, b, _, settings, _ = context
+    monkeypatch.setattr(c, 'availability_products', Mock(return_value=None))
+    c.config.apobj = None
+    assert not c.process_availability_bookings(a, [b], settings)
+    assert not Path(settings.state_file).exists()
+
+
+@pytest.mark.parametrize('method', ['_create_notify_gen', '_apply_overflow'])
+def test_incompatible_preview_has_actionable_version_error_and_retries(context, monkeypatch, method):
+    notifier, service = real_pushover_notifier('split')
+    service.send = Mock(return_value=True)
+    c.config.apobj = notifier
+    target = notifier if method == '_create_notify_gen' else service
+    original = getattr(target, method)
+    monkeypatch.setattr(target, method, Mock(side_effect=AttributeError('PRIVATE_TOKEN')))
+    assert not deliver(context)
+    service.send.assert_not_called()
+    assert not saved_rows(context)['Y7QG']['notified']
+    output = '\n'.join(call.args[0] for call in c.log_warn.call_args_list)
+    assert c.apprise_version in output and 'Apprise==1.13.1' in output
+    assert 'partial failure' in output and 'PRIVATE_TOKEN' not in output
+    monkeypatch.setattr(target, method, original)
+    assert deliver(context)
+    service.send.assert_called_once()
+    assert saved_rows(context)['Y7QG']['notified']
+
+
+def test_console_large_inventory_summarizes_all_days(context):
+    a, b, category, settings, _ = context
+    times = tuple(f'2099-10-{day:02d}T{hour:02d}:00:00'
+                  for day in range(10, 17) for hour in range(6, 23))
+    result = replace(state_result(), times=times)
+    assert c.deliver_availability(settings, a, b, category, False, [result])
+    output = '\n'.join(call.args[0] for call in c.log.call_args_list)
+    assert '119 available times across 7 day(s); showing the first 6' in output
+    assert output.count(':00') == 6
+    assert len(result.times) == 119

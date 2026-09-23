@@ -122,7 +122,9 @@ Console output is grouped as account → sailing → category → product. The s
 
 Newly available products are grouped into one alert per reservation category. Each product
 previews up to six times, grouped by date using `dateDisplayFormat`, with a link
-to the sailing's Cruise Planner category. The console shows all returned times.
+to the sailing's Cruise Planner category. The console also previews up to six
+times per product, with the total number of available times and days when more
+exist. Full inventory is retained internally; only the display is shortened.
 Times preserve Royal's wall-clock values; no timezone conversion is performed.
 Before sending an aggregate, the checker validates its final title and body for
 **every effective destination**, using Apprise's formatting and overflow preview.
@@ -159,8 +161,15 @@ incompatible destinations, and do not read or write state. Because they do not
 read acknowledgements, that preview can be larger than the pending live alert.
 Live delivery/configuration failures preserve pending alerts, finish normal price
 outputs, and report partial failure. The formatting preview uses Apprise internals
-behind one validation helper; an incompatible Apprise version fails validation
-rather than risking silent loss. This checks Apprise's declared formatting limits,
+behind one validation helper. Installs and packaged builds use the tested
+**Apprise 1.13.1**; CI also checks the latest release in a nonblocking compatibility
+job. Upgrade the pin only after those checks pass. An incompatible preview API
+fails validation rather than risking silent loss. Its diagnostic includes the
+installed version and recovery command: `python -m pip install 'Apprise==1.13.1'`.
+Docker/standalone users should use a build with the tested dependency. If the
+problem persists on that version, report the version and affected service without
+including notification URLs or credentials. There is no unchecked-send fallback.
+This checks Apprise's declared formatting limits,
 not end-to-end receipt by a person's device.
 
 All parts must succeed before the aggregate is acknowledged. If a part fails, the
@@ -237,3 +246,16 @@ normal restaurant reservations, My Time Dining, dining packages, onboard dining
 activities, and Royal Railway — Utopia Station. Royal Railway used `pt_dining`
 and returned in-stock dated offerings even when `active` was false or the guest
 had scheduling conflicts, so those fields are not used to suppress release alerts.
+
+### Catalogs that are not available yet
+
+A page-zero response containing only `CommerceProductNotFound` means no catalog
+is currently available for that category. The checker prints an informational
+line, preserves all saved state, and does not count this as a failed check. This
+applies to automatic discovery and selected products. It does not distinguish
+between a ship without reservable shows and a catalog that has not opened yet.
+Other categories continue normally, and the catalog is checked again next run.
+
+A not-found response on a later page, mixed exceptions, malformed responses, and
+request failures still follow the incomplete-catalog/failure rules. A successful
+empty catalog remains distinct from this no-catalog response.

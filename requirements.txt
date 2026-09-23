@@ -1,4 +1,5 @@
 requests
 PyYAML
-Apprise
+# Formatting preflight uses private APIs; verify compatibility before updating.
+Apprise==1.13.1
 curl_cffi

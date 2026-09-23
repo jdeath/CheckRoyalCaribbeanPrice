@@ -38,10 +38,11 @@ import yaml
 # when apprise: is configured without the package - a bare "except: pass" leaves
 # the names undefined and turns that check into a NameError crash (issue #85).
 try:
-    from apprise import Apprise, NotifyFormat
+    from apprise import Apprise, NotifyFormat, __version__ as apprise_version
 except ImportError:
     Apprise = None
     NotifyFormat = None
+    apprise_version = "not installed"
 
 from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass, field
@@ -5028,7 +5029,8 @@ def availability_date(value: Any) -> date:
         raise AvailabilityUnknown("invalid sailing date") from None
 
 
-def availability_products(account: AccountInfo, booking: dict, category: str) -> list:
+def availability_products(account: AccountInfo, booking: dict, category: str) -> Optional[list]:
+    """None means no catalog currently available, not a confirmed empty catalog."""
     products = []
     seen = set()
     total_pages = None
@@ -5047,6 +5049,11 @@ def availability_products(account: AccountInfo, booking: dict, category: str) ->
             if not isinstance(result, dict):
                 raise AvailabilityUnknown("missing catalog result")
             if result.get("__typename") == "CommerceProductExceptions":
+                exceptions = result.get("exceptions")
+                if (page == 0 and isinstance(exceptions, list) and exceptions
+                        and all(isinstance(item, dict) and item.get("__typename") == "CommerceProductNotFound"
+                                for item in exceptions)):
+                    return None
                 raise AvailabilityUnknown("catalog exception or incomplete pagination")
             if result.get("__typename") != "CommerceProductResultSuccess":
                 raise AvailabilityUnknown("unrecognized catalog result")
@@ -5303,8 +5310,11 @@ def availability_notification_error(account: AccountInfo, body: Optional[str] = 
             elif len(chunks) > 1 and service.overflow_mode != "split":
                 errors.append(f"{name}: this message exceeds the service limit; configure overflow=split")
     except Exception:
-        return ("Cannot validate Apprise message formatting; check the installed Apprise version "
-                "and destination settings. Pending alerts have not been acknowledged.")
+        return (f"Cannot validate reservation-alert formatting with Apprise {apprise_version}. "
+                "Reinstall the tested dependency with: python -m pip install 'Apprise==1.13.1'. "
+                "For Docker or standalone builds, use a build with that tested dependency. "
+                "If the problem persists, report the version and service name, without notification URLs. "
+                "No reservation alerts were sent or acknowledged; live checks report partial failure.")
     if errors:
         return f"Reservation alerts for {account.username}: " + "; ".join(errors) + ". Pending alerts will retry after configuration is corrected."
     return None
@@ -5321,8 +5331,12 @@ def deliver_availability(settings: AvailabilitySettings, account: AccountInfo, b
     for result in results:
         color = {"available": GREEN, "unavailable": YELLOW, "unknown": RED}[result.state]
         log(f"        {color}{result.title}: {result.state.capitalize()}{RESET} ({result.reason})")
-        for line in availability_time_lines(result.times):
+        for line in availability_time_lines(result.times[:6]):
             log(f"          {line}")
+        if len(result.times) > 6:
+            days = len({datetime.fromisoformat(stamp).date() for stamp in result.times})
+            log(f"          {len(result.times)} available times across {days} day(s); "
+                "showing the first 6. See Cruise Planner for all times.")
     usable = not results or any(result.state != "unknown" for result in results)
     if settings.dry_run:
         available = [result for result in results if result.state == "available"]
@@ -5445,6 +5459,16 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                 complete = True
                 try:
                     products = availability_products(account, booking, category.category)
+                    if products is None:
+                        log(f"        {YELLOW}No {category.category} catalog currently available; previous state preserved{RESET}")
+                        # Neither a closure nor incomplete pagination. Do not prune,
+                        # create, or rewrite state, including selected-product state.
+                        error = availability_notification_error(account)
+                        if error:
+                            log_warn(f"        {YELLOW}{error}{RESET}")
+                            if not settings.dry_run:
+                                healthy = False
+                        continue
                 except AvailabilityCatalogIncomplete as exc:
                     products = exc.products
                     complete = False
