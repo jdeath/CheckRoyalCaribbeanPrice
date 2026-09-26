@@ -212,3 +212,32 @@ alert also says when a quote is on the other deposit type than your booking
 Rows without a real positive price are never offered or alerted on. Solo
 bookings the main checker prices with the DP340 single-supplement
 code (or that were booked with it) have the booked family quoted with it too.
+
+## Club Royale casino offers (optional)
+
+Set `checkCasinoOffers: true` to list, after each Royal Caribbean account's
+bookings, the Club Royale casino offers on that account - offer code, name, type,
+reserve-by deadline and any FreePlay or perk sweeteners - and to alert when an
+offer's reserve-by date is within `casinoOfferWarnDays` (default 14). One
+notification per account per run lists every expiring offer, sent to that
+account's own `apprise:` entry if it has one, otherwise the global one; with no
+notifier configured the console listing is all you get.
+
+```yaml
+checkCasinoOffers: true
+casinoOfferWarnDays: 14
+```
+
+Complimentary (COMP) offers are highlighted: on a COMP the second guest's fare is
+discounted or comped, whereas a GOBO ("Get One, Buy One") charges the companion
+the going rate, so a COMP is generally the more valuable of the two. The check
+keys on the offer's type code, because the API's description text does not
+reliably distinguish them.
+
+The check reuses the login the price check already made, so it costs one small
+request per account (more only if you hold over 100 offers). Royal Caribbean
+only: Celebrity's Blue Chip Club has no equivalent endpoint, so Celebrity
+accounts are skipped with a note. If the offers API fails part-way, the offers
+fetched so far are still listed and marked partial, and the rest of the run is
+unaffected. This replaces the standalone `CheckRoyalCaribbeanCasinoOffers.py`
+script for scheduled use; that script still works on its own.

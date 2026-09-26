@@ -621,6 +621,8 @@ class CruiseAppConfig:
     upgrade_reservations: List[str] = field(default_factory=list)
     upgrade_sister_categories: bool = True
     cabin_availability_state_file: str = "data/cabin-availability.json"
+    check_casino_offers: bool = False
+    casino_offer_warn_days: int = 14
     output_watch_as_json: bool = False
     output_json_watch_file: Optional[str] = "output-json-watch.txt"
     apprise_urls: List[str] = field(default_factory=list)
@@ -2673,6 +2675,236 @@ def _report_upgrades(url_params: CruiseURLParams, results: Dict[str, Any],
         log(f"\t{RED}{body}{RESET}")
         if apobj is not None:
             apobj.notify(body=body, title='Cruise Upgrade Opportunity', body_format=NotifyFormat.TEXT)
+
+
+##################################
+# Club Royale casino offers (opt-in)
+##################################
+# Club Royale casino guest offers endpoint. Auth requires the account bearer token
+# plus the x-account-id and x-loyalty-id identity headers and a USA country header.
+CASINO_OFFERS_API = "https://www.royalcaribbean.com/api/casino/v2/offers/list"
+
+# Sanity ceiling on pagination: at 100 offers/page a real account never comes
+# close, so a server-claimed totalPages beyond this is junk - stop there and
+# report the results as partial rather than hammering the API in a long loop.
+MAX_CASINO_OFFER_PAGES = 30
+
+
+@dataclass
+class CasinoOffer:
+    """
+    A single Club Royale casino offer parsed from the guest offers API.
+
+    Captures the bookable-offer essentials a player tracks: the redemption code,
+    the offer type, the reserve-by deadline, and any FreePlay/perk sweeteners.
+
+    On offer type: the primary guest's fare is comped in both COMP and GOBO
+    offers. The difference is the second guest - COMP discounts (or comps) the
+    companion fare, while GOBO ("Get One, Buy One") charges the full going rate
+    - so a COMP is generally the more valuable of the two. The API's description
+    text does NOT reliably distinguish them (it is templated), so key on
+    offer_type_code, not the description.
+    """
+    offer_code: str
+    name: str
+    offer_type_code: str
+    offer_type_name: str
+    reserve_by_date: Optional[str]
+    campaign_name: str
+    status: str
+    perks: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_api(cls, raw: Dict[str, Any]) -> "CasinoOffer":
+        """Builds a CasinoOffer from one element of the API 'offers' array."""
+        offer = raw.get("campaignOffer") or {}
+        offer_type = offer.get("offerType") or {}
+        perks = [p.get("perkName", "") for p in (offer.get("perkCodes") or [])
+                 if isinstance(p, dict) and p.get("perkName")]
+        return cls(
+            offer_code=offer.get("offerCode", "?"),
+            name=offer.get("name") or raw.get("campaignName", ""),
+            offer_type_code=offer_type.get("code", "") if isinstance(offer_type, dict) else "",
+            offer_type_name=offer_type.get("name", "") if isinstance(offer_type, dict) else "",
+            reserve_by_date=offer.get("reserveByDate"),
+            campaign_name=raw.get("campaignName", ""),
+            status=offer.get("status") or raw.get("status", ""),
+            perks=perks,
+        )
+
+    @property
+    def is_complimentary(self) -> bool:
+        """True for a Complimentary (COMP) offer, where the second guest fare is
+        discounted or comped rather than full price - generally more valuable
+        than a GOBO."""
+        return self.offer_type_code == "COMP"
+
+    def days_until_reserve_by(self) -> Optional[int]:
+        """Whole days from now until the reserve-by deadline; None without a
+        parseable date."""
+        if not self.reserve_by_date:
+            return None
+        try:
+            deadline = datetime.fromisoformat(str(self.reserve_by_date).replace("Z", "+00:00"))
+            if deadline.tzinfo is None:
+                # A timezone-less date ("2026-09-30" or "...T23:59:59") would
+                # raise on the aware-minus-naive subtraction below, silently
+                # making such offers un-alertable; assume UTC like the Z form
+                deadline = deadline.replace(tzinfo=timezone.utc)
+            return (deadline - datetime.now(timezone.utc)).days
+        except (ValueError, TypeError):
+            return None
+
+
+def fetch_casino_offers(account_info: AccountInfo,
+                        loyalty_number: Optional[str]) -> Tuple[List[CasinoOffer], bool]:
+    """
+    Retrieves the account's active Club Royale offers, following pagination.
+
+    Returns the parsed offers and True when every page was retrieved. False
+    means a page failed or was cut off mid-pagination, so the list holds only
+    the pages fetched so far and may be incomplete.
+    """
+    token = account_info.access.token
+    headers = {
+        "User-Agent": USER_AGENT_WEB,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "country": "USA",
+        "Authorization": f"Bearer {token}",
+        # The casino API requires these identity headers in addition to the token
+        "x-account-id": account_info.access.id,
+        "x-loyalty-id": str(loyalty_number or ""),
+    }
+    cookies = {"accessToken": token, "country": "USA"}
+
+    offers: List[CasinoOffer] = []
+    page, total_pages, truncated = 1, 1, False
+    while page <= total_pages:
+        params = {
+            "sortBy": "offer.reserveByDate",
+            "sortDirection": "asc",
+            "limit": "100",
+            "page": str(page),
+            "digitalRedemption": "true",
+        }
+        try:
+            response = account_info.access.session.get(
+                CASINO_OFFERS_API, params=params, headers=headers, cookies=cookies,
+                timeout=config.request_timeout if config else REQUEST_TIMEOUT)
+        except Exception as e:
+            log(f"\t{RED}Can't reach the Club Royale offers API (program exception '{e}'); "
+                f"treating results as partial{RESET}")
+            return offers, False
+
+        if response.status_code != 200:
+            log(f"\t{RED}Club Royale offers API returned HTTP {response.status_code} on page {page}{RESET}")
+            return offers, False
+
+        try:
+            payload = response.json()
+        except ValueError:
+            log_warn(f"\tClub Royale offers API returned a non-JSON body on page {page}; "
+                     f"treating results as partial")
+            return offers, False
+        if not isinstance(payload, dict):
+            log_warn(f"\tClub Royale offers API returned an unexpected body on page {page}; "
+                     f"treating results as partial")
+            return offers, False
+
+        offers.extend(CasinoOffer.from_api(o) for o in (payload.get("offers") or [])
+                      if isinstance(o, dict))
+        # The API has returned totalPages as a string; coerce it. Junk means we
+        # cannot know whether more pages exist, so stop and report the results
+        # as PARTIAL - a silent fallback to "one page" would truncate the
+        # remaining pages while still claiming the list is complete.
+        raw_total = payload.get("totalPages")
+        try:
+            total_pages = int(raw_total or 1)
+        except (TypeError, ValueError):
+            log_warn(f"\tClub Royale offers API returned an unparseable totalPages "
+                     f"({raw_total!r}) on page {page}; treating results as partial")
+            return offers, False
+        if total_pages > MAX_CASINO_OFFER_PAGES:
+            log_warn(f"\tClub Royale offers API claims {total_pages} pages; stopping at "
+                     f"{MAX_CASINO_OFFER_PAGES} and treating results as partial")
+            total_pages = MAX_CASINO_OFFER_PAGES
+            truncated = True
+        page += 1
+
+    return offers, not truncated
+
+
+def report_casino_offers(offers: List[CasinoOffer], warn_days: int, apobj: Optional[Apprise],
+                         complete: bool = True) -> None:
+    """
+    Prints every offer and alerts on those whose reserve-by deadline is near.
+
+    Complimentary (COMP) offers are highlighted, since their second-guest fare is
+    discounted or comped rather than full price. Offers within warn_days of their
+    reserve-by date are flagged and, if a notifier is configured, sent as one
+    notification.
+    """
+    partial_note = f"{YELLOW}(partial - a page failed, list may be incomplete){RESET}"
+    if not offers:
+        log("\tNo active Club Royale offers found." + (f" {partial_note}" if not complete else ""))
+        return
+
+    log(f"\t{BLUE}Club Royale offers: {len(offers)} active{RESET}"
+        + (f" {partial_note}" if not complete else ""))
+
+    alerts: List[Tuple[int, str]] = []
+    for offer in offers:
+        days = offer.days_until_reserve_by()
+        by_display = str(offer.reserve_by_date)[:10] if offer.reserve_by_date else "no deadline"
+        deadline = f"reserve by {by_display}" + (f" ({days} days)" if days is not None else "")
+
+        line = f"{offer.offer_code}  {offer.name} [{offer.offer_type_name}]"
+        if offer.perks:
+            line += f"  +{', '.join(offer.perks)}"
+
+        expiring = days is not None and days <= warn_days
+        if expiring:
+            colour, tag = RED, f"{RED}[EXPIRING]{RESET} "
+            alerts.append((days, f"{offer.offer_code} {offer.name} [{offer.offer_type_name}] - {deadline}"
+                                 + (f" +{', '.join(offer.perks)}" if offer.perks else "")))
+        elif offer.is_complimentary:
+            # COMP: second guest discounted/comped vs full fare on a GOBO - worth noticing
+            colour, tag = YELLOW, f"{YELLOW}[COMP: 2nd guest discounted]{RESET} "
+        else:
+            colour, tag = GREEN, ""
+
+        log(f"\t  {colour}{line}{RESET}\n\t      {tag}{deadline}")
+
+    if alerts:
+        alerts.sort()
+        body = (f"{len(alerts)} Club Royale offer(s) expiring within {warn_days} days:\n"
+                + "\n".join(f"- {text}" for _, text in alerts))
+        log(f"\t{RED}{body}{RESET}")
+        if apobj is not None:
+            apobj.notify(body=body, title="Club Royale Offer Expiring", body_format=NotifyFormat.TEXT)
+    else:
+        log(f"\t{GREEN}No offers within {warn_days} days of their reserve-by deadline.{RESET}")
+
+
+def check_casino_offers(account_info: AccountInfo, loyalty_number: Optional[str]) -> None:
+    """
+    checkCasinoOffers: list the account's Club Royale offers under its bookings
+    and alert on reserve-by deadlines within casinoOfferWarnDays, using the
+    session the price check already logged in. Royal only - Celebrity's Blue
+    Chip Club has no equivalent endpoint. An optional feature must never end a
+    run: any unexpected failure is logged and the run continues.
+    """
+    log(f"\n{BLUE}Club Royale offers for {account_info.username}{RESET}")
+    if not account_info.is_royal:
+        log("\tSkipped: the offers API is Club Royale's; Celebrity's Blue Chip Club has no equivalent")
+        return
+    try:
+        offers, complete = fetch_casino_offers(account_info, loyalty_number)
+        report_casino_offers(offers, config.casino_offer_warn_days, notifier_for(account_info), complete)
+    except Exception as exc:
+        log(f"\t{YELLOW}Club Royale offer check skipped for this account (unexpected data: "
+            f"{type(exc).__name__}: {exc}){RESET}")
 
 
 class CabinAvailabilityError(Exception):
@@ -4848,6 +5080,19 @@ def _config_id_list(value: Any, key: str) -> List[str]:
     raise ValueError(f"{key} must be a reservation id or a list of reservation ids")
 
 
+def _config_days(value: Any, key: str, default: int) -> int:
+    """A non-negative whole number of days; None (present-but-null) -> default."""
+    if value is None:
+        return default
+    try:
+        days = int(str(value).strip())
+    except ValueError:
+        raise ValueError(f"{key} must be a whole number of days (got {value!r})") from None
+    if days < 0:
+        raise ValueError(f"{key} must not be negative (got {value!r})")
+    return days
+
+
 def _config_amount(value: Any, key: str) -> Optional[float]:
     """A money threshold; tolerates "$100" / "1,000" as users naturally write them."""
     if value is None:
@@ -4969,6 +5214,8 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
         upgrade_reservations=_config_id_list(data.get("upgradeReservations"), "upgradeReservations"),
         upgrade_sister_categories=_config_bool(data.get("upgradeSisterCategories"), True),
         cabin_availability_state_file=cabin_state_file,
+        check_casino_offers=_config_bool(data.get("checkCasinoOffers"), False),
+        casino_offer_warn_days=_config_days(data.get("casinoOfferWarnDays"), "casinoOfferWarnDays", 14),
         output_watch_as_json=data.get("outputWatchAsJson",False),
         output_json_watch_file=data.get("outputJsonFile","output-json-watch.txt"),
         apobj=apobj,
@@ -5232,6 +5479,8 @@ def main() -> None:
                    payment_tracker=payment_tracker,
                    collected_watch_rows=collected_watch_rows,
                  )
+                if config.check_casino_offers is True:
+                    check_casino_offers(account_info, loyalty_number)
             finally:
                 # Close the account session even when a booking raises, so
                 # sessions don't leak across the remaining accounts
