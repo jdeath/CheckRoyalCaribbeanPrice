@@ -49,5 +49,7 @@ logFile: "output.txt"
 # upgradeAlertBelow: 100 # Optional, needs checkForUpgrades. Send an Apprise alert when an upgrade costs this much or less (on the same basis the upgrade table shows)
 # upgradeReservations: ["1234567"] # Optional, needs checkForUpgrades. Only run the upgrade check for these reservation IDs (absent/empty = every booking)
 # upgradeSisterCategories: false # Optional, needs checkForUpgrades. Set false to skip the per-category prices inside your booked family (one fewer API request per booking; the table then shows each family's cheapest tier only)
+# checkCasinoOffers: true # Optional (off by default). After each Royal account's bookings, list its Club Royale casino offers and alert when one's reserve-by deadline is near (uses the account's own apprise if set, else the global one)
+# casinoOfferWarnDays: 14 # Optional, needs checkCasinoOffers. Alert when an offer must be reserved within this many days (default 14)
 # outputWatchAsJson: true # Optional (off by default). Uncomment to write the watchlist price results to a JSON file for external consumption
 # outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file
