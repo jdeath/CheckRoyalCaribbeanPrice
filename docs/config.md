@@ -135,6 +135,57 @@ accountInfo:
 If `outputWatchAsJson` is true, the add-on watch prices checked during each run are also written as a JSON list.
 Set `outputJsonFile` to change the output path; it defaults to `output-json-watch.txt`.
 
+## Reservation-release alerts
+
+Optional dining and entertainment release alerts use booked Royal Caribbean
+sailings and the existing Apprise settings. Configure each reservation once and
+enable automatic discovery for dining, shows, or both. The check uses dated
+offering inventory, including free shows, independently of price thresholds.
+
+```yaml
+reservationAlerts:
+  dryRun: true
+  stateFile: "data/reservation-availability.json"
+  reservations:
+    - reservation: "1234567"
+      dining: true
+      shows: true
+      notifyOnReopen: false
+```
+
+By default, `dining: true` and `shows: true` monitor every matching product
+Royal returns for that category. To monitor only selected products in a category,
+use a `products` list:
+
+```yaml
+reservationAlerts:
+  dryRun: true
+  stateFile: "data/reservation-availability.json"
+  reservations:
+    - reservation: "1234567"
+      dining:
+        products:
+          - "UT_RAILDINNER"
+      shows: true
+      notifyOnReopen: false
+```
+
+See [configuration, notification behavior, and limitations](reservation-alerts.md).
+
+Selective monitoring uses markedly fewer resources: with 20 dining products in
+two catalog pages, checking one selected restaurant costs 3 requests instead of
+22. Catalog pages are still fetched, but only selected products receive eligibility
+checks. Once the dining you want has opened and you have booked it, set
+`dining: false`; keep monitoring only the restaurants still outstanding. One-time
+notifications suppress repeat alerts, not polling. Remove entries when neither
+category needs monitoring. Availability requests have a one-second minimum gap.
+
+Live alerts require `overflow=split` only on destinations where the actual formatted
+message needs splitting. All destinations are validated before sending; destructive
+title/line limits are also rejected. Pending alerts remain unacknowledged until
+configuration is corrected. Existing price checks continue normally. See
+[notification configuration and pre-release upgrade instructions](reservation-alerts.md#notifications-and-state).
+
 ## Example Config with more options (not all of them)
 ```yaml
 accountInfo:
