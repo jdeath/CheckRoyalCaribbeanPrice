@@ -72,13 +72,19 @@ class TestCasinoOffer:
         (_iso_in(10), 10),                                  # Z suffix
         ((datetime.now(timezone.utc) + timedelta(days=5, hours=2)).isoformat(), 5),   # +00:00 offset
         ((datetime.now(timezone.utc) + timedelta(days=3, hours=2)).strftime("%Y-%m-%dT%H:%M:%S"), 3),  # naive
-        ((datetime.now(timezone.utc) + timedelta(days=2, hours=12)).strftime("%Y-%m-%d"), 2),          # date only
         ("not a date", None), (None, None), ("", None), (12345, None),
     ])
     def test_days_until_reserve_by(self, reserve_by, expected):
         """A timezone-less deadline once raised on the aware-minus-naive
         subtraction and silently made the offer un-alertable."""
         assert CasinoOffer.from_api(_raw_offer(reserve_by=reserve_by)).days_until_reserve_by() == expected
+
+    def test_date_only_deadline_is_read_as_midnight_utc(self):
+        """A bare date is midnight UTC of that day, so the whole-days figure
+        depends on the time of day the test runs: three calendar days ahead
+        is 2 days and some hours away - 3 only at the stroke of midnight."""
+        reserve_by = (datetime.now(timezone.utc) + timedelta(days=3)).strftime("%Y-%m-%d")
+        assert CasinoOffer.from_api(_raw_offer(reserve_by=reserve_by)).days_until_reserve_by() in (2, 3)
 
 
 class TestFetchCasinoOffers:
