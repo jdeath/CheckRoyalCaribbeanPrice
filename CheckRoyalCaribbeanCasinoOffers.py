@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+import CheckRoyalCaribbeanPrice as crc
 from CheckRoyalCaribbeanPrice import (
     BLUE,
     GREEN,
@@ -123,13 +124,14 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
     and system locale fallback for maximum cross-platform compatibility."""
     try:
         with open(config_path, "r", encoding="utf-8") as file:
-            return yaml.safe_load(file) or {}
+            raw_data = yaml.safe_load(file)
     except UnicodeDecodeError:
         # Fallback for legacy non-UTF-8 files saved on Windows (e.g., CP1252/ANSI)
         with open(config_path, "r") as file:
-            return yaml.safe_load(file) or {}
+            raw_data = yaml.safe_load(file)
 
-    return expand_env_vars(raw_data) if callable(expand_env_vars) else raw_data
+    # Resolve ${VAR} placeholders (e.g. passwords kept out of config.yaml)
+    return expand_env_vars(raw_data or {})
 
 
 def build_account(data: Dict[str, Any]) -> AccountInfo:
@@ -330,10 +332,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    data = load_config(args.config)
+    data = load_config_file(args.config)
     setup_hybrid_logging(data.get("logFile"))
 
-    apobj = build_apprise(data)
+    # setup_hybrid_logging() only rebinds the loggers inside CheckRoyalCaribbeanPrice;
+    # the names imported above are still its pre-setup None placeholders.
+    global log, log_warn, log_err
+    log, log_warn, log_err = crc.log, crc.log_warn, crc.log_err
+
+    apobj = build_apprise(data.get("apprise") or [])
     account_info = build_account(data)
     offers = fetch_casino_offers(account_info)
     report_offers(offers, args.warn_days, apobj)
