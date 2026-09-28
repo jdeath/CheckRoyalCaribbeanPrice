@@ -59,6 +59,66 @@ def test_first_available_alert_is_not_a_price_threshold_check(cabin, monkeypatch
     assert '99999.00' in message['body'] and URL in message['body']
 
 
+class _Result:
+    """Stand-in for Apprise 2.0's AppriseResult: truthy only on full success."""
+    def __init__(self, ok):
+        self._ok = ok
+    def __bool__(self):
+        return self._ok
+
+
+def test_truthy_non_bool_delivery_result_is_acknowledged(cabin):
+    """Apprise 2.0's notify() returns an AppriseResult, not literal True. The old
+    `is True` check read every delivered alert as unconfirmed: the alert went out,
+    the run failed, and it repeated on every check."""
+    _, config, _ = cabin
+    config.apobj.notify.return_value = _Result(True)
+    deliver(cabin, True)
+    deliver(cabin, True)
+    assert config.apobj.notify.call_count == 1
+    row = c.read_cabin_state(Path(config.cabin_availability_state_file))['test-scope']
+    assert row == {'url': URL, 'available': True, 'notified': True}
+
+
+def test_falsy_result_object_is_not_acknowledged(cabin):
+    """A PARTIAL or NOMATCH AppriseResult is falsy - same meaning as 1.x's False."""
+    _, config, _ = cabin
+    config.apobj.notify.return_value = _Result(False)
+    with pytest.raises(c.CabinAvailabilityError):
+        deliver(cabin, True)
+    assert c.read_cabin_state(Path(config.cabin_availability_state_file))['test-scope']['notified'] is False
+
+
+def test_real_apprise_delivery_is_acknowledged_on_the_installed_version(cabin):
+    """End to end through whatever Apprise is installed (1.x or 2.x): a json://
+    destination on a local socket receives the alert, and the state records it."""
+    import http.server, socketserver, threading
+    apprise = pytest.importorskip('apprise')
+    received = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            received.append(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = socketserver.TCPServer(('127.0.0.1', 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        _, config, _ = cabin
+        config.apobj = apprise.Apprise()
+        config.apobj.add(f'json://127.0.0.1:{server.server_address[1]}/')
+        deliver(cabin, True)
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert len(received) == 1 and b'Cruise Room Available' in received[0]
+    assert c.read_cabin_state(Path(config.cabin_availability_state_file))['test-scope']['notified'] is True
+
+
 @pytest.mark.parametrize('failure', [False, None, RuntimeError('transport')])
 def test_failed_delivery_retries_without_acknowledging(cabin, failure):
     _, config, _ = cabin
