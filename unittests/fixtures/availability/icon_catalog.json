@@ -1,0 +1,74 @@
+{
+  "data": {
+    "products": {
+      "commerceProducts": [
+        {
+          "id": "Y7JH",
+          "title": "STARBURST: Elemental Beauty",
+          "type": {
+            "id": "pt_show",
+            "name": "Show",
+            "__typename": "CommerceType"
+          },
+          "productStatus": "reserved"
+        },
+        {
+          "id": "Y7JM",
+          "title": "AQUA ACTION!",
+          "type": {
+            "id": "pt_show",
+            "name": "Show",
+            "__typename": "CommerceType"
+          },
+          "productStatus": "reserved"
+        },
+        {
+          "id": "Y7JN",
+          "title": "The Wizard of Oz",
+          "type": {
+            "id": "pt_show",
+            "name": "Show",
+            "__typename": "CommerceType"
+          },
+          "productStatus": "reserved"
+        },
+        {
+          "id": "Y7PR",
+          "title": "Adult Comedy starring Royal Comedians (18+)",
+          "type": {
+            "id": "pt_show",
+            "name": "Show",
+            "__typename": "CommerceType"
+          },
+          "productStatus": null
+        },
+        {
+          "id": "Y7PS",
+          "title": "Adult Comedy Starring Royal Comedians (18+)",
+          "type": {
+            "id": "pt_show",
+            "name": "Show",
+            "__typename": "CommerceType"
+          },
+          "productStatus": "reserved"
+        },
+        {
+          "id": "Y7QG",
+          "title": "Headliner Showtime",
+          "type": {
+            "id": "pt_show",
+            "name": "Show",
+            "__typename": "CommerceType"
+          },
+          "productStatus": null
+        }
+      ],
+      "pageInfo": {
+        "totalResults": 6,
+        "totalPages": 1,
+        "__typename": "Page"
+      },
+      "__typename": "CommerceProductResultSuccess"
+    }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "status": 200,
+  "error": null,
+  "warnings": null,
+  "payload": {
+    "productCode": "UT_RAILDINNER",
+    "categoryId": "pt_dining",
+    "guests": [
+      {
+        "id": "guest-1",
+        "reservationId": "booking-3",
+        "remainingBookableQty": 9999,
+        "issues": [
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-001"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-002"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-003"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-004"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-005"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-006"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-007"
+              }
+            }
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1",
+            "conflict": {
+              "offering": {
+                "id": "example-offering-008"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "offerings": [
+      {
+        "id": "example-offering-001",
+        "active": false,
+        "dateTime": "2098-07-02T18:00:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 9999,
+        "issues": [
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-4"
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1"
+          }
+        ]
+      },
+      {
+        "id": "example-offering-002",
+        "active": false,
+        "dateTime": "2098-07-02T18:10:00",
+        "stockLevelStatus": "inStock",
+        "stockLevel": 9999,
+        "issues": [
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-4"
+          },
+          {
+            "type": "USER_HAS_HARD_CONFLICT",
+            "guestId": "guest-1"
+          }
+        ]
+      }
+    ]
+  }
+}
