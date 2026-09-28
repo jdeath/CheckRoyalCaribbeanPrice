@@ -53,3 +53,13 @@ logFile: "output.txt"
 # casinoOfferWarnDays: 14 # Optional, needs checkCasinoOffers. Alert when an offer must be reserved within this many days (default 14)
 # outputWatchAsJson: true # Optional (off by default). Uncomment to write the watchlist price results to a JSON file for external consumption
 # outputJsonFile: "output-json-watch.txt" # Optional, only needed if you want to override the default output file name for the watchlist price results JSON file
+
+# reservationAlerts: # Optional Royal Caribbean dining/show release alerts
+#   dryRun: true # Preview first; false enables notifications
+#   stateFile: "data/reservation-availability.json"
+#   reservations:
+#     - reservation: "1234567"
+#       dining: true # Or {products: ["UT_RAILDINNER"]} to reduce requests
+#       shows: true
+#       notifyOnReopen: false
+# See docs/reservation-alerts.md. Disable dining once your desired reservations are booked.

@@ -263,3 +263,43 @@ Other categories continue normally, and the catalog is checked again next run.
 A not-found response on a later page, mixed exceptions, malformed responses, and
 request failures still follow the incomplete-catalog/failure rules. A successful
 empty catalog remains distinct from this no-catalog response.
+
+### Failure isolation and catalog diagnostics
+
+After a reservation request fails through the existing transport retry policy,
+the remaining reservation requests for that account are skipped for this run.
+Unprocessed products retain their previous state. Results already obtained can
+still be reported and notified. This applies across categories and bookings;
+other accounts and normal price checks continue. The next run tries again.
+Unexpected exceptions in the reservation feature also report partial failure
+without preventing remaining accounts, prospective price checks, or summaries.
+Coverage warnings are retained in history on partial-failure runs as well as
+successful runs.
+
+Duplicate catalog IDs do not stop pagination. Unique products are still checked,
+but the catalog is considered incomplete. Conflicting duplicate metadata makes
+that product unknown. If all returned products have other types, the console
+reports how many were skipped. A selected ID absent from a complete catalog
+produces a warning to check the ID or whether it is listed yet; it is not proof
+of a typo. A matching Celebrity reservation is explicitly reported as unsupported.
+
+`lowStock` and `LOW_STOCK` with a positive bounded numeric count are accepted
+as inventory, like `inStock`. This is defensive support, not a claim that the
+captured Royal responses contain these statuses. Null counts remain unknown;
+they do not establish availability without endpoint-specific evidence.
+
+An Apprise message-preparation failure is reported separately from an incompatible
+preview API. Neither bypasses validation or acknowledges an unsent alert.
+
+### Duplicate and reopening risks
+
+State is intentionally scoped by account so each account's notification routing
+remains independent. If the same booking appears under two configured accounts,
+each may send an alert. There is no cross-account deduplication.
+
+With `notifyOnReopen: true`, a complete, successful empty catalog is treated as
+confirmed absence and can re-arm previously acknowledged products. If Royal
+returns such an empty success transiently, the restored catalog can cause repeat
+alerts. This differs from `CommerceProductNotFound`, incomplete pagination, or
+request failure, which preserve state. Keep the default `notifyOnReopen: false`
+if you only want the initial release notification.

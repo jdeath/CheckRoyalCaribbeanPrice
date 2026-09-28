@@ -5264,7 +5264,8 @@ def availability_date(value: Any) -> date:
 def availability_products(account: AccountInfo, booking: dict, category: str) -> Optional[list]:
     """None means no catalog currently available, not a confirmed empty catalog."""
     products = []
-    seen = set()
+    seen = {}
+    duplicates = False
     total_pages = None
     total_results = None
     try:
@@ -5303,10 +5304,19 @@ def availability_products(account: AccountInfo, booking: dict, category: str) ->
                 if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not entry["id"]:
                     raise AvailabilityUnknown("invalid catalog product")
                 if entry["id"] in seen:
-                    raise AvailabilityUnknown("duplicate catalog page or product")
-                seen.add(entry["id"])
-                products.append(entry)
+                    duplicates = True
+                    previous = seen[entry["id"]]
+                    if previous != entry:
+                        # Conflicting metadata cannot establish product identity/type.
+                        previous.clear()
+                        previous.update(id=entry["id"], title=entry["id"], type=None)
+                    continue
+                product = dict(entry)
+                seen[entry["id"]] = product
+                products.append(product)
             if page + 1 >= pages:
+                if duplicates:
+                    raise AvailabilityUnknown("duplicate catalog products; unique products retained")
                 if len(products) != count:
                     raise AvailabilityUnknown("incomplete catalog")
                 return products
@@ -5423,7 +5433,7 @@ def _evaluate_availability(data: dict, category: str, product: str,
         stock = offering.get("stockLevel")
         if stock_status in ("outOfStock", "OUT_OF_STOCK") and type(stock) in (int, float) and stock == 0:
             continue
-        if stock_status not in ("inStock", "IN_STOCK") or type(stock) not in (int, float) or not 0 <= stock <= 9999:
+        if stock_status not in ("inStock", "IN_STOCK", "lowStock", "LOW_STOCK") or type(stock) not in (int, float) or not 0 <= stock <= 9999:
             uncertain = True
             continue
         if stock == 0:
@@ -5519,6 +5529,9 @@ def availability_notification_error(account: AccountInfo, body: Optional[str] = 
             return "No notification destinations matched; check apprise configuration"
         for service, message in prepared:
             name = service.service_name
+            if "_prepare_error" in message:
+                errors.append(f"{name}: Apprise could not prepare this destination's message; check its format/settings or report the service and Apprise version {apprise_version}")
+                continue
             if not service.enabled:
                 errors.append(f"{name}: notification service disabled")
                 continue
@@ -5662,6 +5675,7 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
     log(f"\n{BLUE}Reservation Alerts{RESET}")
     log(f"  {account.friendly_name} for user {account.username}")
     healthy = True
+    requests_failed = False
     for reservation in settings.reservations:
         matches = [booking for booking in bookings
                    if str(booking.get("bookingId")) == reservation.reservation]
@@ -5687,6 +5701,9 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
 
         for category in reservation.categories:
             log(f"      {BLUE}{availability_category_label(category.category)}{RESET}")
+            if requests_failed:
+                log_warn("        Reservation requests paused for this account after a transport failure; previous state preserved")
+                continue
             try:
                 complete = True
                 try:
@@ -5706,6 +5723,7 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                     complete = False
                     if exc.request_failed:
                         healthy = False
+                        requests_failed = True
                     log_warn(f"        {YELLOW}Incomplete catalog ({exc}); checking returned products. "
                              f"Absent products retain previous state.{RESET}")
                 selected = set(category.products) if category.products is not None else None
@@ -5714,6 +5732,7 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                 catalog_products = {product["id"] for product in scoped_products}
                 catalog_ids = {product["id"] for product in products}
                 results = []
+                skipped_types = 0
                 for product in scoped_products:
                     pid = product["id"]
                     title = product.get("title") or pid
@@ -5726,8 +5745,12 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                         if selected is not None:
                             results.append(AvailabilityResult(
                                 pid, title, "unknown", "unexpected product type: " + type_id))
+                        skipped_types += 1
                         # Category catalogs can contain packages/activities that
                         # are intentionally out of scope. Ignore them silently.
+                        continue
+                    if requests_failed:
+                        results.append(AvailabilityResult(pid, title, "unknown", "not checked after transport failure"))
                         continue
                     try:
                         payload = availability_eligibility(
@@ -5737,11 +5760,22 @@ def process_availability_bookings(account: AccountInfo, bookings: list, settings
                     except (AvailabilityUnknown, KeyError, TypeError, AttributeError, ValueError) as exc:
                         if isinstance(exc, AvailabilityRequestFailed):
                             healthy = False
+                            requests_failed = True
+                            complete = False
+                            log_warn("        Further reservation requests paused for this account until the next run")
                         reason = str(exc) if isinstance(exc, AvailabilityUnknown) else "malformed eligibility response"
                         results.append(AvailabilityResult(pid, title, "unknown", reason))
 
+                if skipped_types and skipped_types == len(scoped_products):
+                    log(f"        No matching {category.category} products; {skipped_types} products of other types skipped")
+
                 if selected is not None:
                     for pid in sorted(selected - catalog_ids):
+                        if complete:
+                            warning = f"{booking['shipCode']} {booking['sailDate']} {category.category}: selected product {pid} not found; check the ID or whether it is listed yet"
+                            log_warn(f"        {YELLOW}{warning}{RESET}")
+                            if warnings is not None:
+                                warnings.append(warning)
                         results.append(AvailabilityResult(
                             pid, pid, "unavailable" if complete else "unknown",
                             "product not listed" if complete else "product absent from incomplete catalog"))
@@ -6223,17 +6257,35 @@ def main() -> None:
                  )
                 if config.check_casino_offers is True:
                     check_casino_offers(account_info, loyalty_number)
-                if availability_enabled and account_info.is_royal:
-                    if isinstance(bookings, list) and all(isinstance(b, dict) for b in bookings):
-                        for booking in bookings:
-                            ship_code = booking.get("shipCode")
-                            if ship_code and not booking.get("shipName"):
-                                booking["shipName"] = ship_dictionary.get_ship(ship_code)
-                        availability_found.update(str(b.get("bookingId")) for b in bookings)
-                        availability_healthy = process_availability_bookings(
-                            account_info, bookings, config.availability, availability_warnings) and availability_healthy
-                    else:
-                        log_warn("[Availability] Booking lookup failed; previous state retained")
+                if availability_enabled:
+                    try:
+                        if not account_info.is_royal:
+                            unsupported = sorted({str(b.get("bookingId")) for b in bookings
+                                if isinstance(b, dict)} & {r.reservation for r in config.availability.reservations}) if isinstance(bookings, list) else []
+                            if unsupported:
+                                availability_found.update(unsupported)
+                                warning = "reservationAlerts supports Royal Caribbean only; Celebrity reservations are unsupported: " + ", ".join(unsupported)
+                                log_warn(warning)
+                                availability_warnings.append(warning)
+                                availability_healthy = False
+                        else:
+                            if isinstance(bookings, list) and all(isinstance(b, dict) for b in bookings):
+                                for booking in bookings:
+                                    ship_code = booking.get("shipCode")
+                                    if ship_code and not booking.get("shipName"):
+                                        booking["shipName"] = ship_dictionary.get_ship(ship_code)
+                                availability_found.update(str(b.get("bookingId")) for b in bookings)
+                                availability_healthy = process_availability_bookings(
+                                    account_info, bookings, config.availability, availability_warnings) and availability_healthy
+                            else:
+                                log_warn("[Availability] Booking lookup failed; previous state retained")
+                                availability_healthy = False
+                    except Exception as exc:
+                        # Optional checks must not prevent other accounts, price
+                        # watches, or summaries. Avoid raw exception details/secrets.
+                        warning = f"Reservation check failed for {account_info.username} ({type(exc).__name__}); continuing with other checks"
+                        log_warn(warning)
+                        availability_warnings.append(warning)
                         availability_healthy = False
             finally:
                 # Close the account session even when a booking raises, so
@@ -6337,7 +6389,7 @@ def main() -> None:
             log(RED + watch_summary + ". See the [FAILED] lines above; pending alerts will retry." + RESET)
             failure_summaries.append(watch_summary)
         if failure_summaries:
-            history.finish_run("partial_failure", "; ".join(failure_summaries))
+            history.finish_run("partial_failure", "; ".join(failure_summaries + availability_warnings))
             # Distinct from the fatal exit 1 below - see EXIT_PARTIAL_FAILURE.
             sys.exit(EXIT_PARTIAL_FAILURE)
 
