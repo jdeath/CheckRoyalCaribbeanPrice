@@ -5629,7 +5629,7 @@ def deliver_availability(settings: AvailabilitySettings, account: AccountInfo, b
             notifier = notifier_for(account)
             try:
                 with suppress_availability_notification_info():
-                    sent = notifier.notify(body=body,
+                    sent = bool(notifier.notify(body=body,
                         title="Cruise Reservation Availability", body_format=NotifyFormat.TEXT))
             except Exception:
                 sent = False
