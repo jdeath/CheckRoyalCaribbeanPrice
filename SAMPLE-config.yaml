@@ -6,6 +6,7 @@ accountInfo: # Optional, Only needed if you want to check your own cruise addons
     military: false # Optional, use military discount for cabin prices. Must be set to true to if military, not in account
     police: false # Optional, use police/emt discount for cabin prices. Must be set to true to if want to use, not in account
     fire: false # Optional, use firefighter discount for cabin prices (separate flag from police). Must be set to true to if want to use, not in account
+    casinoOffersOnly: false # Optional, needs checkCasinoOffers. true = only check this account's casino offers (e.g. a travel companion whose bookings another account already sees)
     apprise: # Optional, per-account notification URLs. Same shape as the top-level apprise: list below.
       - url: "ntfy://user-topic" # Alerts found while checking THIS account go only here.
                                   # Accounts without their own apprise: fall back to the global list.

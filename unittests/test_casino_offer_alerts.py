@@ -17,6 +17,8 @@ from CheckRoyalCaribbeanPrice import (
     MAX_CASINO_OFFER_PAGES,
     AccountInfo,
     APIAccess,
+    AvailabilityReservation,
+    AvailabilitySettings,
     CasinoOffer,
     CruiseAppConfig,
     check_casino_offers,
@@ -293,6 +295,66 @@ class TestMainHook:
         casino, _ = self._run_main([_account()], cfg)
         casino.assert_not_called()
 
+    def test_casino_offers_only_account_skips_its_bookings(self):
+        """A travel companion's account whose bookings are already visible on the main
+        account is logged in for its casino offers only - no second pass over
+        the same bookings."""
+        only = _account()
+        only.casino_offers_only = True
+        casino, voyages = self._run_main([only], CruiseAppConfig(check_casino_offers=True))
+        voyages.assert_not_called()
+        casino.assert_called_once_with(only, "555000111")
+
+    @pytest.mark.parametrize("casino_error", [None, RuntimeError("boom")])
+    def test_casino_offers_only_closes_its_session(self, casino_error):
+        only = _account()
+        only.casino_offers_only = True
+        session = MagicMock()
+        cfg = CruiseAppConfig(check_casino_offers=True, accounts=[only], apprise_test=False)
+        with patch("CheckRoyalCaribbeanPrice.config", cfg), \
+             patch("CheckRoyalCaribbeanPrice.history", MagicMock()), \
+             patch("CheckRoyalCaribbeanPrice.log"), \
+             patch("CheckRoyalCaribbeanPrice.get_ship_dictionary_web"), \
+             patch("CheckRoyalCaribbeanPrice.CheckinPaymentTracker"), \
+             patch("CheckRoyalCaribbeanPrice.login",
+                   return_value=APIAccess(token="t", id="i", session=session)), \
+             patch("CheckRoyalCaribbeanPrice.get_profile", return_value=("FL", "555000111", 10)), \
+             patch("CheckRoyalCaribbeanPrice.get_voyages"), \
+             patch("CheckRoyalCaribbeanPrice.check_casino_offers", side_effect=casino_error):
+            try:
+                main()
+            except (SystemExit, RuntimeError):
+                pass
+        session.close.assert_called_once()
+
+    def test_casino_offers_only_leaves_other_accounts_fully_checked(self):
+        main_account, only = _account(), _account()
+        only.username = "companion@example.com"
+        only.casino_offers_only = True
+        casino, voyages = self._run_main([main_account, only], CruiseAppConfig(check_casino_offers=True))
+        assert [c.args[0].username for c in voyages.call_args_list] == ["user@example.com"]
+        assert [c.args[0].username for c in casino.call_args_list] == ["user@example.com",
+                                                                       "companion@example.com"]
+
+    def test_casino_offers_only_skips_reservation_alerts(self):
+        only = _account()
+        only.casino_offers_only = True
+        cfg = CruiseAppConfig(check_casino_offers=True)
+        cfg.availability = AvailabilitySettings(reservations=(AvailabilityReservation("1234567", ()),))
+        with patch("CheckRoyalCaribbeanPrice.process_availability_bookings") as availability, \
+             patch("CheckRoyalCaribbeanPrice.finish_availability_run"):
+            self._run_main([only], cfg)
+        availability.assert_not_called()
+
+    def test_casino_offers_only_is_ignored_without_the_global_flag(self):
+        """checkCasinoOffers stays the master switch: without it the option has
+        no effect and the account gets its normal full check."""
+        only = _account()
+        only.casino_offers_only = True
+        casino, voyages = self._run_main([only], CruiseAppConfig())
+        voyages.assert_called_once()
+        casino.assert_not_called()
+
 
 class TestConfigKeys:
 
@@ -312,6 +374,13 @@ class TestConfigKeys:
         cfg = self._load(tmp_path, "checkCasinoOffers:\ncasinoOfferWarnDays:\n")
         assert cfg.check_casino_offers is False and cfg.casino_offer_warn_days == 14
         assert self._load(tmp_path, "casinoOfferWarnDays: 0\n").casino_offer_warn_days == 0
+
+    def test_casino_offers_only_is_a_per_account_key(self, tmp_path):
+        assert self._load(tmp_path, "").accounts[0].casino_offers_only is False
+        cfg = self._load(tmp_path, "    casinoOffersOnly: true\n")
+        assert cfg.accounts[0].casino_offers_only is True
+        assert self._load(tmp_path, '    casinoOffersOnly: "false"\n').accounts[0].casino_offers_only is False
+        assert self._load(tmp_path, "    casinoOffersOnly:\n").accounts[0].casino_offers_only is False
 
     def test_invalid_days_are_rejected_with_the_key_named(self, tmp_path):
         with pytest.raises(ValueError, match="casinoOfferWarnDays"):

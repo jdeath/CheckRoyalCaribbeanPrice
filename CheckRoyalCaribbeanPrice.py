@@ -527,6 +527,10 @@ class AccountInfo:
     fire: bool = False
     police: bool = False
     cruise_line: Optional[str] = "royalcaribbean"
+    # casinoOffersOnly: with checkCasinoOffers on, log in only for this
+    # account's Club Royale offers - e.g. a travel companion whose bookings are
+    # already visible (and price-checked) on another configured account.
+    casino_offers_only: bool = False
 
     # Defaulting access to None allows us to load the YAML configuration safely
     # before the script logs in and populates it.
@@ -5906,6 +5910,7 @@ def load_config_objects(config_path: str) -> CruiseAppConfig:
             fire=a.get("fire", False),
             police=a.get("police", False),
             cruise_line=a.get("cruiseLine", "royalcaribbean"),
+            casino_offers_only=_config_bool(a.get("casinoOffersOnly"), False),
             apobj=build_apprise(a.get("apprise") or [])
         )
         for a in (data.get("accountInfo") or [])
@@ -6141,8 +6146,15 @@ def main() -> None:
         failed_watches: List[int] = []
 
         for account_info in config.accounts:
+            # casinoOffersOnly: this account's bookings are checked through
+            # another account, so skip them and only list its casino offers.
+            # checkCasinoOffers stays the master switch - without it the
+            # option has no effect and the account gets its full check.
+            casino_only = account_info.casino_offers_only and config.check_casino_offers is True
+
             log(f"\nUsing {account_info.friendly_name} for user {account_info.username}")
-            log(f"\t{account_info.friendly_name} loyalty number will be used for checking cabin prices")
+            if not casino_only:
+                log(f"\t{account_info.friendly_name} loyalty number will be used for checking cabin prices")
 
             # Login in to this account and get the profile information.
             #
@@ -6223,6 +6235,20 @@ def main() -> None:
 
             if account_info.state is None:
                 account_info.state = state_from_profile
+
+            if casino_only:
+                log(f"\tcasinoOffersOnly: skipping bookings and prices for {account_info.username}")
+                try:
+                    check_casino_offers(account_info, loyalty_number)
+                finally:
+                    account_info.access.session.close()
+                if len(config.accounts) > 1:
+                    log("Sleeping for 5 seconds to allow API to cool down between accounts")
+                    time.sleep(ACCOUNT_COOLDOWN_SECONDS)
+                continue
+            if account_info.casino_offers_only:
+                log(YELLOW + f"\tcasinoOffersOnly ignored for {account_info.username}: "
+                             f"checkCasinoOffers is not enabled" + RESET)
 
             # This block bundles all age, loyalty, and regional residency codes
             # together. If you want to check prices for a specific state or check senior discounts,
