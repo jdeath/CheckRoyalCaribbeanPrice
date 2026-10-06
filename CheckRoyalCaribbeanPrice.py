@@ -477,7 +477,7 @@ class WatchItemContext:
     sales_unit: Optional[Any] = None
     for_watch: bool = True
     order_code: str = "WATCH-LIST"
-    order_date: str = "Watch List"
+    order_date: str = "Watch List"  # display text for alerts, in the configured date format
     purchase_date: Optional[str] = None  # YYYY-MM-DD orderDate for the history DB; None if not from an order
     owner: bool = True
     reservations: List[str] = field(default_factory=list)
@@ -4357,13 +4357,13 @@ def get_orders(
 
         for order in all_orders:
             order_code = order.get("orderCode")
+            purchase_date = None
             try:
                 date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
+                purchase_date = date_obj.date().isoformat()   # before strftime: a bad display format must not lose it
                 order_date = date_obj.strftime(config.date_display_format)
-                purchase_date = date_obj.date().isoformat()
             except (TypeError, ValueError):
                 order_date = order.get("orderDate") or "Unknown"
-                purchase_date = None
             owner = order.get("owner")
 
             # Only process valid paid orders

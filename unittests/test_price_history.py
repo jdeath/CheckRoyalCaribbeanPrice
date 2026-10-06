@@ -846,17 +846,20 @@ def test_price_history_adds_order_date_column_to_existing_db(tmp_path):
 
     # second startup finds the column already there and must not fail on it
     assert PriceHistory(str(db_path)).enabled is True
-    assert PriceHistory(str(db_path)).enabled is True
+    migrated = PriceHistory(str(db_path))
+    assert migrated.enabled is True
+    migrated.start_run()
+    migrated.record_addon(item_kind="addon", reservation_id="7654321", status="priced", order_date="2026-06-10")
 
     conn = sqlite3.connect(str(db_path))
     try:
         columns = [r[1] for r in conn.execute("PRAGMA table_info(price_points)").fetchall()]
-        old_rows = conn.execute("SELECT order_date FROM price_points").fetchall()
+        rows = conn.execute("SELECT reservation_id, order_date FROM price_points ORDER BY id").fetchall()
     finally:
         conn.close()
 
     assert columns.count("order_date") == 1
-    assert old_rows == [(None,)]
+    assert rows == [("1234567", None), ("7654321", "2026-06-10")]
 
 
 def _api_response(payload):
@@ -865,7 +868,7 @@ def _api_response(payload):
     return response
 
 
-def run_orders_scenario(tmp_path, *, order_date, catalog_response):
+def run_orders_scenario(tmp_path, *, order_date, catalog_response, display_format="%m/%d/%Y"):
     """
     Drive the real get_orders() -> get_new_order_price() into a real history DB;
     only the RCCL API is mocked. One order: a per-night beverage package paid
@@ -899,7 +902,7 @@ def run_orders_scenario(tmp_path, *, order_date, catalog_response):
     mock_cfg = MagicMock()
     mock_cfg.minimum_saving_alert = None
     mock_cfg.ignored_price_alerts = []
-    mock_cfg.date_display_format = "%m/%d/%Y"
+    mock_cfg.date_display_format = display_format
 
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
          patch("CheckRoyalCaribbeanPrice.history", real_history), \
@@ -917,13 +920,14 @@ def run_orders_scenario(tmp_path, *, order_date, catalog_response):
     return rows, mock_cfg.apobj
 
 
-PRICE_DROP = _api_response({"payload": {"title": "Deluxe Beverage Package",
-                                         "startingFromPrice": {"adultPromotionalPrice": 30.0}}})
+def price_drop():
+    return _api_response({"payload": {"title": "Deluxe Beverage Package",
+                                      "startingFromPrice": {"adultPromotionalPrice": 30.0}}})
 
 
 def test_get_orders_records_order_date_as_iso_date(tmp_path):
     """An ordered add-on's row carries the order's purchase date as YYYY-MM-DD; the alert text keeps the display format."""
-    rows, apobj = run_orders_scenario(tmp_path, order_date="2026-06-10", catalog_response=PRICE_DROP)
+    rows, apobj = run_orders_scenario(tmp_path, order_date="2026-06-10", catalog_response=price_drop())
 
     assert [dict(r) for r in rows] == [{"item_kind": "addon", "item_code": "pt_beverage/3005",
                                         "status": "priced", "order_date": "2026-06-10"}]
@@ -944,10 +948,19 @@ def test_get_orders_records_order_date_when_price_check_fails(tmp_path, catalog_
 
 def test_get_orders_records_null_order_date_when_malformed(tmp_path):
     """An orderDate that is not YYYY-MM-DD is stored as NULL; the alert text still shows it raw, as before."""
-    rows, apobj = run_orders_scenario(tmp_path, order_date="June 10", catalog_response=PRICE_DROP)
+    rows, apobj = run_orders_scenario(tmp_path, order_date="June 10", catalog_response=price_drop())
 
     assert [r["order_date"] for r in rows] == [None]
     assert "Cancel Order June 10 RC-ORD1" in apobj.notify.call_args.kwargs["body"]
+
+
+def test_get_orders_records_order_date_when_display_format_fails(tmp_path):
+    """A valid orderDate is stored even if the configured display format can't render it (alert falls back to raw)."""
+    rows, apobj = run_orders_scenario(tmp_path, order_date="2026-06-10", catalog_response=price_drop(),
+                                      display_format=None)
+
+    assert [r["order_date"] for r in rows] == ["2026-06-10"]
+    assert "Cancel Order 2026-06-10 RC-ORD1" in apobj.notify.call_args.kwargs["body"]
 
 
 def test_get_new_order_price_records_null_order_date_for_watchlist(tmp_path):
@@ -965,7 +978,7 @@ def test_get_new_order_price_records_null_order_date_for_watchlist(tmp_path):
     with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
          patch("CheckRoyalCaribbeanPrice.history", real_history), \
          patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
-         patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=PRICE_DROP):
+         patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=price_drop()):
         get_new_order_price(make_account(), booking, MagicMock(), ctx)
 
     conn = sqlite3.connect(str(tmp_path / "h.db"))
