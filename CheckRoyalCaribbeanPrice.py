@@ -1443,7 +1443,10 @@ def _parse_stateroom_type(room_type_code: Optional[str]) -> str:
     keywords expected by corporate inventory checkout paths (e.g., 'INTERIOR', 'OUTSIDE', 'BALCONY').
     """
     if not room_type_code:
-            return "NONE"
+        return "NONE"
+    if room_type_code == '':
+        print("Perform manual cabin price check. Cannot determine cabin type from API")
+        return "NONE"
     return STATEROOM_TYPE_MAPPING.get(room_type_code.upper(), "NONE")
 
 
@@ -1960,7 +1963,7 @@ def get_voyages(
 
         if not sail_date:
             continue
-
+    
         # Translate room letter code
         stateroom_type_name = _parse_stateroom_type(booking.get("stateroomType"))
 
