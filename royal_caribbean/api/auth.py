@@ -16,8 +16,7 @@ from typing import Tuple
 from urllib.parse import quote
 
 from royal_caribbean.api.client import IMPERSONATE_ARGS, _execute_api_request
-from royal_caribbean.config.loaders import AccountInfo
-from royal_caribbean.models import APIAccess
+from royal_caribbean.models import APIAccess, AccountInfo
 from royal_caribbean.utils.constants import (
     APPKEY_WEB,
     EXIT_TOTAL_FAILURE,

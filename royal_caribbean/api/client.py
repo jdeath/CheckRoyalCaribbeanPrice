@@ -23,7 +23,7 @@ except ImportError:
 from typing import Any, Dict, Optional, Union
 
 # Import session setup & user agent from auth
-from royal_caribbean.config.loaders import AccountInfo
+from royal_caribbean.models import AccountInfo
 from royal_caribbean.utils.constants import (
     APPKEY_WEB,
     DEFAULT_ON_FAILURE,

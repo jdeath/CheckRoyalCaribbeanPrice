@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
-from royal_caribbean.models import APIAccess
+from royal_caribbean.models import APIAccess, AccountInfo
 from royal_caribbean.utils.constants import REQUEST_TIMEOUT
 from royal_caribbean.utils.logging import RESET, YELLOW, log, setup_hybrid_logging
 from royal_caribbean.utils.notify import build_apprise
@@ -93,51 +93,6 @@ class PriceAlertExclusion:
             and self.product == str(ctx.product)
             and (self.guest is None or self.guest == str(getattr(ctx, "passenger_ID", "")))
         )
-
-
-@dataclass
-class AccountInfo:
-    """User credential profile used to initialize authenticated client sessions."""
-
-    username: str
-    password: str
-    state: Optional[str] = None
-    senior: bool = False
-    military: bool = False
-    fire: bool = False
-    police: bool = False
-    cruise_line: Optional[str] = "royalcaribbean"
-    casino_offers_only: bool = False
-    access: Optional[APIAccess] = None
-    found_items: Set[str] = field(default_factory=set)
-    loyalty_tier: Optional[str] = None
-    loyalty_points: Optional[int] = None
-    apobj: Optional[Any] = None
-
-    @property
-    def is_royal(self) -> bool:
-        """True if target brand is Royal Caribbean."""
-        return self.cruise_line.lower() in ("royal", "royalcaribbean", "royal caribbean", "r")
-
-    @property
-    def is_celebrity(self) -> bool:
-        """True if target brand is Celebrity Cruises."""
-        return self.cruise_line.lower() in ("celebrity", "celebritycruises", "celebrity cruises", "c")
-
-    @property
-    def api_brand(self) -> str:
-        """Internal API brand string ('royal' or 'celebrity')."""
-        return "celebrity" if self.is_celebrity else "royal"
-
-    @property
-    def url_brand(self) -> str:
-        """Brand path segment used in web endpoints and OAuth portals."""
-        return "celebritycruises" if self.is_celebrity else "royalcaribbean"
-
-    @property
-    def friendly_name(self) -> str:
-        """Presentation label for logging and user notifications."""
-        return "Celebrity Cruises" if self.is_celebrity else "Royal Caribbean"
 
 
 @dataclass
