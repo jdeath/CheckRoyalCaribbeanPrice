@@ -389,8 +389,8 @@ def main() -> None:
 
     targets_to_build = (
         list(BUNDLE_CONFIGS.keys())
-        if "all" in args.targets
-        else args.targets
+        if "all" in targets
+        else targets
     )
 
     for target in targets_to_build:
