@@ -477,7 +477,8 @@ class WatchItemContext:
     sales_unit: Optional[Any] = None
     for_watch: bool = True
     order_code: str = "WATCH-LIST"
-    order_date: str = "Watch List"
+    order_date: str = "Watch List"  # display text for alerts, in the configured date format
+    purchase_date: Optional[str] = None  # YYYY-MM-DD orderDate for the history DB; None if not from an order
     owner: bool = True
     reservations: List[str] = field(default_factory=list)
     reservation_id: str = ""
@@ -729,7 +730,8 @@ class PriceHistory:
         discount_applied TEXT,
         status           TEXT NOT NULL,
         rebook_decision  TEXT,
-        notified         INTEGER NOT NULL DEFAULT 0
+        notified         INTEGER NOT NULL DEFAULT 0,
+        order_date       TEXT                  -- YYYY-MM-DD purchase date of an ordered add-on; NULL otherwise
     );
 
     CREATE INDEX IF NOT EXISTS idx_price_points_latest
@@ -791,6 +793,12 @@ class PriceHistory:
             try:
                 with closing(self._connect()) as conn:
                     conn.executescript(self._PRICE_HISTORY_SCHEMA_SQL)
+                    # CREATE TABLE IF NOT EXISTS leaves an older price_points
+                    # untouched: add columns introduced since (old rows stay NULL)
+                    columns = {row[1] for row in conn.execute("PRAGMA table_info(price_points)")}
+                    if "order_date" not in columns:
+                        conn.execute("ALTER TABLE price_points ADD COLUMN order_date TEXT")
+                        conn.commit()
             except (sqlite3.Error, OSError) as e:
                 self._disable(e)
 
@@ -1435,7 +1443,10 @@ def _parse_stateroom_type(room_type_code: Optional[str]) -> str:
     keywords expected by corporate inventory checkout paths (e.g., 'INTERIOR', 'OUTSIDE', 'BALCONY').
     """
     if not room_type_code:
-            return "NONE"
+        return "NONE"
+    if room_type_code == '':
+        print("Perform manual cabin price check. Cannot determine cabin type from API")
+        return "NONE"
     return STATEROOM_TYPE_MAPPING.get(room_type_code.upper(), "NONE")
 
 
@@ -1952,7 +1963,7 @@ def get_voyages(
 
         if not sail_date:
             continue
-
+    
         # Translate room letter code
         stateroom_type_name = _parse_stateroom_type(booking.get("stateroomType"))
 
@@ -4008,7 +4019,7 @@ def get_new_order_price(
             nights=number_of_nights or None,
             item_code=f"{prefix}/{product}", guest_id=str(passenger_ID) if passenger_ID is not None else None,
             guest_name=passenger_name, paid_price=paid_price, currency=currency,
-            per_night=int(per_day_price), current_price=None,
+            per_night=int(per_day_price), current_price=None, order_date=ctx.purchase_date,
             status="no_price_data", rebook_decision=None, notified=False)
         return
 
@@ -4029,7 +4040,7 @@ def get_new_order_price(
             nights=number_of_nights or None,
             item_code=f"{prefix}/{product}", guest_id=str(passenger_ID) if passenger_ID is not None else None,
             guest_name=passenger_name, paid_price=paid_price, currency=currency,
-            per_night=int(per_day_price), current_price=None,
+            per_night=int(per_day_price), current_price=None, order_date=ctx.purchase_date,
             status="not_available_for_passenger", rebook_decision=None, notified=False)
         return
 
@@ -4054,6 +4065,7 @@ def get_new_order_price(
         "nights": number_of_nights or None, "item_code": f"{prefix}/{product}", "item_name": title,
         "guest_id": str(passenger_ID) if passenger_ID is not None else None, "guest_name": passenger_name,
         "paid_price": paid_price, "currency": currency, "per_night": int(per_day_price),
+        "order_date": ctx.purchase_date,
     }
 
     booking_eligibility = payload.get("bookingEligibility") or {}
@@ -4348,8 +4360,10 @@ def get_orders(
 
         for order in all_orders:
             order_code = order.get("orderCode")
+            purchase_date = None
             try:
                 date_obj = datetime.strptime(order.get("orderDate"), "%Y-%m-%d")
+                purchase_date = date_obj.date().isoformat()   # before strftime: a bad display format must not lose it
                 order_date = date_obj.strftime(config.date_display_format)
             except (TypeError, ValueError):
                 order_date = order.get("orderDate") or "Unknown"
@@ -4433,6 +4447,7 @@ def get_orders(
                             for_watch=False,
                             order_code=order_code,
                             order_date=order_date,
+                            purchase_date=purchase_date,
                             owner=owner,
                             reservations=[],
                             reservation_id=guestreservation_ID

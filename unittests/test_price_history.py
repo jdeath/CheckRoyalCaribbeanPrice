@@ -29,6 +29,7 @@ from CheckRoyalCaribbeanPrice import (
     get_cruise_price,
     get_final_payment_date,
     get_new_order_price,
+    get_orders,
     get_voyages,
     history,
     load_config_objects,
@@ -157,6 +158,7 @@ def test_price_history_record_cabin_fare_round_trip(tmp_path):
     assert row["status"] == "priced"
     assert row["rebook_decision"] == "rebook"
     assert row["notified"] == 1
+    assert row["order_date"] is None
 
 
 def test_price_history_append_only_across_runs(tmp_path):
@@ -512,10 +514,7 @@ def test_get_new_order_price_records_not_available_for_passenger():
 # PART 3: PR 2 - `bookings` / `promos` snapshot tables
 # =====================================================================
 
-def test_price_history_upgrades_103_era_db_in_place(tmp_path):
-    """Opening a database created with ONLY the legacy schema adds missing tables/indexes."""
-    db_path = tmp_path / "h.db"
-    legacy_103_schema = """
+LEGACY_103_SCHEMA = """
     CREATE TABLE runs (
         run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at       TEXT NOT NULL,
@@ -548,9 +547,14 @@ def test_price_history_upgrades_103_era_db_in_place(tmp_path):
         notified         INTEGER NOT NULL DEFAULT 0
     );
     """
+
+
+def test_price_history_upgrades_103_era_db_in_place(tmp_path):
+    """Opening a database created with ONLY the legacy schema adds missing tables/indexes."""
+    db_path = tmp_path / "h.db"
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.executescript(legacy_103_schema)
+        conn.executescript(LEGACY_103_SCHEMA)
         conn.execute("INSERT INTO runs (run_id, started_at, status) VALUES (1, '2026-01-01T00:00:00', 'ok')")
         conn.execute("INSERT INTO price_points (run_id, observed_at, reservation_id, item_kind, status) VALUES (1, '2026-01-01T00:00:00', '1234567', 'cabin_fare', 'priced')")
         conn.commit()
@@ -822,3 +826,164 @@ def test_get_all_promotions_calls_record_promo_once_per_promo():
     assert calls_by_id["P1"]["promo_title"] == "P1"
     assert calls_by_id["P1"]["promo_start"] == "2027-06-01"
     assert calls_by_id["P1"]["promo_end"] == "2027-07-01"
+
+
+# =====================================================================
+# PART 4: order_date - the real purchase date of an ordered add-on
+# =====================================================================
+
+def test_price_history_adds_order_date_column_to_existing_db(tmp_path):
+    """A DB created before order_date existed gains the column on startup; its old rows stay NULL."""
+    db_path = tmp_path / "h.db"
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.executescript(LEGACY_103_SCHEMA)
+        conn.execute("INSERT INTO runs (run_id, started_at, status) VALUES (1, '2026-01-01T00:00:00', 'ok')")
+        conn.execute("INSERT INTO price_points (run_id, observed_at, reservation_id, item_kind, status) VALUES (1, '2026-01-01T00:00:00', '1234567', 'addon', 'priced')")
+        conn.commit()
+    finally:
+        conn.close()
+
+    # second startup finds the column already there and must not fail on it
+    assert PriceHistory(str(db_path)).enabled is True
+    migrated = PriceHistory(str(db_path))
+    assert migrated.enabled is True
+    migrated.start_run()
+    migrated.record_addon(item_kind="addon", reservation_id="7654321", status="priced", order_date="2026-06-10")
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        columns = [r[1] for r in conn.execute("PRAGMA table_info(price_points)").fetchall()]
+        rows = conn.execute("SELECT reservation_id, order_date FROM price_points ORDER BY id").fetchall()
+    finally:
+        conn.close()
+
+    assert columns.count("order_date") == 1
+    assert rows == [("1234567", None), ("7654321", "2026-06-10")]
+
+
+def _api_response(payload):
+    response = MagicMock()
+    response.json.return_value = payload
+    return response
+
+
+def run_orders_scenario(tmp_path, *, order_date, catalog_response, display_format="%m/%d/%Y"):
+    """
+    Drive the real get_orders() -> get_new_order_price() into a real history DB;
+    only the RCCL API is mocked. One order: a per-night beverage package paid
+    350.00 for 7 nights (50.00/night). Returns (price_points rows, the Apprise mock).
+    """
+    real_history = PriceHistory(str(tmp_path / "h.db"))
+    real_history.start_run()
+
+    account = make_account()
+    account.found_items = set()
+    booking = {"bookingId": "1234567", "shipCode": "WN", "sailDate": "20270819", "numberOfNights": 7,
+               "bookingCurrency": "USD", "guests": [{"passengerId": "PAX1", "cabinNumber": "6543"}]}
+
+    order_list = _api_response({"payload": {"myOrders": [{
+        "orderCode": "RC-ORD1", "orderDate": order_date, "owner": True, "orderTotals": {"total": 350.0},
+    }]}})
+    order_detail = _api_response({"payload": {"orderHistoryDetailItems": [{
+        "productSummary": {
+            "title": "Deluxe Beverage Package",
+            "baseOptions": [{"selected": {"code": "3005"}}],
+            "productTypeCategory": {"id": "pt_beverage"},
+            "salesUnit": "PER_NIGHT",
+        },
+        "priceDetails": {"quantity": 1},
+        "guests": [{
+            "id": "PAX1", "orderStatus": "COMPLETED", "firstName": "JIM", "guestType": "ADULT",
+            "reservationId": "1234567", "priceDetails": {"subtotal": 350.0, "quantity": 1},
+        }],
+    }]}})
+
+    mock_cfg = MagicMock()
+    mock_cfg.minimum_saving_alert = None
+    mock_cfg.ignored_price_alerts = []
+    mock_cfg.date_display_format = display_format
+
+    with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.history", real_history), \
+         patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
+         patch("CheckRoyalCaribbeanPrice._execute_api_request",
+               side_effect=[order_list, order_detail, catalog_response]):
+        get_orders(account, booking)
+
+    conn = sqlite3.connect(str(tmp_path / "h.db"))
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT item_kind, item_code, status, order_date FROM price_points").fetchall()
+    finally:
+        conn.close()
+    return rows, mock_cfg.apobj
+
+
+def price_drop():
+    return _api_response({"payload": {"title": "Deluxe Beverage Package",
+                                      "startingFromPrice": {"adultPromotionalPrice": 30.0}}})
+
+
+def test_get_orders_records_order_date_as_iso_date(tmp_path):
+    """An ordered add-on's row carries the order's purchase date as YYYY-MM-DD; the alert text keeps the display format."""
+    rows, apobj = run_orders_scenario(tmp_path, order_date="2026-06-10", catalog_response=price_drop())
+
+    assert [dict(r) for r in rows] == [{"item_kind": "addon", "item_code": "pt_beverage/3005",
+                                        "status": "priced", "order_date": "2026-06-10"}]
+    assert "Cancel Order 06/10/2026 RC-ORD1" in apobj.notify.call_args.kwargs["body"]
+
+
+@pytest.mark.parametrize("catalog_response, status", [
+    (None, "no_price_data"),                                                # request failed
+    (_api_response({"payload": None}), "not_available_for_passenger"),     # payload unusable
+])
+def test_get_orders_records_order_date_when_price_check_fails(tmp_path, catalog_response, status):
+    """The purchase date belongs to the order, not the price check: the early-exit rows still record it."""
+    rows, _ = run_orders_scenario(tmp_path, order_date="2026-06-10", catalog_response=catalog_response)
+
+    assert [dict(r) for r in rows] == [{"item_kind": "addon", "item_code": "pt_beverage/3005",
+                                        "status": status, "order_date": "2026-06-10"}]
+
+
+def test_get_orders_records_null_order_date_when_malformed(tmp_path):
+    """An orderDate that is not YYYY-MM-DD is stored as NULL; the alert text still shows it raw, as before."""
+    rows, apobj = run_orders_scenario(tmp_path, order_date="June 10", catalog_response=price_drop())
+
+    assert [r["order_date"] for r in rows] == [None]
+    assert "Cancel Order June 10 RC-ORD1" in apobj.notify.call_args.kwargs["body"]
+
+
+def test_get_orders_records_order_date_when_display_format_fails(tmp_path):
+    """A valid orderDate is stored even if the configured display format can't render it (alert falls back to raw)."""
+    rows, apobj = run_orders_scenario(tmp_path, order_date="2026-06-10", catalog_response=price_drop(),
+                                      display_format=None)
+
+    assert [r["order_date"] for r in rows] == ["2026-06-10"]
+    assert "Cancel Order 2026-06-10 RC-ORD1" in apobj.notify.call_args.kwargs["body"]
+
+
+def test_get_new_order_price_records_null_order_date_for_watchlist(tmp_path):
+    """A watchlist item was never ordered: its row gets NULL, not the 'Watch List' display placeholder."""
+    real_history = PriceHistory(str(tmp_path / "h.db"))
+    real_history.start_run()
+    booking = {"bookingId": "1234567", "shipCode": "WN", "sailDate": "20270819", "numberOfNights": 7}
+    ctx = WatchItemContext(prefix="pt_beverage", product="3005", passenger_ID="PAX1", passenger_name="Jim",
+                           room="6543", paid_price=50.0, guest_age_string="adult", for_watch=True)
+
+    mock_cfg = MagicMock()
+    mock_cfg.minimum_saving_alert = None
+    mock_cfg.ignored_price_alerts = []
+
+    with patch("CheckRoyalCaribbeanPrice.config", mock_cfg), \
+         patch("CheckRoyalCaribbeanPrice.history", real_history), \
+         patch("CheckRoyalCaribbeanPrice.log", MagicMock()), \
+         patch("CheckRoyalCaribbeanPrice._execute_api_request", return_value=price_drop()):
+        get_new_order_price(make_account(), booking, MagicMock(), ctx)
+
+    conn = sqlite3.connect(str(tmp_path / "h.db"))
+    try:
+        rows = conn.execute("SELECT item_kind, order_date FROM price_points").fetchall()
+    finally:
+        conn.close()
+    assert rows == [("watchlist", None)]
