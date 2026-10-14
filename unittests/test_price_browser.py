@@ -25,11 +25,13 @@ from BrowseRoyalCaribbeanPrice_entry import (
     print_all_products,
     setup_hybrid_logging
 )
+
 try:
     from royal_caribbean.api.client import _execute_api_request
 except ImportError:
     # Create a mock module structure for royal_caribbean pointing to the flattened bundle file
     # We don't need the entire module structure; just what this unittest file is using
+    # TODO: Should we refactor test into package unit tests and entry point integration tests
     import types
     import BrowseRoyalCaribbeanPrice_entry as _bundle_entry
 
@@ -91,7 +93,6 @@ except ImportError:
 # ==============================================================================
 # FIXTURES & GLOBAL AUTO-MOCK SETUP
 # ==============================================================================
-
 @pytest.fixture(autouse=True)
 def mock_global_dependencies():
     """
@@ -123,7 +124,6 @@ def mock_response_success():
 # UNIT TESTS: EXECUTE API REQUEST
 # ==============================================================================
 class TestExecuteApiRequest(unittest.TestCase):
-
     @patch('royal_caribbean.api.client.requests.Session')
     def test_execute_request_success(self, mock_session_cls):
         mock_session_inst = MagicMock()
@@ -229,7 +229,6 @@ class TestExecuteApiRequest(unittest.TestCase):
 # FLEET & SAILING DISCOVERY TESTS
 # ==============================================================================
 class TestFleetAndSailingParsers:
-
     @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_ships_web_handles_empty_payload_gracefully(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
@@ -320,7 +319,6 @@ class TestFleetAndSailingParsers:
 # SAILING ITINERARY & WEB DETAILS TESTS
 # ==============================================================================
 class TestSailingDetailsWeb:
-
     @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailing_details_web_handles_empty_or_failed_responses(self, mock_execute):
         # 1. API request failure (None)
@@ -418,7 +416,6 @@ class TestSailingDetailsWeb:
 # COMMERCE CATALOG & GRAPHQL TESTS
 # ==============================================================================
 class TestCommerceCatalogGraphQL:
-
     @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_web_categories_handles_empty_graphql_container(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
@@ -550,7 +547,6 @@ class TestCommerceCatalogGraphQL:
 # CRUISE PRICE BRAND ROUTING & ROOM SELECTION
 # ==============================================================================
 class TestCruisePriceBrandRouting:
-
     @staticmethod
     def _room_selection_text(cheap=1503.43, expensive=2200.00):
         return json.dumps({"rooms": [{"options": {"stateroomTypes": [
@@ -652,7 +648,6 @@ class TestCruisePriceBrandRouting:
 # ADDITIONAL DEEP COVERAGE TESTS FOR UNCOVERED BRANCHES
 # ==============================================================================
 class TestDeepModuleCoverage:
-
     @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailings_web_fallback_branches(self, mock_execute):
         # Hits lines 528-538 by passing 'voyages' at top-level
@@ -691,9 +686,7 @@ class TestDeepModuleCoverage:
 # ==============================================================================
 # DEEP COVERAGE SUITE FOR BrowseRoyalCaribbeanPrice_entry.py
 # ==============================================================================
-
 class TestBrowseCoverageExpansionTargeted:
-
     @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_products_graph_all_pages_pagination(self, mock_execute):
         """Simulates multi-page pagination through WebProductsByCategory GraphQL API."""
@@ -838,7 +831,6 @@ class TestBrowseCoverageExpansionTargeted:
 
 
 class TestMainCLIOrchestration:
-
     @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
     @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
     @patch('BrowseRoyalCaribbeanPrice_entry.log')
@@ -899,7 +891,6 @@ class TestMainCLIOrchestration:
 
 
 class TestBrowseInteractiveAndBrandEdgeCases:
-
     # -------------------------------------------------------------------------
     # 1. Ship Selection Edge Cases (No --ship flag passed)
     # -------------------------------------------------------------------------
@@ -1007,7 +998,6 @@ class TestBrowseInteractiveAndBrandEdgeCases:
 # BROWSE HARDENING (failure vs sold-out, payload variants, locale, prompts)
 # ==============================================================================
 class TestBrowseHardening:
-
     def _run_price(self, response):
         logged = []
         with patch('royal_caribbean.core.browsing._execute_api_request', return_value=response) as net, \
@@ -1021,6 +1011,8 @@ class TestBrowseHardening:
         [{"options": {"stateroomTypes": [
             {"name": "Balcony", "stateroomSubtypes": None}]}}],   # null subtype list
     ])
+
+
     def test_rsc_payload_variants_do_not_crash(self, rooms_payload):
         """Next.js flight payload variants crashed the whole run with
         AttributeError/TypeError before products or activities printed."""
@@ -1028,6 +1020,7 @@ class TestBrowseHardening:
         resp.text = json.dumps({"rooms": rooms_payload})
         logged, _ = self._run_price(resp)
         assert any("sold out" in m for m in logged)   # degraded, not crashed
+
 
     def test_failed_request_is_not_reported_as_sold_out(self):
         """A None response (403/timeout, unretried) printed the same 'Sailing
@@ -1037,6 +1030,7 @@ class TestBrowseHardening:
         assert any("Could not retrieve cabin prices" in m for m in logged)
         assert not any("sold out" in m for m in logged)
 
+
     def test_rsc_request_uses_plain_requests_like_the_main_checker(self):
         """The main checker deliberately disables TLS impersonation on
         room-selection/type-and-subtype (issue #88); Browse must send the
@@ -1045,6 +1039,7 @@ class TestBrowseHardening:
         resp.text = json.dumps({"rooms": []})
         _, net = self._run_price(resp)
         assert net.call_args.kwargs.get("use_impersonation") is False
+
 
     def test_voyage_without_saildate_is_skipped_not_fatal(self):
         """One partial voyage record killed the whole sailing menu with
@@ -1060,6 +1055,7 @@ class TestBrowseHardening:
             sailings = get_sailings_web("WN")
         assert [s['date'] for s in sailings] == ["20270510"]
 
+
     def test_logging_reinit_does_not_recurse(self):
         """setup_hybrid_logging computed real_stdout and then ignored it: a
         second call chained the console handler into the previous
@@ -1074,6 +1070,7 @@ class TestBrowseHardening:
             root = logging.getLogger()
             root.handlers.clear()
             root.handlers.extend(saved_handlers)
+
 
     def test_zero_dollar_prices_are_suppressed(self):
         """'$0.00' cleaned to '0.00' slipped past the string compares and
@@ -1091,6 +1088,7 @@ class TestBrowseHardening:
         assert "54.99" in out
         assert "ZeroDollar" not in out
 
+
     def test_empty_locale_currency_falls_back_to_usd(self):
         """Bare C/POSIX locales (cron, containers without LANG) yield an empty
         int_curr_symbol; every pricing query then carried currencyCode=''."""
@@ -1104,6 +1102,7 @@ class TestBrowseHardening:
                    return_value={"int_curr_symbol": "EUR "}):
             assert get_system_currency() == "EUR"
 
+
     def test_saildate_format_no_longer_depends_on_currency_flag(self):
         """The locale used for the -d comparison was only set as a side effect
         of get_system_currency(): passing -c changed which date format -d
@@ -1115,6 +1114,7 @@ class TestBrowseHardening:
             main(['-c', 'USD', '-s', 'Nonexistent'])
         assert any(c.args[1] == '' for c in set_loc.call_args_list), \
             "locale never set when -c bypasses get_system_currency()"
+
 
     def test_prompts_refuse_non_tty_stdin_cleanly(self):
         """Under cron/pipes the ship menu crashed with a raw EOFError
