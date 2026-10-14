@@ -39,6 +39,13 @@ SCRIPTS = [
         "tests": ["unittests/test_casino_offers.py"],
         "siblings": ["CheckRoyalCaribbeanPrice.py"],  # other root modules the tests import
     },
+    {
+        "module": "BrowseRoyalCaribbeanPrice_entry",
+        "facade": "BrowseRoyalCaribbeanPrice_entry.py",
+        "bundle": "dist/BrowseRoyalCaribbeanPrice_bundled.py",
+        "tests": ["unittests/test_price_browser.py"],
+        "siblings": ["CheckRoyalCaribbeanPrice.py"],
+    },
 ]
 
 SHAPES = ("package", "bundle")
@@ -157,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
                     failures.append(f"{mod}/{shape}: pytest {results[shape]['summary']}")
                     tail = "\n".join(results[shape]["output"].strip().splitlines()[-12:])
                     print(f"--- {mod}/{shape} pytest tail ---\n{tail}\n")
+                    print(f"\n{'='*40}\nFULL PYTEST OUTPUT FOR {mod}/{shape}:\n{'='*40}\n{results[shape]['output']}\n{'='*40}\n") #DEBUG
                 if not surfaces[shape]["ok"]:
                     failures.append(f"{mod}/{shape}: import failed: {surfaces[shape]['error']}")
                 elif surfaces[shape]["unbound"]:

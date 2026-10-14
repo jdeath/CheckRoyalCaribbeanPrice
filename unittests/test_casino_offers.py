@@ -9,14 +9,13 @@ import sys
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import CheckRoyalCaribbeanCasinoOffers_entry as casino
 from CheckRoyalCaribbeanCasinoOffers_entry import (
     CasinoOffer,
     fetch_casino_offers,
     load_config_file,
+    main,
     report_offers,
 )
-
 
 def _raw(code="26TOR309", otype="COMP", reserve="2030-01-15T00:00:00.000Z", perks=("FreePlay",)):
     """Build one element of the casino offers API 'offers' array."""
@@ -161,13 +160,12 @@ def test_main_wires_loggers_and_apprise_list(tmp_path):
 
     fake_setup = MagicMock()
 
-    with patch.object(casino, "setup_hybrid_logging", fake_setup), \
-         patch.object(casino, "build_apprise") as build_apprise, \
-         patch.object(casino, "build_account"), \
-         patch.object(casino, "fetch_casino_offers", return_value=[]), \
+    with patch("CheckRoyalCaribbeanCasinoOffers_entry.setup_hybrid_logging", fake_setup), \
+         patch("CheckRoyalCaribbeanCasinoOffers_entry.build_apprise") as build_apprise, \
+         patch("CheckRoyalCaribbeanCasinoOffers_entry.build_account"), \
+         patch("CheckRoyalCaribbeanCasinoOffers_entry.fetch_casino_offers", return_value=[]), \
          patch.object(sys, "argv", ["prog", "-c", str(cfg)]):
-
-        casino.main()
+        main()
 
     fake_setup.assert_called_once_with("run.log")
     build_apprise.assert_called_once_with([{"url": "json://localhost/"}])

@@ -30,12 +30,21 @@ DIST_DIR = ROOT_DIR / "dist"
 
 # Core submodules required across CLI entrypoints
 BASE_SUBMODULES = [
-    PACKAGE_DIR / "models.py",
+#    PACKAGE_DIR / "models.py",
     PACKAGE_DIR / "utils" / "constants.py",
+    PACKAGE_DIR / "utils" / "helpers.py",
     PACKAGE_DIR / "utils" / "logging.py",
+#    PACKAGE_DIR / "utils" / "notify.py",
+#    PACKAGE_DIR / "config" / "loaders.py",
+    PACKAGE_DIR / "api" / "client.py",
+#    PACKAGE_DIR / "api" / "auth.py",
+]
+
+# Additional modules required only by configurable alerting/monitoring scripts
+CONFIG_MODULES = [
+    PACKAGE_DIR / "models.py",
     PACKAGE_DIR / "utils" / "notify.py",
     PACKAGE_DIR / "config" / "loaders.py",
-    PACKAGE_DIR / "api" / "client.py",
     PACKAGE_DIR / "api" / "auth.py",
 ]
 
@@ -53,14 +62,15 @@ BUNDLE_CONFIGS: Dict[str, BundleSpec] = {
         name="Casino Offers Tracker",
         entry_point=ROOT_DIR / "CheckRoyalCaribbeanCasinoOffers_entry.py",
         dist_output=DIST_DIR / "CheckRoyalCaribbeanCasinoOffers_bundled.py",
-        modules=BASE_SUBMODULES + [PACKAGE_DIR / "core" / "casino.py"],
+        modules=CONFIG_MODULES + BASE_SUBMODULES + [PACKAGE_DIR / "core" / "casino.py"],
+#        modules=BASE_SUBMODULES + [PACKAGE_DIR / "core" / "casino.py"],
     ),
-#    "browse": BundleSpec(
-#        name="Ship & Itinerary Browser",
-#        entry_point=ROOT_DIR / "BrowseRoyalCaribbeanPrice_entry.py",
-#        dist_output=DIST_DIR / "BrowseRoyalCaribbeanPrice_bundled.py",
-#        modules=BASE_SUBMODULES + [PACKAGE_DIR / "core" / "price.py"],
-#    ),
+    "browse": BundleSpec(
+        name="Ship & Itinerary Browser",
+        entry_point=ROOT_DIR / "BrowseRoyalCaribbeanPrice_entry.py",
+        dist_output=DIST_DIR / "BrowseRoyalCaribbeanPrice_bundled.py",
+        modules=BASE_SUBMODULES + [PACKAGE_DIR / "core" / "browsing.py"],
+    ),
 #    "price": BundleSpec(
 #        name="Price Tracker",
 #        entry_point=ROOT_DIR / "CheckRoyalCaribbeanPrice_entry.py",

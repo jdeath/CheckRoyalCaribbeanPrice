@@ -4,12 +4,6 @@ from __future__ import annotations
 
 import base64
 import json
-
-try:
-    import requests as plain_requests
-except ImportError:
-    import plain_requests  # Fallback fallback
-
 import sys
 
 from typing import Tuple

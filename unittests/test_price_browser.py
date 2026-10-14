@@ -3,13 +3,13 @@ import logging
 import pytest
 import requests
 import sys
+import time
 import unittest
 
 from unittest.mock import patch, MagicMock
 
 # Import targets from module
-from BrowseRoyalCaribbeanPrice import (
-    _execute_api_request,
+from BrowseRoyalCaribbeanPrice_entry import (
     get_all_activities_web,
     get_cruise_price_from_API,
     get_MDR_locations,
@@ -19,12 +19,74 @@ from BrowseRoyalCaribbeanPrice import (
     get_sailings_web,
     get_system_currency,
     get_web_categories,
+    log,
     main,
     print_and_sort_products,
     print_all_products,
     setup_hybrid_logging
 )
+try:
+    from royal_caribbean.api.client import _execute_api_request
+except ImportError:
+    # Create a mock module structure for royal_caribbean pointing to the flattened bundle file
+    # We don't need the entire module structure; just what this unittest file is using
+    import types
+    import BrowseRoyalCaribbeanPrice_entry as _bundle_entry
 
+    # Use a descriptor/proxy approach so patches on the mock modules
+    # write straight back to the underlying bundle module entries
+    class LiveProxyModule(types.ModuleType):
+        def __init__(self, name, target):
+            super().__init__(name)
+            super().__setattr__('_target', target)
+
+        def __getattr__(self, name):
+            return getattr(self._target, name)
+
+        def __setattr__(self, name, value):
+            if name == '_target':
+                super().__setattr__(name, value)
+            else:
+                setattr(self._target, name, value)
+
+        def __delattr__(self, name):
+            if name == '_target':
+                super().__delattr__(name)
+            else:
+                if hasattr(self._target, name):
+                    delattr(self._target, name)
+
+
+    # Package structure and live proxy modules
+    rc_pkg = types.ModuleType("royal_caribbean")
+
+    # Wrap browsing and client mods to mirror _bundle_entry live
+    core_pkg = types.ModuleType("royal_caribbean.core")
+    browsing_mod = LiveProxyModule("royal_caribbean.core.browsing", _bundle_entry)
+    core_pkg.browsing = browsing_mod
+    rc_pkg.core = core_pkg
+
+    api_pkg = types.ModuleType("royal_caribbean.api")
+    client_mod = LiveProxyModule("royal_caribbean.api.client", _bundle_entry)
+    api_pkg.client = client_mod
+    rc_pkg.api = api_pkg
+
+    utils_pkg = types.ModuleType("royal_caribbean.utils")
+    logging_mod = LiveProxyModule("royal_caribbean.utils.logging", _bundle_entry)
+    utils_pkg.logging = logging_mod
+    rc_pkg.utils = utils_pkg
+
+    # Register in sys.modules
+    sys.modules["royal_caribbean"] = rc_pkg
+    sys.modules["royal_caribbean.core"] = core_pkg
+    sys.modules["royal_caribbean.core.browsing"] = browsing_mod
+    sys.modules["royal_caribbean.api"] = api_pkg
+    sys.modules["royal_caribbean.api.client"] = client_mod
+    sys.modules["royal_caribbean.utils"] = utils_pkg
+    sys.modules["royal_caribbean.utils.logging"] = logging_mod
+
+    # Export target from the mocked module structure
+    from royal_caribbean.api.client import _execute_api_request
 
 # ==============================================================================
 # FIXTURES & GLOBAL AUTO-MOCK SETUP
@@ -36,7 +98,7 @@ def mock_global_dependencies():
     Intercept module-level stdout logging calls across all tests
     to prevent un-bound custom method crashes.
     """
-    with patch('BrowseRoyalCaribbeanPrice.log', MagicMock()) as mock_log:
+    with patch('royal_caribbean.utils.logging.log.info', MagicMock()) as mock_log:
         yield mock_log
 
 
@@ -62,7 +124,7 @@ def mock_response_success():
 # ==============================================================================
 class TestExecuteApiRequest(unittest.TestCase):
 
-    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    @patch('royal_caribbean.api.client.requests.Session')
     def test_execute_request_success(self, mock_session_cls):
         mock_session_inst = MagicMock()
         mock_session_cls.return_value = mock_session_inst
@@ -78,8 +140,8 @@ class TestExecuteApiRequest(unittest.TestCase):
         self.assertEqual(mock_session_inst.request.call_count, 1)
 
 
-    @patch('BrowseRoyalCaribbeanPrice.time.sleep', return_value=None)
-    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    @patch('time.sleep', return_value=None)
+    @patch('royal_caribbean.api.client.requests.Session')
     def test_execute_request_non_critical_failure_returns_none(self, mock_session_cls, mock_sleep):
         mock_session_inst = MagicMock()
         mock_session_cls.return_value = mock_session_inst
@@ -91,8 +153,8 @@ class TestExecuteApiRequest(unittest.TestCase):
         self.assertEqual(mock_session_inst.request.call_count, 3)
 
 
-    @patch('BrowseRoyalCaribbeanPrice.time.sleep', return_value=None)
-    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    @patch('time.sleep', return_value=None)
+    @patch('royal_caribbean.api.client.requests.Session')
     def test_execute_request_recovers_after_transient_server_error(self, mock_session_cls, mock_sleep):
         mock_session_inst = MagicMock()
         mock_session_cls.return_value = mock_session_inst
@@ -111,7 +173,7 @@ class TestExecuteApiRequest(unittest.TestCase):
         self.assertEqual(mock_session_inst.request.call_count, 2)
 
 
-    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    @patch('royal_caribbean.api.client.requests.Session')
     def test_execute_request_does_not_retry_definitive_http_errors(self, mock_session_cls):
         mock_session_inst = MagicMock()
         mock_session_cls.return_value = mock_session_inst
@@ -130,8 +192,8 @@ class TestExecuteApiRequest(unittest.TestCase):
         self.assertEqual(mock_session_inst.request.call_count, 1)
 
 
-    @patch('BrowseRoyalCaribbeanPrice.time.sleep', return_value=None)
-    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    @patch('time.sleep', return_value=None)
+    @patch('royal_caribbean.api.client.requests.Session')
     def test_execute_request_retries_connection_errors_despite_port_443(self, mock_session_cls, mock_sleep):
         """Connect-phase failures carry "port 443" in their text; the
         status-from-text fallback must not read that as HTTP 443 and skip
@@ -148,7 +210,7 @@ class TestExecuteApiRequest(unittest.TestCase):
         self.assertEqual(mock_session_inst.request.call_count, 3)
 
 
-    @patch('BrowseRoyalCaribbeanPrice.requests.Session')
+    @patch('royal_caribbean.api.client.requests.Session')
     def test_execute_request_text_4xx_without_response_fails_fast(self, mock_session_cls):
         """curl_cffi's HTTPError may carry no .response; genuine client-error
         TEXT is still terminal (no retries)."""
@@ -168,7 +230,7 @@ class TestExecuteApiRequest(unittest.TestCase):
 # ==============================================================================
 class TestFleetAndSailingParsers:
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_ships_web_handles_empty_payload_gracefully(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
         mock_resp.json.return_value = {"payload": None}
@@ -178,7 +240,7 @@ class TestFleetAndSailingParsers:
         assert ships == []
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_ships_web_normalizes_allcaps_names(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
         mock_resp.json.return_value = {
@@ -198,7 +260,7 @@ class TestFleetAndSailingParsers:
         assert ships[1] == {'code': 'HE', 'name': 'Hero of the Seas'}
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailings_web_valid_dates(self, mock_execute):
         """Validates exact return count and item properties from get_sailings_web."""
         mock_resp = MagicMock(spec=requests.Response)
@@ -234,7 +296,7 @@ class TestFleetAndSailingParsers:
         assert sailings[1]["date"] == "20261122"
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailings_web_resilient_to_malformed_json(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
         mock_resp.json.side_effect = ValueError("Corrupted JSON body text string")
@@ -244,7 +306,7 @@ class TestFleetAndSailingParsers:
         assert sailings == []
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailings_web_missing_payload(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
         mock_resp.json.return_value = {"payload": None}
@@ -259,7 +321,7 @@ class TestFleetAndSailingParsers:
 # ==============================================================================
 class TestSailingDetailsWeb:
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailing_details_web_handles_empty_or_failed_responses(self, mock_execute):
         # 1. API request failure (None)
         mock_execute.return_value = None
@@ -272,9 +334,9 @@ class TestSailingDetailsWeb:
         assert get_sailing_details_web("AL", "20261115") == {}
 
 
-    @patch('BrowseRoyalCaribbeanPrice.log')
-    @patch('BrowseRoyalCaribbeanPrice.sanitize_string', side_effect=lambda s: s)
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.utils.logging.log.info')
+    @patch('royal_caribbean.utils.logging.sanitize_string', side_effect=lambda s: s)
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailing_details_web_full_itinerary_branches(self, mock_execute, mock_sanitize, mock_log):
         mock_resp = MagicMock(spec=requests.Response)
         mock_resp.json.return_value = {
@@ -357,7 +419,7 @@ class TestSailingDetailsWeb:
 # ==============================================================================
 class TestCommerceCatalogGraphQL:
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_web_categories_handles_empty_graphql_container(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
         mock_resp.json.return_value = {"data": {"categories": None}}
@@ -367,7 +429,7 @@ class TestCommerceCatalogGraphQL:
         assert categories == {}
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_web_categories_success(self, mock_execute):
         mock_resp = MagicMock(spec=requests.Response)
         mock_resp.json.return_value = {
@@ -386,7 +448,7 @@ class TestCommerceCatalogGraphQL:
         assert categories == {"BEVERAGE": "Beverage Packages", "DINING": "Specialty Dining"}
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_web_categories_exception_returns_empty(self, mock_execute):
         mock_execute.return_value = None
 
@@ -394,7 +456,7 @@ class TestCommerceCatalogGraphQL:
         assert categories == {}
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_products_graph_pagination_exhaustion(self, mock_execute):
         mock_page_1 = MagicMock(spec=requests.Response)
         mock_page_1.json.return_value = {
@@ -431,7 +493,7 @@ class TestCommerceCatalogGraphQL:
         assert mock_execute.call_count == 2
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_products_graph_handles_none_response(self, mock_execute):
         mock_execute.return_value = None
 
@@ -447,9 +509,9 @@ class TestCommerceCatalogGraphQL:
         assert products == []
 
 
-    @patch('BrowseRoyalCaribbeanPrice.print_and_sort_products')
-    @patch('BrowseRoyalCaribbeanPrice.get_products_graph_all_pages')
-    @patch('BrowseRoyalCaribbeanPrice.get_web_categories')
+    @patch('royal_caribbean.core.browsing.print_and_sort_products')
+    @patch('royal_caribbean.core.browsing.get_products_graph_all_pages')
+    @patch('royal_caribbean.core.browsing.get_web_categories')
     def test_print_all_products_orchestration(self, mock_get_cats, mock_get_prods, mock_print_sort):
         mock_get_cats.return_value = {
             "shorex": "Shore Excursions",
@@ -501,7 +563,7 @@ class TestCruisePriceBrandRouting:
         ]}}]})
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_celebrity_routes_to_celebrity_host(self, mock_exec, mock_global_dependencies):
         mock_resp = MagicMock()
         mock_resp.text = self._room_selection_text()
@@ -514,7 +576,7 @@ class TestCruisePriceBrandRouting:
         assert "room-selection/type-and-subtype" in called_url
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_royal_routes_to_royal_host(self, mock_exec, mock_global_dependencies):
         mock_resp = MagicMock()
         mock_resp.text = self._room_selection_text()
@@ -525,7 +587,7 @@ class TestCruisePriceBrandRouting:
         assert "royalcaribbean.com" in mock_exec.call_args[1]["url"]
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_reports_cheapest_subtype_total_per_class(self, mock_exec, mock_global_dependencies):
         mock_resp = MagicMock()
         mock_resp.text = self._room_selection_text(cheap=1503.43, expensive=2200.00)
@@ -538,7 +600,7 @@ class TestCruisePriceBrandRouting:
         assert "2200.0" not in logged
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_no_rooms_reports_sold_out(self, mock_exec, mock_global_dependencies):
         mock_resp = MagicMock()
         mock_resp.text = "no rooms payload here"
@@ -550,7 +612,7 @@ class TestCruisePriceBrandRouting:
         assert "Sailing is sold out" in logged
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_pricing_ignores_invalid_json_body(self, mock_exec, mock_global_dependencies):
         mock_resp = MagicMock()
         mock_resp.text = "Internal Server Error / HTML page"
@@ -562,7 +624,7 @@ class TestCruisePriceBrandRouting:
         assert "Sailing is sold out" in logged
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_pricing_handles_empty_rooms_list(self, mock_exec, mock_global_dependencies):
         mock_resp = MagicMock()
         mock_resp.text = json.dumps({"rooms": []})
@@ -574,7 +636,7 @@ class TestCruisePriceBrandRouting:
         assert "Sailing is sold out" in logged
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_pricing_handles_different_currencies(self, mock_exec, mock_global_dependencies):
         mock_resp = MagicMock()
         mock_resp.text = self._room_selection_text(cheap=1200.00, expensive=1800.00)
@@ -591,7 +653,7 @@ class TestCruisePriceBrandRouting:
 # ==============================================================================
 class TestDeepModuleCoverage:
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_sailings_web_fallback_branches(self, mock_execute):
         # Hits lines 528-538 by passing 'voyages' at top-level
         mock_resp = MagicMock(spec=requests.Response)
@@ -604,7 +666,7 @@ class TestDeepModuleCoverage:
         assert isinstance(res, list)
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_web_categories_non_dict_data(self, mock_execute):
         """Hits lines 707-709 empty categories handling safely."""
         mock_resp = MagicMock(spec=requests.Response)
@@ -615,7 +677,7 @@ class TestDeepModuleCoverage:
         assert cats == {}
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_products_graph_all_pages_error_payload(self, mock_execute):
         # Hits lines 757-760 GraphQL error response handling
         mock_resp = MagicMock(spec=requests.Response)
@@ -627,12 +689,12 @@ class TestDeepModuleCoverage:
 
 
 # ==============================================================================
-# DEEP COVERAGE SUITE FOR BrowseRoyalCaribbeanPrice.py
+# DEEP COVERAGE SUITE FOR BrowseRoyalCaribbeanPrice_entry.py
 # ==============================================================================
 
 class TestBrowseCoverageExpansionTargeted:
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_products_graph_all_pages_pagination(self, mock_execute):
         """Simulates multi-page pagination through WebProductsByCategory GraphQL API."""
 
@@ -717,7 +779,7 @@ class TestBrowseCoverageExpansionTargeted:
         assert mock_execute.call_count == 3
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_all_activities_web_parsing(self, mock_execute):
         """Hits lines 1048-1135 (non-revenue schedulable products parser)."""
         mock_resp = MagicMock(spec=requests.Response)
@@ -742,7 +804,7 @@ class TestBrowseCoverageExpansionTargeted:
         assert activities[0]["productTitle"] == "Laser Tag"
 
 
-    @patch('BrowseRoyalCaribbeanPrice._execute_api_request')
+    @patch('royal_caribbean.core.browsing._execute_api_request')
     def test_get_MDR_locations_royal_and_celebrity(self, mock_execute):
         """Hits lines 1349-1459 (GraphQL main dining venue extraction logic)."""
         mock_resp = MagicMock(spec=requests.Response)
@@ -777,9 +839,9 @@ class TestBrowseCoverageExpansionTargeted:
 
 class TestMainCLIOrchestration:
 
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.log')
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.log')
     def test_main_invalid_ship_name_returns_early(self, mock_log, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
 
@@ -789,10 +851,10 @@ class TestMainCLIOrchestration:
         mock_log.assert_any_call("I can't find that ship name UnknownShip; please try again")
 
 
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.get_sailings_web')
-    @patch('BrowseRoyalCaribbeanPrice.log')
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_sailings_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.log')
     def test_main_invalid_saildate_returns_early(self, mock_log, mock_get_sailings, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
         mock_get_sailings.return_value = [{'displayDate': '11/15/26 7 Night', 'description': 'Eastern Caribbean'}]
@@ -802,18 +864,18 @@ class TestMainCLIOrchestration:
         mock_log.assert_any_call("I can't find that sail date 12/25/99 for Allure of the Seas; please try again")
 
 
-    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', return_value=False)
-    @patch('BrowseRoyalCaribbeanPrice.print_MDR_menus')
-    @patch('BrowseRoyalCaribbeanPrice.get_MDR_locations', return_value=['MDR1'])
-    @patch('BrowseRoyalCaribbeanPrice.print_all_activities')
-    @patch('BrowseRoyalCaribbeanPrice.get_all_activities_web', return_value=[])
-    @patch('BrowseRoyalCaribbeanPrice.print_all_products')
-    @patch('BrowseRoyalCaribbeanPrice.get_cruise_price_from_API')
-    @patch('BrowseRoyalCaribbeanPrice.get_sailing_details_web', return_value={1: 'Port Canaveral'})
-    @patch('BrowseRoyalCaribbeanPrice.get_sailings_web')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.get_system_currency', return_value='USD')
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.sys.stdin.isatty', return_value=False)
+    @patch('BrowseRoyalCaribbeanPrice_entry.print_MDR_menus')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_MDR_locations', return_value=['MDR1'])
+    @patch('BrowseRoyalCaribbeanPrice_entry.print_all_activities')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_all_activities_web', return_value=[])
+    @patch('BrowseRoyalCaribbeanPrice_entry.print_all_products')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_cruise_price_from_API')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_sailing_details_web', return_value={1: 'Port Canaveral'})
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_sailings_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_system_currency', return_value='USD')
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
     def test_main_successful_end_to_end_cli_run(
         self, mock_setup_log, mock_currency, mock_get_ships, mock_get_sailings,
         mock_get_details, mock_get_price, mock_print_prods, mock_get_acts,
@@ -841,10 +903,10 @@ class TestBrowseInteractiveAndBrandEdgeCases:
     # -------------------------------------------------------------------------
     # 1. Ship Selection Edge Cases (No --ship flag passed)
     # -------------------------------------------------------------------------
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.log')
-    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.log')
+    @patch('BrowseRoyalCaribbeanPrice_entry.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='99')
     def test_interactive_ship_selection_out_of_bounds(self, mock_input, mock_log, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
@@ -854,10 +916,10 @@ class TestBrowseInteractiveAndBrandEdgeCases:
         mock_log.assert_any_call("Invalid ship selection")
 
 
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.log')
-    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.log')
+    @patch('BrowseRoyalCaribbeanPrice_entry.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='not_a_number')
     def test_interactive_ship_selection_non_numeric(self, mock_input, mock_log, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
@@ -867,10 +929,10 @@ class TestBrowseInteractiveAndBrandEdgeCases:
         mock_log.assert_any_call("Invalid ship selection")
 
 
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.log')
-    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.log')
+    @patch('BrowseRoyalCaribbeanPrice_entry.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='q')
     def test_interactive_ship_selection_quit(self, mock_input, mock_log, mock_get_ships, mock_logging):
         mock_get_ships.return_value = [{'name': 'Allure of the Seas', 'code': 'AL'}]
@@ -883,11 +945,11 @@ class TestBrowseInteractiveAndBrandEdgeCases:
     # -------------------------------------------------------------------------
     # 2. Sailing Selection Edge Cases (Ship matched via CLI, interactive sailing)
     # -------------------------------------------------------------------------
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.get_sailings_web')
-    @patch('BrowseRoyalCaribbeanPrice.log')
-    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', new=lambda: True)
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_sailings_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.log')
+    @patch('BrowseRoyalCaribbeanPrice_entry.sys.stdin.isatty', new=lambda: True)
     @patch('builtins.input', return_value='55')
     def test_interactive_sailing_selection_out_of_bounds(
         self, mock_input, mock_log, mock_get_sailings, mock_get_ships, mock_logging
@@ -903,19 +965,19 @@ class TestBrowseInteractiveAndBrandEdgeCases:
     # -------------------------------------------------------------------------
     # 3. Celebrity Brand Routing Logic
     # -------------------------------------------------------------------------
-    @patch('BrowseRoyalCaribbeanPrice.sys.stdin.isatty', return_value=False)
-    @patch('BrowseRoyalCaribbeanPrice.print_MDR_menus')
-    @patch('BrowseRoyalCaribbeanPrice.get_MDR_locations', return_value=['MDR1'])
-    @patch('BrowseRoyalCaribbeanPrice.print_all_activities')
-    @patch('BrowseRoyalCaribbeanPrice.get_all_activities_web', return_value=[])
-    @patch('BrowseRoyalCaribbeanPrice.print_all_products')
-    @patch('BrowseRoyalCaribbeanPrice.get_cruise_price_from_API')
-    @patch('BrowseRoyalCaribbeanPrice.get_sailing_details_web', return_value={})
-    @patch('BrowseRoyalCaribbeanPrice.get_sailings_web')
-    @patch('BrowseRoyalCaribbeanPrice.get_ships_web')
-    @patch('BrowseRoyalCaribbeanPrice.get_system_currency', return_value='USD')
-    @patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging')
-    @patch('BrowseRoyalCaribbeanPrice.log')
+    @patch('BrowseRoyalCaribbeanPrice_entry.sys.stdin.isatty', return_value=False)
+    @patch('BrowseRoyalCaribbeanPrice_entry.print_MDR_menus')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_MDR_locations', return_value=['MDR1'])
+    @patch('BrowseRoyalCaribbeanPrice_entry.print_all_activities')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_all_activities_web', return_value=[])
+    @patch('BrowseRoyalCaribbeanPrice_entry.print_all_products')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_cruise_price_from_API')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_sailing_details_web', return_value={})
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_sailings_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web')
+    @patch('BrowseRoyalCaribbeanPrice_entry.get_system_currency', return_value='USD')
+    @patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging')
+    @patch('BrowseRoyalCaribbeanPrice_entry.log')
     def test_celebrity_ship_brand_routing(
         self, mock_log, mock_setup_log, mock_currency, mock_get_ships,
         mock_get_sailings, mock_get_details, mock_get_price, mock_print_prods,
@@ -948,8 +1010,8 @@ class TestBrowseHardening:
 
     def _run_price(self, response):
         logged = []
-        with patch('BrowseRoyalCaribbeanPrice._execute_api_request', return_value=response) as net, \
-             patch('BrowseRoyalCaribbeanPrice.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
+        with patch('royal_caribbean.core.browsing._execute_api_request', return_value=response) as net, \
+             patch('royal_caribbean.utils.logging.log.info', side_effect=lambda m, *a, **k: logged.append(str(m))):
             get_cruise_price_from_API("USD", "WN07X123", "2027-05-10", 2, 0, True)
         return logged, net
 
@@ -993,8 +1055,8 @@ class TestBrowseHardening:
             {"voyageCode": "Y789", "duration": 7, "sailDate": "20270510",
              "voyageDescription": "7 Night Test"},
         ]}}
-        with patch('BrowseRoyalCaribbeanPrice._execute_api_request', return_value=resp), \
-             patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
+        with patch('royal_caribbean.core.browsing._execute_api_request', return_value=resp), \
+             patch('royal_caribbean.utils.logging.log.info', lambda *a, **k: None):
             sailings = get_sailings_web("WN")
         assert [s['date'] for s in sailings] == ["20270510"]
 
@@ -1006,9 +1068,6 @@ class TestBrowseHardening:
         try:
             setup_hybrid_logging(None)
             setup_hybrid_logging(None)
-
-            # Re-import log locally to fetch the rebound function reference post-init
-            from BrowseRoyalCaribbeanPrice import log
             log("reinit-ok")  # raised RecursionError before the fix
         finally:
             sys.stdout = saved_stdout
@@ -1026,7 +1085,7 @@ class TestBrowseHardening:
              "price": [{"formattedPromotionalPrice": "$54.99"}]},
         ]
         logged = []
-        with patch('BrowseRoyalCaribbeanPrice.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
+        with patch('royal_caribbean.utils.logging.log.info', side_effect=lambda m, *a, **k: logged.append(str(m))):
             print_and_sort_products(products, "default", "asc", "USD", "shorex", False)
         out = "\n".join(logged)
         assert "54.99" in out
@@ -1035,13 +1094,13 @@ class TestBrowseHardening:
     def test_empty_locale_currency_falls_back_to_usd(self):
         """Bare C/POSIX locales (cron, containers without LANG) yield an empty
         int_curr_symbol; every pricing query then carried currencyCode=''."""
-        with patch('BrowseRoyalCaribbeanPrice.locale.setlocale'), \
-             patch('BrowseRoyalCaribbeanPrice.locale.localeconv',
+        with patch('BrowseRoyalCaribbeanPrice_entry.locale.setlocale'), \
+             patch('BrowseRoyalCaribbeanPrice_entry.locale.localeconv',
                    return_value={"int_curr_symbol": ""}), \
-             patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
+             patch('royal_caribbean.utils.logging.log.info', lambda *a, **k: None):
             assert get_system_currency() == "USD"
-        with patch('BrowseRoyalCaribbeanPrice.locale.setlocale'), \
-             patch('BrowseRoyalCaribbeanPrice.locale.localeconv',
+        with patch('BrowseRoyalCaribbeanPrice_entry.locale.setlocale'), \
+             patch('BrowseRoyalCaribbeanPrice_entry.locale.localeconv',
                    return_value={"int_curr_symbol": "EUR "}):
             assert get_system_currency() == "EUR"
 
@@ -1049,10 +1108,10 @@ class TestBrowseHardening:
         """The locale used for the -d comparison was only set as a side effect
         of get_system_currency(): passing -c changed which date format -d
         accepted. main() now sets the locale unconditionally."""
-        with patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging'), \
-             patch('BrowseRoyalCaribbeanPrice.locale.setlocale') as set_loc, \
-             patch('BrowseRoyalCaribbeanPrice.get_ships_web', return_value=[]), \
-             patch('BrowseRoyalCaribbeanPrice.log', lambda *a, **k: None):
+        with patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging'), \
+             patch('BrowseRoyalCaribbeanPrice_entry.locale.setlocale') as set_loc, \
+             patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web', return_value=[]), \
+             patch('royal_caribbean.utils.logging.log.info', lambda *a, **k: None):
             main(['-c', 'USD', '-s', 'Nonexistent'])
         assert any(c.args[1] == '' for c in set_loc.call_args_list), \
             "locale never set when -c bypasses get_system_currency()"
@@ -1061,12 +1120,12 @@ class TestBrowseHardening:
         """Under cron/pipes the ship menu crashed with a raw EOFError
         traceback; now it explains and exits."""
         logged = []
-        with patch('BrowseRoyalCaribbeanPrice.setup_hybrid_logging'), \
-             patch('BrowseRoyalCaribbeanPrice.get_system_currency', return_value="USD"), \
-             patch('BrowseRoyalCaribbeanPrice.get_ships_web',
+        with patch('BrowseRoyalCaribbeanPrice_entry.setup_hybrid_logging'), \
+             patch('BrowseRoyalCaribbeanPrice_entry.get_system_currency', return_value="USD"), \
+             patch('BrowseRoyalCaribbeanPrice_entry.get_ships_web',
                    return_value=[{"name": "Wonder of the Seas", "code": "WN"}]), \
-             patch('BrowseRoyalCaribbeanPrice.sys.stdin') as stdin, \
-             patch('BrowseRoyalCaribbeanPrice.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
+             patch('BrowseRoyalCaribbeanPrice_entry.sys.stdin') as stdin, \
+             patch('BrowseRoyalCaribbeanPrice_entry.log', side_effect=lambda m, *a, **k: logged.append(str(m))):
             stdin.isatty.return_value = False
             main([])
         assert any("Non-interactive run" in m for m in logged)

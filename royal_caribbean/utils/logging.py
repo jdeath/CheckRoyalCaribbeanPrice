@@ -7,6 +7,7 @@ import re
 import sys
 from datetime import datetime
 from typing import Any, Callable, Optional
+from unicodedata import combining, normalize
 
 ##################################
 # Global Constants & Variables
@@ -40,6 +41,11 @@ BLUE = '\033[94m'        # Bright blue text, default background, normal weight
 #BLUE = '\033[1;34;40m'   # Standard dark blue text, black background, bold weight
 
 __all__ = [
+    "BLUE",
+    "GREEN",
+    "RED",
+    "RESET",
+    "YELLOW",
     "log",
     "setup_hybrid_logging",
 ]
@@ -71,6 +77,11 @@ class EasyLogger:
         that is, define log("text") as a shorthand
         for log.info("text")
         """
+        self._logger.info(message, *args, **kwargs)
+
+
+    def info(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        """Redirects log_warn("text") calls to logger.warning"""
         self._logger.info(message, *args, **kwargs)
 
 
@@ -209,3 +220,25 @@ def setup_hybrid_logging(log_file_path: Optional[str] = None) -> None:
 
     # 7. Intercept raw standard print statements system-wide with unwrapped real stream reference
     sys.stdout = PrintRedirector(_root_logger.info, wrapped_stream=real_stdout)
+
+
+def sanitize_string(string_to_clean: str) -> str:
+    cleaned_string = string_to_clean.lstrip()
+
+    # TODO: should these all move under if has_terminal_issues?
+    cleaned_string = cleaned_string.replace('\u00AE', '(R)')
+    cleaned_string = cleaned_string.replace('\u200B', ' ')
+    cleaned_string = cleaned_string.replace('\u2013', '-')
+    cleaned_string = cleaned_string.replace('\u2014', '-')
+    cleaned_string = cleaned_string.replace('\u2018', '`')
+    cleaned_string = cleaned_string.replace('\u2019', '\'')
+    cleaned_string = cleaned_string.replace('\u201C', '"')
+    cleaned_string = cleaned_string.replace('\u201D', '"')
+    cleaned_string = cleaned_string.replace('\u2120', '(SM)')
+
+    if has_terminal_issues:
+        cleaned_string = cleaned_string.replace('\u2191', '^')
+        cleaned_string = cleaned_string.replace('\u2193', 'v')
+
+    cleaned_string = normalize('NFKD', cleaned_string)
+    return ''.join([c for c in cleaned_string if not combining(c)])

@@ -9,6 +9,7 @@ import argparse
 from royal_caribbean.models import *
 from royal_caribbean.config.loaders import *
 from royal_caribbean.core.casino import *
+from royal_caribbean.utils.helpers import *
 from royal_caribbean.utils.logging import *
 from royal_caribbean.utils.notify import *
 
@@ -16,12 +17,14 @@ from royal_caribbean.utils.notify import *
 from royal_caribbean.models import __all__ as _models_all
 from royal_caribbean.config.loaders import __all__ as _loaders_all
 from royal_caribbean.core.casino import __all__ as _casino_all
+from royal_caribbean.utils.helpers import __all__ as _helpers_all
 from royal_caribbean.utils.logging import __all__ as _logging_all
 from royal_caribbean.utils.notify import __all__ as _notify_all
 
 # Deduplicate names while maintaining deterministic order
 __all__ = list(dict.fromkeys(
     _casino_all +
+    _helpers_all +
     _loaders_all +
     _logging_all +
     _models_all +

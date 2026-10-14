@@ -7,6 +7,7 @@ try:
 except ImportError:
     import plain_requests  # Fallback fallback
 
+import logging
 import re
 import sys
 import time
