@@ -25,7 +25,6 @@ def _token_with(payload: dict) -> str:
 # =============================================================================
 # 1. Login & Auth Tests
 # =============================================================================
-
 def test_login_encodes_username_and_decodes_urlsafe_token():
     """A raw '+' in the username decodes server-side as a space (login fails
     as the wrong user), and standard b64decode silently corrupts base64URL
@@ -72,7 +71,6 @@ def test_login_exits_on_http_error_or_missing_token():
 # =============================================================================
 # 2. Network Helper (_execute_api_request) Tests
 # =============================================================================
-
 def test_execute_api_request_handles_success_and_errors():
     """Verify _execute_api_request unpacks payload on 200 OK and handles non-200/exceptions safely."""
     session = MagicMock()
@@ -97,7 +95,6 @@ def test_execute_api_request_handles_success_and_errors():
 # =============================================================================
 # 3. Order Processing & Deduplication Tests
 # =============================================================================
-
 def test_process_orders_tolerates_missing_order_arrays():
     """Either order array can be null/absent (and an error body has no
     payload at all); the concat used to TypeError and kill the run."""
@@ -175,7 +172,6 @@ def test_order_history_path_follows_brand():
 # =============================================================================
 # 4. Catalog Price Auditing Tests
 # =============================================================================
-
 def test_check_item_catalog_price_prints_rebook_alert_on_price_drop(capsys):
     """Verifies that a price drop triggers the RED rebook output banner."""
     auth = AuthSession(
