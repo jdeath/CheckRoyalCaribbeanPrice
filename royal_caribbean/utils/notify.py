@@ -14,10 +14,6 @@ except ImportError:
     NotifyFormat = None
     apprise_version = "not installed"
 
-__all__ = [
-    "build_apprise",
-]
-
 # ==============================================================================
 # Notification Utilities
 # ==============================================================================

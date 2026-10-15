@@ -41,11 +41,6 @@ BLUE = '\033[94m'        # Bright blue text, default background, normal weight
 #BLUE = '\033[1;34;40m'   # Standard dark blue text, black background, bold weight
 
 __all__ = [
-    "BLUE",
-    "GREEN",
-    "RED",
-    "RESET",
-    "YELLOW",
     "log",
     "setup_hybrid_logging",
 ]

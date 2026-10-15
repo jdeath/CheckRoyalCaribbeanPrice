@@ -6,23 +6,35 @@ import argparse
 import locale
 import sys
 
-# Clean star imports driven strictly by submodule __all__ definitions
+# Core browsing imports
 from royal_caribbean.core.browsing import *
-from royal_caribbean.utils.helpers import *
-from royal_caribbean.utils.logging import *
-
-# Submodule __all__ exports for dynamic facade surface aggregation
 from royal_caribbean.core.browsing import __all__ as _browsing_all
-from royal_caribbean.utils.helpers import __all__ as _helpers_all
-from royal_caribbean.utils.logging import __all__ as _logging_all
+
+# Explicit, deliberate re-exports required by tests, configuration, or execution
+from royal_caribbean.utils.helpers import get_system_currency
+from royal_caribbean.utils.logging import (
+    BLUE,
+    GREEN,
+    RESET,
+    log,
+    setup_hybrid_logging
+)
+
+# Tight, controlled public surface contract
+_public_utilities = [
+    "get_system_currency",
+    "log",
+    "setup_hybrid_logging"
+]
+
+_local_all = ["main"]
 
 # Deduplicate names while maintaining deterministic order
-__all__ = list(dict.fromkeys(
+__all__ = sorted(list(set(
     _browsing_all +
-    _helpers_all +
-    _logging_all +
-    ["main"])
-)
+    _public_utilities +
+    _local_all
+)))
 
 
 def main(args: list[str] | None = None) -> None:

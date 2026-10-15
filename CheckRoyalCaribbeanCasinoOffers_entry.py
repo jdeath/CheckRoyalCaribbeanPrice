@@ -5,32 +5,34 @@ from __future__ import annotations
 
 import argparse
 
-# Clean star imports driven strictly by submodule __all__ definitions
-from royal_caribbean.models import *
-from royal_caribbean.config.loaders import *
+# Core casino imports
 from royal_caribbean.core.casino import *
-from royal_caribbean.utils.helpers import *
-from royal_caribbean.utils.logging import *
-from royal_caribbean.utils.notify import *
-
-# Submodule __all__ exports for dynamic facade surface aggregation
-from royal_caribbean.models import __all__ as _models_all
-from royal_caribbean.config.loaders import __all__ as _loaders_all
 from royal_caribbean.core.casino import __all__ as _casino_all
-from royal_caribbean.utils.helpers import __all__ as _helpers_all
-from royal_caribbean.utils.logging import __all__ as _logging_all
-from royal_caribbean.utils.notify import __all__ as _notify_all
+
+# Explicit, deliberate re-exports required by tests, configuration, or execution
+from royal_caribbean.config.loaders import load_config_file
+from royal_caribbean.utils.logging import (
+    log,
+    setup_hybrid_logging,
+)
+
+from royal_caribbean.utils.notify import build_apprise
+
+
+# Tight, controlled public surface contract
+_public_utilities = [
+    "log",
+    "setup_hybrid_logging",
+]
+
+_local_all = ["main"]
 
 # Deduplicate names while maintaining deterministic order
-__all__ = list(dict.fromkeys(
+__all__ = sorted(list(set(
     _casino_all +
-    _helpers_all +
-    _loaders_all +
-    _logging_all +
-    _models_all +
-    _notify_all +
-    ["main"])
-)
+    _public_utilities +
+    _local_all
+)))
 
 
 def main() -> None:
