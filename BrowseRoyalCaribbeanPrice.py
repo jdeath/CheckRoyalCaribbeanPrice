@@ -37,7 +37,7 @@ APPKEY_MOBILE_GRAPH = '5pWJwSTvu30Dkw5GHLVQ5PsmoKRE1arh'
 USER_AGENT_MOBILE_GRAPH = 'okhttp/4.12.0'
 
 APPKEY_WEB = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
-USER_AGENT_WEB = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
+USER_AGENT_WEB = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0'
 
 # API timeout / retry behavior
 # Seconds before giving up on an API call so a stalled connection cannot hang the run
