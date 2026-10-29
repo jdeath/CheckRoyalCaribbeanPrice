@@ -56,7 +56,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 # Global Constants & Variables
 ##################################
 # Immutable configuration settings
-USER_AGENT_WEB = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0'
+USER_AGENT_WEB = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0'
 APPKEY_WEB = 'hyNNqIPHHzaLzVpcICPdAdbFV8yvTsAm'
 
 # API timeout / retry behavior
