@@ -22,7 +22,7 @@ Mary   (1234) has best price for VOOM SURF + STREAM Internet Package of: 16.99 (
 8/28/2026 Ovation of the Seas BALCONY XB: You have best price of 1000.0 USD (now 1714.08 USD)
 8/28/2026 Ovation of the Seas BALCONY XB (Loyalty, Residency Discount): You have best price of 1000.0 USD (now 1613.08 USD) #Impact of discounts 
 ```
-If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel. Notice on the 2nd reservation, the official room is GTY but the excursions show the currently assigned room in the Royal backend system. This room is likely what you will get!
+If any of the prices are lower, it will send a notification if you set up apprise. Notification will include a link to your order history and the specific date and order number to cancel. ~~Notice on the 2nd reservation, the official room is GTY but the excursions show the currently assigned room in the Royal backend system. This room is likely what you will get!~~ Reports of being patched by Royal in October 2026
 
 At the end of the run, a summary table shows the check-in opening/boarding time and final payment date for every booked sailing, sorted by sail date. The final payment column is color coded: green if paid in full, yellow if a balance is still due (or the API does not report a status, common for travel agent bookings - see reservationsPaidInFull above), and red if a balance is due past the final payment date.
 ```
