@@ -7,6 +7,6 @@ On the Royal Website, you need their reservation number, name, and birthdate to 
 
 If you have their username/password, you can add it to the list of accounts in the config.yaml and it will cycle though accounts automatically.
 
-**Do you have a GTY Room and want to know the room you will likely get?** If a room is not officially assigned yet, the code displays GTY (meaning guarantee) for your room number. However, any excursion purchased will show the passenger's name and the room number currently associated with that excursion. Guess what? That room number is likely the room you will be officially assigned. Confirmed by the author, please post an issue if you can confirm this as well.
+~~**Do you have a GTY Room and want to know the room you will likely get?** If a room is not officially assigned yet, the code displays GTY (meaning guarantee) for your room number. However, any excursion purchased will show the passenger's name and the room number currently associated with that excursion. Guess what? That room number is likely the room you will be officially assigned. Confirmed by the author, please post an issue if you can confirm this as well.~~ Reports of being patched by Royal in October 2026
 
 **Are you browsing the website for the best prices?** Always add the item to your cart and then go to the next page where you enter your credit card. Often the price will be lower in the screen where you enter your credit card then in your cart. If on the fence, do the extra step and you may be suprised!
