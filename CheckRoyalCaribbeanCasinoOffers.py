@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+import yaml
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-
-import yaml
 
 import CheckRoyalCaribbeanPrice as crc
 from CheckRoyalCaribbeanPrice import (

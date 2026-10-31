@@ -54,4 +54,26 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m pytest unittests/ -vs --cov=CheckRoyalCaribbeanPrice --cov=BrowseRoyalCaribbeanPrice --cov-report=term-missing
+          python -m pytest unittests/ -vs --cov=royal_caribbean --cov=CheckRoyalCaribbeanPrice --cov=BrowseRoyalCaribbeanPrice --cov-report=term-missing
+#          python -m pytest unittests/ -vs --cov=CheckRoyalCaribbeanPrice --cov=BrowseRoyalCaribbeanPrice --cov-report=term-missing
+
+  shapes:
+    name: Package vs bundle shapes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Test package facade and bundled file as one module
+        run: python tools/test_shapes.py

@@ -1,6 +1,8 @@
 config.yaml
 config.yaml.*
 __pycache__
+.coverage
+.pytest_cache
 config-c.yaml
 config-r.yaml
 output-celebrity.txt
